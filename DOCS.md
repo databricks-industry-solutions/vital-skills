@@ -1,6 +1,6 @@
 # Docs site
 
-The [GitHub Pages site](https://databricks-industry-solutions.github.io/hls-skills/) is `docs/index.html` (the landing page) plus an MkDocs guide under `/guide/`. Most of the guide is not written in `docs/`. It is generated at build time from files elsewhere in this repository, so **edit the source file, not the page.**
+The [GitHub Pages site](https://databricks-industry-solutions.github.io/vital-skills/) is `docs/index.html` (the landing page) plus an MkDocs guide under `/guide/`. Most of the guide is not written in `docs/`. It is generated at build time from files elsewhere in this repository, so **edit the source file, not the page.**
 
 ## Where each page comes from
 
@@ -14,7 +14,7 @@ The [GitHub Pages site](https://databricks-industry-solutions.github.io/hls-skil
 | Evaluation | The `#### 3. Evaluate with and without skill` section of [CONTRIBUTING.md](CONTRIBUTING.md) | `CONTRIBUTING.md` |
 | FAQ | `docs/guide/faq.md` | The page itself |
 | Links | `docs/guide/links.md` | The page itself |
-| Changelog | `docs/CHANGELOG.md` | The page itself |
+| Changelog | Root [CHANGELOG.md](CHANGELOG.md) | `CHANGELOG.md` |
 
 A page under `docs/guide/` that holds only a title and a line like `<!-- include: README.md#Setup -->` is a copy. Editing that page changes nothing you can see.
 
@@ -43,7 +43,7 @@ The strict build fails if a file or heading is missing or ambiguous, and names t
 
 Copied text is shown in two places, so it has to render in both.
 
-- **Links.** Relative links, such as `[AGENTS.md](AGENTS.md)`, point at GitHub on the site. To link a site page, use its full URL, such as `https://databricks-industry-solutions.github.io/hls-skills/guide/skills/`.
+- **Links.** Relative links, such as `[AGENTS.md](AGENTS.md)`, point at GitHub on the site. To link a site page, use its full URL, such as `https://databricks-industry-solutions.github.io/vital-skills/guide/skills/`.
 - **Notes and warnings.** Use GitHub alerts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`). The site turns them into boxed notes. MkDocs-only syntax such as `!!! note` shows as raw text on GitHub.
 - **Comments.** `<!-- ... -->` is hidden in both places but stays in the published page source. Do not start one with `include:` in a page under `docs/`; that marks a copy.
 
@@ -55,14 +55,15 @@ Copied text is shown in two places, so it has to render in both.
 |------|--------|
 | `<!-- include: README.md#Setup -->` | The text under `Setup`, without the heading |
 | `<!-- include: CONTRIBUTING.md -->` | The whole file, without its leading `# Title` |
+| `<!-- include: CHANGELOG.md -->` | The whole file, without its leading `# Title` |
 | `... omit="Heading"` | Leaves out that heading and its text. Repeat for more |
 | `... replace="Heading=Markdown"` | Keeps the heading, swaps its text for the Markdown. Links in it are relative to the page |
 | `... level=3` | Shifts headings so the copy's top level is `###` (default `##`) |
 
 ## Preview, check, publish
 
-- **Preview:** `uv run --isolated --with-requirements docs/requirements.txt mkdocs serve`. Edits to `docs/`, `README.md`, and `CONTRIBUTING.md` reload on save. After editing `docs/hooks/`, restart the server; it caches hook code.
-- **Check:** `uv run --isolated --with pytest python -m pytest -q tests` includes `tests/test_docs_sections.py`, which expands every include line.
+- **Preview:** `uv run --isolated --with-requirements docs/requirements.txt mkdocs serve`. Edits to `docs/`, `README.md`, `CONTRIBUTING.md`, and `CHANGELOG.md` reload on save. After editing `docs/hooks/`, restart the server; it caches hook code.
+- **Check:** `uv run --isolated --with pytest --with pyyaml python -m pytest -q tests` includes `tests/test_docs_sections.py`, which expands every include line.
 - **CI:** `.github/workflows/pages.yml` runs `mkdocs build --strict` on PRs that touch `docs/`, `skills/`, root Markdown files, or `mkdocs.yml`. It does not deploy: the organization's IP allow list blocks Pages deployments from GitHub-hosted runners.
 - **Publish** (maintainers, after docs or skill changes merge): from an up-to-date `main` checkout on an allowed network, run
 
