@@ -130,7 +130,9 @@ for run in RUNS:
     for task_id in task_ids:
         rows = [
             {
-                "inputs": {"task_id": task_id, "run_id": run, "query": prompts[run][task_id]},
+                # the prompt actually pasted: the record's prompt_used if it deviated, else the rendered one
+                "inputs": {"task_id": task_id, "run_id": run,
+                           "query": latest_record(records, run, task_id).get("prompt_used") or prompts[run][task_id]},
                 "outputs": {"notebook_source": sources[run][task_id], "outcome": outcomes[(run, task_id)]},
                 "expectations": expectations_by_task[task_id],
             }

@@ -279,6 +279,7 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
         },
         "compute": {"type": "", "runtime": ""},       # e.g. "serverless GPU (GPU_1xA10)", "AI Runtime v5"
         "resources_created": expected_resources(run_id, task_id, family),  # check against the notebook
+        "prompt_used": None,                           # set only if the pasted prompt differs from the rendered one
         "outcome": None,                               # written by check_outcome.py
         "discarded": False,
         "discard_reason": "",

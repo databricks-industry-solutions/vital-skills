@@ -50,6 +50,15 @@ open-weight-models; managed volume `owm_teddy_files`), named per run with `<run>
 | Vector Search index | — | `<catalog>.skills_owm_202610.owm_teddy_index_002_<run>` |
 | download folder | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_<run>/` | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_<run>/` |
 
+Exception this round: teddy-001 `with_skill` uses `<run>` = `skill_on`
+(`run_suffix_overrides`), because the first `baseline`/teddy-001 run was pasted with the
+`with_skill` names (see the round README).
+
+If a run's pasted prompt or resource names differ from the rendered ones, record what was
+actually used in its run record (`prompt_used`, `resources_created`, and a line in
+`notes`); `check_outcome.py` reads `resources_created` and the scoring notebook logs
+`prompt_used` when it is set.
+
 `evalset.json` stores each query with a `{run}` placeholder in one added sentence
 ("Use these names: …", right after the catalog/schema sentence; the rest is the
 Sep–Oct 2026 wording with the schema changed). Print the exact prompt for a run with
@@ -108,9 +117,11 @@ runs are done (step 13).
 
 ## Run protocol
 
-**Run order for this round** (MVP first): teddy-002 standard pair — `baseline`, then
-`with_skill`; then teddy-001 standard pair — `baseline`, then `with_skill`; then,
-optionally, the replication pair (`old_prompt_baseline`, then `old_prompt_with_skill`).
+**Run order for this round:** `baseline`/teddy-001 (in progress), `baseline`/teddy-002,
+`with_skill`/teddy-002, `with_skill`/teddy-001; then, optionally, the replication pair
+(`old_prompt_baseline`, then `old_prompt_with_skill`). Both skill-off runs come before
+any with-skill run. Deviations from plan are recorded in
+`models/teddy/runs_20261026/README.md`.
 A skill-off run never follows a with-skill run in the same pair, so nothing about the
 skill is in a chat or memory before its baseline. Between a with-skill run and the next
 skill-off run, step 1 (`--state off`) removes the skill and step 2 clears memory. One

@@ -14,6 +14,12 @@
     "old_prompt_baseline": "old_baseline",
     "old_prompt_with_skill": "old_with_skill"
   },
+  "run_suffix_overrides": {
+    "teddy-001": {
+      "with_skill": "skill_on"
+    }
+  },
+  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because the first baseline/teddy-001 run (2026-10-27) was pasted with the with_skill names by mistake; see runs_20261026/README.md.",
   "names": {
     "teddy-001": {
       "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_{run}",

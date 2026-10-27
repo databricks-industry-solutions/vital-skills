@@ -102,5 +102,58 @@
     "discarded": false,
     "discard_reason": "",
     "notes": ""
+  },
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-001",
+    "state": "off",
+    "timestamp": "2026-10-27T05:14:04+00:00",
+    "skill_commit": "0e0fcf0d155d3062950ecf2643eefd220d592617",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": null,
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "",
+      "expected": [],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": []
+    },
+    "visible_steps": {
+      "text": "",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": ""
+    },
+    "compute": {
+      "type": "",
+      "runtime": ""
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_001_with_skill",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill",
+      "uc_model_version": "",
+      "delta_table": "",
+      "vector_search_endpoint": "",
+      "vector_search_index": ""
+    },
+    "outcome": null,
+    "discarded": false,
+    "discard_reason": "",
+    "notes": "Deviation: this baseline (skill off) run was pasted with the with_skill names by mistake (model <catalog>.skills_owm_202610.owm_teddy_model_001_with_skill, endpoint owm_teddy_ep_001_with_skill, files /Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/); wording otherwise identical to the standard teddy-001 query. resources_created and prompt_used record what was actually used; the later with_skill/teddy-001 run uses suffix skill_on instead.",
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill`, serving endpoint `owm_teddy_ep_001_with_skill`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/`. Write the code and explain your decisions."
   }
 ]

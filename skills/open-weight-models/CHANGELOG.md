@@ -31,7 +31,8 @@ frontmatter `version` is the source of truth for releases.
   dimension 512, which tasks have Vector Search), fixed request
   (`fixtures/teddy_request.json`), `answer_sheet.md`, the Sep–Oct 2026 prompts with this
   round's names (`old_prompt_baseline.md`, `old_prompt_with_skill.md`), and the
-  2026-10-26 round folder `runs_20261026/`. Unit tests in
+  2026-10-26 round folder `runs_20261026/` (deviations from plan recorded in its
+  README; run records can override names with `resources_created` / `prompt_used`). Unit tests in
   `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
   `tests/test_check_outcome.py`.
 - `eval/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a frozen record

@@ -37,14 +37,16 @@ def round_dir(family: str = DEFAULT_FAMILY, round_name: str | None = None, eval_
     return family_dir(family, eval_dir) / (round_name or load_family(family, eval_dir)["current_round"])
 
 
-def run_suffix(settings: dict, run_id: str) -> str:
-    """The <run> part of resource names: baseline, with_skill, old_baseline, old_with_skill."""
-    return settings["run_suffix"][run_id]
+def run_suffix(settings: dict, run_id: str, task_id: str | None = None) -> str:
+    """The <run> part of resource names: baseline, with_skill, old_baseline, old_with_skill,
+    unless family.json run_suffix_overrides sets another one for this task."""
+    override = settings.get("run_suffix_overrides", {}).get(task_id, {}).get(run_id)
+    return override or settings["run_suffix"][run_id]
 
 
 def resource_names(settings: dict, run_id: str, task_id: str) -> dict:
     """{"uc_model", "serving_endpoint", "files", ...} for one run of one task."""
-    suffix = run_suffix(settings, run_id)
+    suffix = run_suffix(settings, run_id, task_id)
     return {key: value.replace("{run}", suffix) for key, value in settings["names"][task_id].items()}
 
 
@@ -55,9 +57,9 @@ def outcome_checks(settings: dict, task_id: str) -> list:
         list(out["checks_vector_search"]) if task_id in out["vector_search_tasks"] else [])
 
 
-def render_query(query: str, settings: dict, run_id: str) -> str:
+def render_query(query: str, settings: dict, run_id: str, task_id: str | None = None) -> str:
     """An evalset.json query with {run} replaced by the run's name suffix."""
-    return query.replace("{run}", run_suffix(settings, run_id))
+    return query.replace("{run}", run_suffix(settings, run_id, task_id))
 
 
 def old_prompt_substitutions(settings: dict, run_id: str, task_id: str) -> list:
@@ -97,7 +99,7 @@ def run_prompts(family: str = DEFAULT_FAMILY, eval_dir: Path = EVAL_DIR) -> dict
     settings = load_family(family, eval_dir)
     with open(Path(eval_dir) / "evalset.json", encoding="utf-8") as handle:
         queries = {t["task_id"]: t["query"] for t in json.load(handle)}
-    prompts = {run: {tid: render_query(q, settings, run) for tid, q in queries.items()} for run in STANDARD_RUNS}
+    prompts = {run: {tid: render_query(q, settings, run, tid) for tid, q in queries.items()} for run in STANDARD_RUNS}
     for run in settings["old_prompts"]:
         blocks = old_prompt_blocks(settings, run, family, eval_dir)
         if set(blocks) != set(queries):

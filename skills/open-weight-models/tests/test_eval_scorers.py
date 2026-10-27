@@ -98,7 +98,7 @@ def test_retest_queries_are_sep_oct_2026_queries_plus_schema_and_names(scorers):
         assert query.startswith(head + "Use catalog <catalog>, schema skills_owm_202610. Use these names: ")
         assert query.endswith(". " + tail.lstrip()) or query.endswith("." + tail)
         for run in ("baseline", "with_skill"):
-            rendered = fs.render_query(query, settings, run)
+            rendered = fs.render_query(query, settings, run, new_id)
             assert "{run}" not in rendered
             for value in fs.resource_names(settings, run, new_id).values():
                 assert f"`{value}`" in rendered
@@ -351,7 +351,11 @@ def test_run_prompts_standard_pair_renders_evalset_query(scorers):
     prompts = scorers.run_prompts()
     assert set(prompts) == set(scorers.RUN_IDS)
     for run in ("baseline", "with_skill"):
-        assert prompts[run] == {tid: fs.render_query(t["query"], settings, run) for tid, t in scorers.TASKS.items()}
+        assert prompts[run] == {tid: fs.render_query(t["query"], settings, run, tid) for tid, t in scorers.TASKS.items()}
+    # teddy-001 with_skill uses suffix skill_on (the first baseline run used the with_skill names)
+    assert "owm_teddy_ep_001_skill_on" in prompts["with_skill"]["teddy-001"]
+    assert "_with_skill" not in prompts["with_skill"]["teddy-001"]
+    assert "owm_teddy_ep_002_with_skill" in prompts["with_skill"]["teddy-002"]
     assert prompts["baseline"]["teddy-002"] != prompts["with_skill"]["teddy-002"]
     assert prompts["baseline"]["teddy-002"].replace("_baseline", "_with_skill") == prompts["with_skill"]["teddy-002"]
 

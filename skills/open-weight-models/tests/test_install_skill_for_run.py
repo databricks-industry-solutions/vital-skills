@@ -487,3 +487,19 @@ def test_protocol_gaps():
     fresh = inst.build_record(run_id="baseline", task_id="teddy-002", state="off", user="u",
                               codes={}, environment={}, skill_commit="abc")
     assert len(inst.protocol_gaps(fresh)) == 3
+
+
+def test_prompt_used_and_skill_on_suffix():
+    record = inst.build_record(run_id="baseline", task_id="teddy-001", state="off", user="u",
+                               codes={}, environment={}, skill_commit="abc")
+    assert record["prompt_used"] is None
+    assert inst.expected_resources("with_skill", "teddy-001")["serving_endpoint"] == "owm_teddy_ep_001_skill_on"
+    assert inst.expected_resources("with_skill", "teddy-002")["serving_endpoint"] == "owm_teddy_ep_002_with_skill"
+
+
+def test_live_round_records_deviation_is_recorded():
+    records = inst.load_records(inst.default_records())
+    first_001 = next(r for r in records if (r["run_id"], r["task_id"]) == ("baseline", "teddy-001"))
+    assert first_001["resources_created"]["serving_endpoint"] == "owm_teddy_ep_001_with_skill"
+    assert "owm_teddy_ep_001_with_skill" in first_001["prompt_used"] and "{run}" not in first_001["prompt_used"]
+    assert "Deviation" in first_001["notes"]

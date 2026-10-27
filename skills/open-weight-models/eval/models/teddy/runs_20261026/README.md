@@ -19,3 +19,20 @@ Filled in during the runs (see `../../../README.md`, run protocol). Run IDs: `ba
   - `<run_id>_outcome.json` — the outcome group (`outcome/…`, measured before teardown);
   - `<run_id>_judge.json` — the optional guideline judge (`judge/guidelines`), only when
     `USE_GUIDELINE_JUDGE = True`.
+
+## Deviations from plan
+
+1. **`baseline`/teddy-001 (first run, 2026-10-27) used the `with_skill` names.** The prompt
+   pasted into the skill-off run named model
+   `<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill`, endpoint
+   `owm_teddy_ep_001_with_skill` and files
+   `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/`; the wording is
+   otherwise identical to the standard teddy-001 query. Its record holds the actual names
+   in `resources_created`, the pasted text in `prompt_used`, and a note. The skill was off
+   for this run; only the names are affected.
+2. **`with_skill`/teddy-001 therefore uses suffix `skill_on`** (model
+   `owm_teddy_model_001_skill_on`, endpoint `owm_teddy_ep_001_skill_on`, files
+   `001_skill_on/`), set in `../family.json` → `run_suffix_overrides`, so it cannot clash
+   with the names above. teddy-002 names are unchanged.
+3. **Run order:** `baseline`/teddy-001, `baseline`/teddy-002, `with_skill`/teddy-002,
+   `with_skill`/teddy-001.
