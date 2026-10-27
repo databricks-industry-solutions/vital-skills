@@ -23,7 +23,12 @@ frontmatter `version` is the source of truth for releases.
   `old_prompt_with_skill.md`, and `install_skill_for_run.py` (switches the skill
   off/on, hides codes that show which skill files were read, backs up before replacing
   an existing install, records each run's environment, restores the user's pre-eval
-  install at the end). Unit tests in
+  install at the end), `check_outcome.py` + `fixtures/teddy_request.json` (outcome
+  group, measured on the live deployment before teardown: endpoint ready and serving
+  the recorded version, one finite 512-dimension embedding per cell, working
+  nearest-neighbour search for teddy-002), per-check severity / source / environment
+  dependence in `expectations.json`, an optional guideline LLM judge, and a README list
+  of known false negatives in the replicated checks. Unit tests in
   `tests/test_install_skill_for_run.py` and `tests/test_eval_scorers.py`.
 - `eval/previous_runs_2026-10/`: the 2026-10 TEDDY evaluation kept as a frozen record
   in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005

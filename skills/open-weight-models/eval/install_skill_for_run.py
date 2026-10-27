@@ -23,8 +23,9 @@ Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
        /Workspace/.assistant_workspace_instructions.md exist), the codes, the backup
        path and whether it holds the user's "pre-eval install" or an "eval copy" (an
        installed SKILL.md with a marker line), the skill's git commit, a UTC timestamp,
-       and the fields filled in by hand after the run: "discarded", "discard_reason",
-       "notes".
+       the fields filled in by hand after the run ("compute", "resources_created",
+       "discarded", "discard_reason", "notes"), and "outcome", written by
+       check_outcome.py.
 
   --restore-original (after all runs) deletes the eval copy and re-imports the earliest
   backup of the user's pre-eval install, or, if there is none, leaves the skill removed.
@@ -69,6 +70,9 @@ MARKED_FILES = {
     "references/models/teddy.md": "skill-proof-teddy",
 }
 PRE_EVAL, EVAL_COPY = "pre-eval install", "eval copy"
+# What a run created, filled in by hand for check_outcome.py (same keys there).
+RESOURCE_KEYS = ("serving_endpoint", "uc_model", "uc_model_version", "delta_table",
+                 "vector_search_endpoint", "vector_search_index")
 DEFAULT_SKILL_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_RECORDS = Path(__file__).resolve().parent / "outputs" / "run_records.json"
 
@@ -176,7 +180,8 @@ def latest_record(records: list[dict], run_id: str, task_id: str) -> dict:
 
 def build_record(*, run_id, task_id, state, user, codes, environment, skill_commit, backup=None,
                  backup_of=None, timestamp=None) -> dict:
-    """One run record. `discarded` / `discard_reason` / `notes` are filled in by hand after the run."""
+    """One run record. `compute`, `resources_created`, `discarded`, `discard_reason` and `notes`
+    are filled in by hand after the run; `outcome` by check_outcome.py."""
     return {
         "run_id": run_id,
         "task_id": task_id,
@@ -188,6 +193,10 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
         "backup": str(backup) if backup else None,
         "backup_of": backup_of,
         "environment": json.loads(redact_user(json.dumps(environment), user)),
+        # Filled in by hand after the run (README steps 7-11):
+        "compute": {"type": "", "runtime": ""},       # e.g. "serverless GPU (GPU_1xA10)", "AI Runtime v5"
+        "resources_created": {key: "" for key in RESOURCE_KEYS},
+        "outcome": None,                               # written by check_outcome.py
         "discarded": False,
         "discard_reason": "",
         "notes": "",

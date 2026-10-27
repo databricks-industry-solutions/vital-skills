@@ -1,6 +1,6 @@
 """MLflow scorers for the open-weight-models TEDDY retest (teddy-001, teddy-002).
 
-Two groups, reported separately:
+Three groups, reported separately (plus an optional judge):
 
   Replicated set — the 8 phase checks used for the 2026-10 runs, with the check
   logic copied unchanged from previous_runs_2026-10/scorers.py so old and new
@@ -34,8 +34,18 @@ expectations.json (difficulty, model_family, variant, capability, checks) next t
 this file, keyed by task_id. Each
 eval row's outputs must carry the exported notebook text as "notebook_source".
 
-Exports: `scorers` (both groups), `replicated_scorers`, `new_check_scorers`,
-NEW_CHECK_PREFIX, and run_prompts() (the prompt pasted in each run, for the eval rows).
+  Outcome group — metric names start with "outcome/": what the run built actually works
+  (measured live by check_outcome.py before teardown, read here from outputs["outcome"]).
+  Optional, off by default: guideline_judges() — an LLM judge over the task guidelines,
+  metric "judge/guidelines".
+
+Every check has a severity (critical / major / minor), the source line it rests on, and
+whether it depends on the model or the compute, in expectations.json "checks";
+failed_by_severity() / severity_table() report raw failed counts per severity.
+
+Exports: `scorers` (replicated + new checks + outcome), `replicated_scorers`,
+`new_check_scorers`, `outcome_scorers`, guideline_judges(), the metric prefixes,
+run_prompts() (the prompt pasted in each run), failed_by_severity(), severity_table().
 """
 import ast
 import json
@@ -47,6 +57,8 @@ from mlflow.genai.scorers import scorer as mlflow_scorer
 
 EVAL_DIR = Path(__file__).resolve().parent
 NEW_CHECK_PREFIX = "new_checks/"
+OUTCOME_PREFIX = "outcome/"
+JUDGE_PREFIX = "judge/"
 SEARCH_CAPABILITY = "nearest_neighbor_search"
 
 
@@ -869,4 +881,107 @@ new_check_scorers = [
     uc_provenance_new_checks,
     existing_resources_new_checks,
 ]
-scorers = replicated_scorers + new_check_scorers
+
+
+# ---- Outcome group -------------------------------------------------------------
+#
+# Did what the run built actually work? Measured live by check_outcome.py after each
+# run and before teardown, stored in the run record, and passed to the scorer as
+# outputs["outcome"] = {"outcome/<check>": bool}. Nothing is re-measured here.
+
+@mlflow_scorer
+def outcome_checks(inputs, outputs):
+    """Outcome: endpoint ready + serving the recorded version, valid embeddings, search works."""
+    task = _task(inputs)
+    measured = outputs.get("outcome")
+    if not measured:
+        raise ValueError(f"{task['task_id']}: no outcome in outputs — run check_outcome.py before teardown")
+    missing = [c for c in task["outcome_checks"] if c not in measured]
+    if missing:
+        raise ValueError(f"{task['task_id']}: outcome checks not measured: {missing}")
+    return [Feedback(name=c, value=bool(measured[c]), rationale="pass" if measured[c] else "fail")
+            for c in task["outcome_checks"]]
+
+
+outcome_scorers = [outcome_checks]
+scorers = replicated_scorers + new_check_scorers + outcome_scorers
+
+
+# ---- Optional LLM judge over the task guidelines (off by default) ----------------
+
+def guideline_judges(model: str = "databricks:/databricks-gpt-5-mini") -> list:
+    """One binary judge (skill-eval scorer-pack.md: make_judge, explicit yes/no
+    feedback_value_type) that grades the notebook against the task's `guidelines` from
+    expectations.json. Metric name "judge/guidelines". Not part of `scorers`; the judge
+    model must differ from the model that wrote the notebooks."""
+    from typing import Literal
+
+    from mlflow.genai.judges import make_judge
+
+    return [make_judge(
+        name=f"{JUDGE_PREFIX}guidelines",
+        instructions="""
+You are grading a Databricks notebook that an agent wrote to deploy an open-weight model.
+
+Task given to the agent: {{ inputs }}
+Notebook source written by the agent: {{ outputs }}
+Rules the notebook must follow (the "guidelines" list): {{ expectations }}
+
+Grading rules:
+- Check each guideline against the notebook source only. Do not assume code that is not shown.
+- A guideline that the source does not clearly satisfy counts as failed.
+- Ignore every other field of the expectations; grade only the "guidelines" list.
+
+Answer with exactly one word: 'yes' if every guideline is satisfied, otherwise 'no'.
+""",
+        feedback_value_type=Literal["yes", "no"],
+        model=model,
+    )]
+
+
+# ---- Grouping + severity report (pure) ---------------------------------------------
+
+GROUPS = ("replicated", "new_checks", "outcome", "judge")
+
+
+def metric_group(name: str) -> str:
+    """Which reporting group a metric belongs to."""
+    for group, prefix in (("new_checks", NEW_CHECK_PREFIX), ("outcome", OUTCOME_PREFIX), ("judge", JUDGE_PREFIX)):
+        if name.startswith(prefix):
+            return group
+    return "replicated"
+
+
+
+SEVERITIES = ("critical", "major", "minor")
+
+
+def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None) -> dict:
+    """{"critical"|"major"|"minor": [failed metric names]} for one (run, task), from the
+    `checks` severities in expectations.json. Judge metrics have no severity and are skipped."""
+    meta = (tasks or TASKS)[task_id]["checks"]
+    out = {sev: [] for sev in SEVERITIES}
+    for name, ok in metrics.items():
+        if name.startswith(JUDGE_PREFIX):
+            continue
+        if name not in meta:
+            raise ValueError(f"{task_id}: no severity for metric {name!r} in expectations.json")
+        if not ok:
+            out[meta[name]["severity"]].append(name)
+    return out
+
+
+def severity_table(scores_by_run: dict, pairs: list, tasks: dict = None) -> str:
+    """Markdown: per pair, per run, per task — raw counts of failed checks by severity and
+    whether the outcome group passed. No percentages, no single score."""
+    lines = ["| Pair | Run | Task | Critical failed | Major failed | Minor failed | Outcome passed |",
+             "|---|---|---|---|---|---|---|"]
+    for pair in pairs:
+        for run in pair:
+            for task_id, metrics in sorted(scores_by_run[run].items()):
+                failed = failed_by_severity(task_id, metrics, tasks)
+                outcome = [ok for name, ok in metrics.items() if name.startswith(OUTCOME_PREFIX)]
+                lines.append(f"| {pair[0]} / {pair[1]} | {run} | {task_id} | "
+                             + " | ".join(str(len(failed[s])) for s in SEVERITIES)
+                             + f" | {'yes' if outcome and all(outcome) else 'no'} |")
+    return "\n".join(lines)

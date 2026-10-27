@@ -156,6 +156,8 @@ def test_record_has_hand_filled_fields():
                                codes={}, environment={}, skill_commit="abc")
     assert (record["notes"], record["discarded"], record["discard_reason"], record["backup"], record["backup_of"]) == (
         "", False, "", None, None)
+    assert record["compute"] == {"type": "", "runtime": ""} and record["outcome"] is None
+    assert set(record["resources_created"]) == set(inst.RESOURCE_KEYS)
 
 
 def test_first_backup_and_fingerprint():

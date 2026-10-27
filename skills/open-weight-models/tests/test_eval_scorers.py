@@ -278,7 +278,7 @@ def test_existing_resource_check_must_come_first(scorers):
 
 
 def test_exports(scorers):
-    assert scorers.scorers == scorers.replicated_scorers + scorers.new_check_scorers
+    assert scorers.scorers == scorers.replicated_scorers + scorers.new_check_scorers + scorers.outcome_scorers
     assert len(scorers.replicated_scorers) == 8 and len(scorers.new_check_scorers) == 3
 
 
@@ -318,3 +318,105 @@ def test_run_prompts_standard_pair_uses_evalset_query(scorers):
     assert set(prompts) == set(scorers.RUN_IDS)
     for run in ("baseline", "with_skill"):
         assert prompts[run] == {tid: task["query"] for tid, task in scorers.TASKS.items()}
+
+
+# ---- severity, environment dependence, outcome scorer ----------------------------
+
+REPO_ROOT = SKILL_DIR.parent.parent
+
+
+def _all_metric_names(scorers, task_id: str) -> set:
+    task = scorers.TASKS[task_id]
+    names = {scorers.mlflow_metric_name(k) for k in scorers.sub_check_scores(task, GOOD_SOURCE)}
+    names |= set(scorers.new_check_scores(task, GOOD_SOURCE))
+    return names | set(task["outcome_checks"])
+
+
+@pytest.mark.parametrize("task_id", ["teddy-001", "teddy-002"])
+def test_every_check_has_severity_and_cited_source(scorers, task_id):
+    meta = scorers.TASKS[task_id]["checks"]
+    assert set(meta) == _all_metric_names(scorers, task_id)
+    for name, m in meta.items():
+        assert m["severity"] in scorers.SEVERITIES, name
+        assert m["depends_on"] in ("none", "model", "compute"), name
+        if m["depends_on"] != "none":
+            assert m.get("assumes"), name
+        if m["severity"] in ("critical", "major"):
+            path, line = m["source"].rsplit(":", 1)
+            target = SKILL_DIR / path
+            assert target.is_file(), m["source"]
+            assert 1 <= int(line) <= len(target.read_text().splitlines()), m["source"]
+            assert m.get("why"), name
+
+
+def test_environment_dependence_examples(scorers):
+    meta = scorers.TASKS["teddy-001"]["checks"]
+    assert meta["download_staging/hf_xet_disabled"]["depends_on"] == "model"
+    assert meta["download_staging/uses_tmp"]["depends_on"] == "compute"
+    assert meta["download_staging/deps_pinned"]["depends_on"] == "model"
+    assert scorers.TASKS["teddy-001"]["environment_assumed"]["runtime"] == "AI Runtime v5"
+
+
+def test_failed_by_severity_and_table(scorers):
+    metrics = {"download_staging/deps_pinned": False, "pyfunc_quality/sys_modules_purge": False,
+               "new_checks/ai_gateway/usage_tracking": False, "outcome/endpoint_ready": True,
+               "judge/guidelines": False}
+    failed = scorers.failed_by_severity("teddy-001", metrics)
+    assert failed == {"critical": ["download_staging/deps_pinned"],
+                      "major": ["new_checks/ai_gateway/usage_tracking"],
+                      "minor": ["pyfunc_quality/sys_modules_purge"]}
+    with pytest.raises(ValueError, match="no severity"):
+        scorers.failed_by_severity("teddy-001", {"made_up/check": False})
+    table = scorers.severity_table({"baseline": {"teddy-001": metrics}, "with_skill": {"teddy-001": {}}},
+                                   [("baseline", "with_skill")])
+    assert "| baseline / with_skill | baseline | teddy-001 | 1 | 1 | 1 | yes |" in table
+    assert "| baseline / with_skill | with_skill | teddy-001 | 0 | 0 | 0 | no |" in table
+    assert "%" not in table
+
+
+def test_metric_group(scorers):
+    assert [scorers.metric_group(n) for n in ("smoke_tests/endpoint_query", "new_checks/ai_gateway/usage_tracking",
+                                              "outcome/index_ready", "judge/guidelines")] == list(scorers.GROUPS)
+
+
+def test_outcome_scorer_reads_recorded_outcome(scorers):
+    checks = scorers.TASKS["teddy-001"]["outcome_checks"]
+    measured = {c: True for c in checks} | {"outcome/embedding_dim": False}
+    feedbacks = scorers.outcome_checks(inputs={"task_id": "teddy-001"}, outputs={"outcome": measured})
+    assert {f.name: f.value for f in feedbacks} == measured
+    with pytest.raises(ValueError, match="no outcome"):
+        scorers.outcome_checks(inputs={"task_id": "teddy-001"}, outputs={"notebook_source": ""})
+    with pytest.raises(ValueError, match="not measured"):
+        scorers.outcome_checks(inputs={"task_id": "teddy-001"}, outputs={"outcome": {checks[0]: True}})
+    assert scorers.outcome_checks in scorers.scorers
+
+
+def test_guideline_judge_is_optional_and_binary(scorers):
+    assert not any(getattr(s, "name", "").startswith(scorers.JUDGE_PREFIX) for s in scorers.scorers)
+    (judge,) = scorers.guideline_judges()
+    assert judge.name == "judge/guidelines"
+
+
+@pytest.mark.parametrize("key, source", [
+    ("download_staging/deps_pinned", 'pip_requirements=["transformers>=4.30.0,<4.52.0"]\n'),
+    ("forbidden_patterns/transformers>=", 'pip_requirements=["transformers>=4.30.0,<4.52.0"]\n'),
+    ("model_registration/pip_reqs_from_source", 'pip_requirements=["torch>=2.3.0", "transformers==4.41.0"]\n'),
+    ("pyfunc_quality/real_gene_ids", "tok = GeneTokenizer.from_pretrained(model_dir)\n"),
+    ("download_staging/uses_tmp", "d = tempfile.mkdtemp()\n"),
+    ("forbidden_patterns//local_disk0",
+     'try:\n    os.makedirs("/local_disk0/tmp")\n    TMP = "/local_disk0/tmp"\nexcept OSError:\n    TMP = "/tmp"\n'),
+    ("endpoint_deployment/ai_gateway_config", 'body = {"ai_gateway": {"inference_table_config": {"enabled": True}}}\n'),
+    ("endpoint_deployment/sdk_enums", 'body = {"served_entities": [{"workload_type": "GPU_SMALL"}]}\n'),
+    ("ai_search/graceful_skip", "try:\n    df = spark.table(T)\nexcept AnalysisException:\n    df = None\n"),
+    ("endpoint_deployment/run_go_gate", 'DEPLOY = dbutils.widgets.get("deploy") == "yes"\n'),
+])
+def test_known_false_negatives(scorers, key, source):
+    """The README's 'Known false negatives' table: valid alternatives the replicated checks fail."""
+    assert scorers.sub_check_scores(scorers.TASKS["teddy-002"], source)[key] is False
+
+
+def test_teddy_md_subprocess_download_is_not_a_false_negative(scorers):
+    teddy = (SKILL_DIR / "references" / "models" / "teddy.md").read_text().splitlines()
+    block = "\n".join(teddy[136:154])
+    assert "snapshot_download" in block
+    assert scorers.sub_check_scores(scorers.TASKS["teddy-001"], block)["download_staging/hf_xet_disabled"] is True

@@ -10,6 +10,12 @@ list, and hidden codes showing which skill files Genie Code read. Two pairs:
 - **replication** — `old_prompt_baseline` vs `old_prompt_with_skill`, the recorded
   2026-10 prompts: the replication of the results below.
 
+Each run is scored in groups — the replicated 2026-10 checks, the new checks, and an
+outcome group measured on the live deployment before teardown (endpoint ready, valid
+512-dimension embeddings for a fixed request, working search for teddy-002) — and every
+failed check is counted by severity (critical / major / minor) next to whether the run's
+outcome passed.
+
 The score files (`baseline_scores.json`, `with_skill_scores.json`,
 `old_prompt_baseline_scores.json`, `old_prompt_with_skill_scores.json`) appear after
 those runs.
