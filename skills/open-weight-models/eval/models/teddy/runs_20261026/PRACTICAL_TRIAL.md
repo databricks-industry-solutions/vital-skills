@@ -5,8 +5,8 @@ replicated checks, the new checks, the outcome checks, the score files in `score
 `RESULTS.md` are unchanged. The practical checks live in `eval/practical_checks.py`
 (tests: `tests/test_practical_checks.py`) and are **not** wired into
 `eval/score_open_weight_models.py`. Raw counts only — no percentages, no single score.
-This is the second version of the trial; "What changed since the first version" (below)
-lists the review fixes.
+This is the third version of the trial; "What changed since the first version" (below)
+lists the review fixes of both later versions.
 
 **Words used here.** CPU = central processing unit and GPU = graphics processing unit (the
 two kinds of serving hardware; `GPU_SMALL` is Model Serving's smallest GPU size). UC =
@@ -162,8 +162,13 @@ critical / major).
 | `download_location_ok`: only `/local_disk0` as a download destination or staging copy fails, not any `/local_disk0` string | none |
 | `signature_and_example`: needs `infer_signature(...)` / `ModelSignature(...)`, or recorded READY evidence for another expression | none |
 | Added `endpoint_smoke_tested` and `existing_resources_checked` (the two findings the first version dropped) | a1 fails `endpoint_smoke_tested`; b/002 fails `existing_resources_checked` |
+| Third version (`62f806d` review): `HF_HUB_DISABLE_XET` must have a disabling value (1 / true / yes / on, any case) — `'0'` or `'false'` no longer passes | none — ws/001 and ws/002 set `"1"` |
+| Third version: a resolved commit counts only if **that** value is recorded — followed from the resolved variable, or back from the subprocess through its printed output (ws/002, :102 → :110 → :117–119) or a file it wrote and the notebook copied and read back (ws/001, :53 → :59 → :63); a 40-character SHA literal also counts. Recording e.g. `'main'` no longer passes | none — ws/001 and ws/002 record the resolved commit |
+| Third version: `json.dump` counts as a manifest only into a file opened for writing (`open(path, "w")`, also as a `with` target); `Path(...).write_text(json.dumps(...))` and `mlflow.log_text` also count; `json.dump(..., io.StringIO())` does not | none — ws/001 (:97) and ws/002 (:130–131) write to `MANIFEST_PATH` |
 
-| Run | First version | This version |
+Per-run results after each version (the third version changes none):
+
+| Run | First version | Second and third versions |
 |---|---|---|
 | b/001 a2 | 7 / 10, failed 1 / 2 | 10 / 12, failed 0 / 2 |
 | b/001 a1 | 5 / 10, failed 1 / 4 | 6 / 12, failed 1 / 5 |
@@ -191,9 +196,11 @@ critical / major).
    the notebook's own functions) are not followed. The tests pin the review's false
    positive (`teddy.version()` next to an unrelated comparison) and a cross-cell
    comparison, but a parity check written in another shape could still be missed.
-5. **A resolved commit counts as pinned when any revision / commit / sha key is recorded**
-   (ws/001, ws/002); the check does not prove the recorded value is the same one the
-   download used — reading the notebooks, it is (both read it back from the download).
+5. **A resolved commit counts as pinned only when that value is followed into the record.**
+   Across a subprocess boundary the link is by its printed output or by the file path it
+   wrote (including a `shutil` copy of that file); the check does not read the file's
+   contents, so a notebook that writes the commit and an unrelated value to the same file
+   would still pass.
 6. **`fidelity_verified` treats a direct forward of the upstream model as a reference**
    (a2) when the notebook loads the upstream package and defines no model module of its
    own; it does not check which weights that model loaded. `check_outcome.py
