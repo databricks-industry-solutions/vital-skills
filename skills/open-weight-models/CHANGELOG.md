@@ -129,9 +129,10 @@ frontmatter `version` is the source of truth for releases.
   `model-template.md` say the same. Motivating case: in the 2026-10-27 eval, with-skill
   teddy-001 created the gate with default `"true"`
   (`eval/models/teddy/runs_20261026/with_skill/teddy-001.py:12`), so its costly steps ran
-  without the user switching them on; with-skill teddy-002 defaulted it to `"false"`
-  (`with_skill/teddy-002.py:30`) but its run notes record the widget being switched to
-  `true` during the run. #14 now also says the agent does not switch it on for the user.
+  without the user switching them on. By contrast, with-skill teddy-002 created the gate
+  defaulting to `"false"` (`with_skill/teddy-002.py:30`) and the user switched it on
+  during the run — the intended use. #14 also says the agent does not switch the gate on
+  for the user.
 - Validation now requires an **upstream-parity test** (`SKILL.md` Workflow step 7 and
   Protocol Guidelines item 9, `model-template.md`, `teddy.md` checklist item 13 and a new
   "Upstream-parity test" section): run a few real samples through the model's own
