@@ -7,6 +7,12 @@ frontmatter `version` is the source of truth for releases.
 ## [Unreleased]
 
 ### Added
+- TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
+  accept any valid way of reaching each goal (parsed code + recorded outcome), with
+  tests in `tests/test_practical_checks.py`, and
+  `eval/models/teddy/runs_20261026/PRACTICAL_TRIAL.md` comparing them with the current
+  scores. Not wired into `score_open_weight_models.py`; score files and `RESULTS.md`
+  unchanged.
 - `references/models/midnight.md` for the `kaiko-ai/midnight` pathology tile
   encoder.
 - Evaluation prompt-template library (now

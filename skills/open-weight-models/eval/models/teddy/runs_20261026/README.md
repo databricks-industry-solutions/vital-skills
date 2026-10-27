@@ -9,6 +9,8 @@ Filled in during the runs (see `../../../README.md`, run protocol). Run IDs: `ba
 - `<run_id>/<task_id>.py` — exported notebook source (`<task_id>_attempt<n>.py` when a
   (run, task) was repeated; its record has `"attempt": n`).
 - `RESULTS.md` — results of this round.
+- `PRACTICAL_TRIAL.md` — TRIAL, not adopted: the same runs rescored with goal-based
+  "practical" checks (`eval/practical_checks.py`), next to the current scores.
 - `<run_id>/<task_id>_skills_panel*.png` — Customizations → Skills panel (User and All
   skills tabs) before the run; `<run_id>/<task_id>_steps.png` — the chat's visible steps
   after the run.
