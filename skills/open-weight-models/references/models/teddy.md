@@ -615,7 +615,7 @@ w.serving_endpoints.create(
 10. **AI Search self-retrieval test**: query the index with a known cell's embedding; top-1 result must be the same cell (score ~1.0). Results must be monotonically ordered by similarity.
 11. **Census gene ID test**: verify `adata.var_names` are Ensembl IDs (start with `ENSG`), not numeric indices, before intersecting with TEDDY vocab. Overlap should be ≥80% (22K+).
 12. **AI Search dimension match test**: if switching variants, the index dimension must match `EMB_DIM` for the current variant. On a dim mismatch (e.g. 1024 from 400M vs 512 from 70M), stop and ask the user: use a new variant-suffixed index name, or replace the existing index only with their confirmation.
-13. **Upstream-parity test** (SKILL.md Workflow step 7): run a few real cells through TEDDY's own preprocessing and tokenization and through the wrapper; the selected tokens must match and the per-cell embedding cosine must be ~1.0. Comparing the endpoint only with the same wrapper run in the notebook does not count. See [Upstream-parity test](#upstream-parity-test).
+13. **Upstream-parity test** (SKILL.md Workflow step 7): run a few real cells through TEDDY's own preprocessing and tokenization and through the wrapper; the selected token sets must match and the per-cell embedding cosine must be at least 0.9999. Comparing the endpoint only with the same wrapper run in the notebook does not count. See [Upstream-parity test](#upstream-parity-test).
 
 ## Upstream-parity test
 
@@ -666,15 +666,18 @@ w_ids, w_mask = wrapper._tokenize(counts.astype(np.float32), genes, 2048)    # t
 # 4. The same model on the upstream tokens; compare per cell
 for i in range(len(cells)):
     ids = up_ids[i][up_vals[i] != 0].unsqueeze(0).to(wrapper.device)   # include_zero_genes=False
-    same_tokens = torch.equal(w_ids[i][w_mask[i].bool()].cpu(), ids[0].cpu())   # preprocessing parity
+    up_row, w_row = ids[0].cpu(), w_ids[i][w_mask[i].bool()].cpu()
+    same_genes = set(w_row.tolist()) == set(up_row.tolist())              # preprocessing parity: membership
+    moved = int((w_row != up_row).sum()) if len(w_row) == len(up_row) else None   # information only
     with torch.no_grad():
         ref = wrapper.model(gene_ids=ids, attention_mask=torch.ones_like(ids))["cell_emb"][0].float().cpu().numpy()
     cos = float(ref @ E[i] / (np.linalg.norm(ref) * np.linalg.norm(E[i])))
-    print(f"cell {i}: upstream tokens={ids.shape[1]}  same tokens={same_tokens}  cosine(upstream, wrapper)={cos:.6f}")
-    assert same_tokens and cos > 0.999, "wrapper does not reproduce upstream TEDDY on this cell"
+    print(f"cell {i}: tokens upstream={len(up_row)} wrapper={len(w_row)}  same genes={same_genes}  "
+          f"positions in a different order={moved}  cosine(upstream, wrapper)={cos:.9f}")
+    assert same_genes and cos >= 0.9999, "wrapper does not reproduce upstream TEDDY on this cell"
 ```
 
-Expect the same tokens and cosine ~1.0 on every cell. A mismatch means the wrapper's preprocessing or token selection differs from upstream — compare the token lists before touching anything else (genes with exactly tied values can swap places; compare those as sets). If the wrapper casts to bf16 on GPU, run this test with the wrapper in float32.
+Pass = the same set of genes and cosine >= 0.9999 on every cell. Token **order** is reported, not asserted: the wrapper's dense NumPy preprocessing and upstream's in-place sparse preprocessing differ in the last float32 digits (up to about 2e-6), which can swap genes with nearly tied values. On the upstream sample data at revision `8c880aa` (5 cells, CPU, float32), 3 of 5 cells had 2–8 positions in a different order, all 5 had the same gene sets, and cosine was 0.99999984 or higher. The 0.9999 threshold sits far above what a real preprocessing error gives: with the median step removed, cosine fell to 0.22–0.92 on the same cells — and on cells with fewer than 2,048 expressed genes the gene set still matched, so the cosine check is what catches it. A failure means the wrapper's preprocessing or token selection differs from upstream — compare the token lists before touching anything else. If the wrapper casts to bf16 on GPU, run this test with the wrapper in float32.
 
 ## Sending inference controls
 

@@ -124,8 +124,12 @@ frontmatter `version` is the source of truth for releases.
 - Validation now requires an **upstream-parity test** (`SKILL.md` Workflow step 7 and
   Protocol Guidelines item 9, `model-template.md`, `teddy.md` checklist item 13 and a new
   "Upstream-parity test" section): run a few real samples through the model's own
-  upstream preprocessing and inference and through the wrapper, and compare tokens and
-  output embeddings (cosine ~1.0). Motivating case, 2026-10-27 TEDDY runs: with-skill
+  upstream preprocessing and inference and through the wrapper, and compare token sets
+  and output embeddings (cosine >= 0.9999 for TEDDY; token order is reported, not asserted,
+  because float32 differences of about 2e-6 between NumPy and upstream's sparse
+  preprocessing swap near-tied genes — run on the upstream sample data at `8c880aa`: 3 of 5
+  cells differed in order, all 5 had the same gene sets, cosine 0.99999984 or higher;
+  with the median step removed, cosine 0.22–0.92). Motivating case, 2026-10-27 TEDDY runs: with-skill
   teddy-002 compared the endpoint only with its own wrapper
   (`eval/models/teddy/runs_20261026/with_skill/teddy-002.py:583`), while with-skill
   teddy-001 compared against TEDDY's `_build_batch_tensors` with `GeneTokenizer`

@@ -183,8 +183,8 @@ Found in these runs; all six are now fixed in the skill (`CHANGELOG.md`).
    (`_build_batch_tensors` with `GeneTokenizer`) and measured cosine 1.000000 per cell;
    ws/002 compared the endpoint only with its own wrapper, which proves the deployment, not
    that the wrapper reproduces TEDDY. The skill's validation step asked only for "a small
-   known-input regression test". Now required: an upstream-parity test (same tokens, cosine
-   ~1.0 against the model's own preprocessing and inference), with the TEDDY functions named
+   known-input regression test". Now required: an upstream-parity test (same token sets, cosine
+   at least 0.9999 against the model's own preprocessing and inference), with the TEDDY functions named
    in `teddy.md`.
 5. **OOV handling and normalisation.** `teddy.md` mapped OOV genes to `<unk>`. Checked in
    the upstream source at revision `8c880aa`: TEDDY drops OOV genes before choosing the

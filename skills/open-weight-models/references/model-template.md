@@ -50,7 +50,7 @@ Describe the Unity Catalog model artifact and versioning approach. If AI Gateway
 Include:
 
 * import and offline-startup checks
-* upstream-parity case: a few real samples through the model's own upstream preprocessing and inference functions (name them, with module paths) and through the wrapper — same tokens/inputs, output cosine ~1.0
+* upstream-parity case: a few real samples through the model's own upstream preprocessing and inference functions (name them, with module paths) and through the wrapper — same token/input sets (order can differ on near-tied values), output cosine ~1.0 against a stated threshold
 * signature and payload tests
 * malformed-input tests
 * resource-limit tests
