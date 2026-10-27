@@ -21,9 +21,10 @@ frontmatter `version` is the source of truth for releases.
   cells; license + Hugging Face revision tags; checking for existing resources — and an
   outcome group), `score_open_weight_models.py` (standard pair `baseline` vs
   `with_skill`; replication pair `old_prompt_baseline` vs `old_prompt_with_skill`),
-  `install_skill_for_run.py` (skill off/on, hidden codes per installed skill, backups,
+  `install_skill_for_run.py` (skill off/on, optional hidden codes, backups,
   run records with environment, pre-filled resource names and protocol fields),
-  `check_outcome.py` (outcome checks on the live deployment before teardown),
+  `check_outcome.py` (outcome checks on the live deployment before teardown, with the
+  request built in the endpoint's own declared input format),
   `family_settings.py` (per-family names, prompt rendering, outcome settings), per-check
   severity / source / environment dependence, an optional guideline LLM judge, and a
   README run protocol with known false negatives of the replicated checks.
@@ -35,6 +36,15 @@ frontmatter `version` is the source of truth for releases.
   README; run records can override names with `resources_created` / `prompt_used`). Unit tests in
   `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
   `tests/test_check_outcome.py`.
+- `eval/models/teddy/runs_20261026/`: the 2026-10-27 TEDDY runs (five exported notebooks,
+  catalog name replaced by `<catalog>`), filled run records, score files and a results
+  draft (`RESULTS.md`); `eval_report.md` points to it. The first baseline/teddy-001 attempt
+  is kept as a second sample: the run guide supplied the wrong prompt (the planned
+  with-skill teddy-001 prompt, with `_001_with_skill` names); wording is otherwise
+  identical to the teddy-001 request.
+- Convention check `convention/shared_single_cell_format` (shared `adata_*` input format),
+  scored and reported apart from the outcome group; outcome checks
+  `returns_valid_embeddings`, `accepts_expression_input`, `nn_returns_cell_type`.
 - `eval/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a frozen record
   in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005
   with-skill output from a workspace backup (user name, project folder and catalog
@@ -45,6 +55,20 @@ frontmatter `version` is the source of truth for releases.
 - Corrected Geneformer status to serving tested, with evaluation still in
   progress.
 - Scrubbed concrete catalog identifiers from examples.
+- Eval: hidden-code markers are off by default (`--hidden-codes` opts in) and no longer
+  count as proof of skill use — a planted marker instruction is a prompt-injection
+  pattern; skill use is read from the self-report, visible steps and notebook choices.
+  Eval copies are recognised by their recorded `SKILL.md` sha256.
+- Eval: `check_outcome.py` reads the served model version's signature, sends the fixed
+  cells in that declared format (mixed lengths), POSTs inference controls under `params`
+  (the SDK's `extra_params` are dropped by the scoring server), asks the index only for
+  columns it holds, and records the endpoint's workload type and AI Gateway flags.
+- Eval: the scoring notebook scores repeat attempts as extra samples, skips discarded
+  records and pairs that were not run; the protocol preflight accepts "not available:
+  <reason>".
+- Eval scorers: no infinite recursion on `x = x + ...`; `a if cond else b` is followed in
+  the AI Gateway check; two more known false negatives listed; citation test matches the
+  quote in the cited file instead of the exact line number.
 - Eval material moved out of `tests/` (which now holds only CI unit tests) into
   `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded

@@ -36,7 +36,11 @@ this file, keyed by task_id; each task's outcome checks come from its family set
 eval row's outputs must carry the exported notebook text as "notebook_source".
 
   Outcome group — metric names start with "outcome/": what the run built actually works
-  (measured live by check_outcome.py before teardown, read here from outputs["outcome"]).
+  (measured live by check_outcome.py before teardown, read here from outputs["outcome"]),
+  with the request sent in the endpoint's own declared input format.
+  Convention group — metric names start with "convention/": whether the endpoint uses the
+  shared single-cell input format of the reference notes (teddy.md, scgpt.md). Read from the
+  same recorded outcome, reported on its own and NOT counted in the severity table.
   Optional, off by default: guideline_judges() — an LLM judge over the task guidelines,
   metric "judge/guidelines".
 
@@ -44,8 +48,8 @@ Every check has a severity (critical / major / minor), the source line it rests 
 whether it depends on the model or the compute, in expectations.json "checks";
 failed_by_severity() / severity_table() report raw failed counts per severity.
 
-Exports: `scorers` (replicated + new checks + outcome), `replicated_scorers`,
-`new_check_scorers`, `outcome_scorers`, guideline_judges(), the metric prefixes,
+Exports: `scorers` (replicated + new checks + outcome + convention), `replicated_scorers`,
+`new_check_scorers`, `outcome_scorers`, `convention_scorers`, guideline_judges(), the metric prefixes,
 run_prompts() (the prompt pasted in each run), failed_by_severity(), severity_table().
 """
 import ast
@@ -60,6 +64,7 @@ from mlflow.genai.scorers import scorer as mlflow_scorer
 EVAL_DIR = Path(__file__).resolve().parent
 NEW_CHECK_PREFIX = "new_checks/"
 OUTCOME_PREFIX = "outcome/"
+CONVENTION_PREFIX = "convention/"
 JUDGE_PREFIX = "judge/"
 SEARCH_CAPABILITY = "nearest_neighbor_search"
 
@@ -83,8 +88,9 @@ def load_tasks(eval_dir: Path = EVAL_DIR) -> dict:
     for tid, request in requests.items():
         task = {**request, **answers[tid]}
         task["vs"] = SEARCH_CAPABILITY in task.get("capability", "")
-        task["outcome_checks"] = family_settings.outcome_checks(
-            family_settings.load_family(task["model_family"], eval_dir), tid)
+        settings = family_settings.load_family(task["model_family"], eval_dir)
+        task["outcome_checks"] = family_settings.outcome_checks(settings, tid)
+        task["convention_checks"] = family_settings.convention_checks(settings)
         tasks[tid] = task
     return tasks
 
@@ -480,9 +486,12 @@ class NotebookCode:
                     self.calls.append(node)
 
     def values(self, node, depth: int = 0) -> list:
-        """Candidate values of `node`: a simple name is followed through its assignments."""
-        if isinstance(node, ast.Name) and depth < 8 and node.id in self.assigned:
+        """Candidate values of `node`: a simple name is followed through its assignments, and
+        a conditional expression (`a if cond else b`) stands for both branches."""
+        if depth < 8 and isinstance(node, ast.Name) and node.id in self.assigned:
             return [v for value in self.assigned[node.id] for v in self.values(value, depth + 1)]
+        if depth < 8 and isinstance(node, ast.IfExp):
+            return self.values(node.body, depth + 1) + self.values(node.orelse, depth + 1)
         return [node]
 
     def dotted(self, node, depth: int = 0) -> list:
@@ -540,8 +549,11 @@ class NotebookCode:
                 out.append(fields)
         return out
 
-    def strings(self, node) -> list:
-        """Possible string values of `node`; an unresolved f-string part becomes '{}'."""
+    def strings(self, node, depth: int = 0) -> list:
+        """Possible string values of `node`; an unresolved f-string part becomes '{}'.
+        `depth` bounds self-referencing assignments such as `x = x + y`."""
+        if depth > 8:
+            return []
         out = []
         for v in self.values(node):
             if isinstance(v, ast.Constant) and isinstance(v.value, str):
@@ -552,11 +564,12 @@ class NotebookCode:
                     if isinstance(piece, ast.Constant):
                         options = [str(piece.value)]
                     else:
-                        options = self.strings(piece.value) or ["{}"]
+                        options = self.strings(piece.value, depth + 1) or ["{}"]
                     parts = [p + o for p in parts for o in options]
                 out += parts
             elif isinstance(v, ast.BinOp) and isinstance(v.op, ast.Add):
-                out += [a + b for a in self.strings(v.left) or ["{}"] for b in self.strings(v.right) or ["{}"]]
+                out += [a + b for a in self.strings(v.left, depth + 1) or ["{}"]
+                        for b in self.strings(v.right, depth + 1) or ["{}"]]
         return out
 
 
@@ -968,22 +981,35 @@ new_check_scorers = [
 # run and before teardown, stored in the run record, and passed to the scorer as
 # outputs["outcome"] = {"outcome/<check>": bool}. Nothing is re-measured here.
 
-@mlflow_scorer
-def outcome_checks(inputs, outputs):
-    """Outcome: endpoint ready + serving the recorded version, valid embeddings, search works."""
-    task = _task(inputs)
+def _recorded_feedbacks(task: dict, outputs, names: list) -> list:
     measured = outputs.get("outcome")
     if not measured:
         raise ValueError(f"{task['task_id']}: no outcome in outputs — run check_outcome.py before teardown")
-    missing = [c for c in task["outcome_checks"] if c not in measured]
+    missing = [c for c in names if c not in measured]
     if missing:
         raise ValueError(f"{task['task_id']}: outcome checks not measured: {missing}")
     return [Feedback(name=c, value=bool(measured[c]), rationale="pass" if measured[c] else "fail")
-            for c in task["outcome_checks"]]
+            for c in names]
+
+
+@mlflow_scorer
+def outcome_checks(inputs, outputs):
+    """Outcome: endpoint ready + serving the recorded version, valid embeddings in its own
+    declared format, takes expression input, search works."""
+    task = _task(inputs)
+    return _recorded_feedbacks(task, outputs, task["outcome_checks"])
+
+
+@mlflow_scorer
+def convention_checks(inputs, outputs):
+    """Convention: the endpoint uses the shared single-cell input format (reported on its own)."""
+    task = _task(inputs)
+    return _recorded_feedbacks(task, outputs, task["convention_checks"])
 
 
 outcome_scorers = [outcome_checks]
-scorers = replicated_scorers + new_check_scorers + outcome_scorers
+convention_scorers = [convention_checks]
+scorers = replicated_scorers + new_check_scorers + outcome_scorers + convention_scorers
 
 
 # ---- Optional LLM judge over the task guidelines (off by default) ----------------
@@ -1020,12 +1046,13 @@ Answer with exactly one word: 'yes' if every guideline is satisfied, otherwise '
 
 # ---- Grouping + severity report (pure) ---------------------------------------------
 
-GROUPS = ("replicated", "new_checks", "outcome", "judge")
+GROUPS = ("replicated", "new_checks", "outcome", "convention", "judge")
 
 
 def metric_group(name: str) -> str:
     """Which reporting group a metric belongs to."""
-    for group, prefix in (("new_checks", NEW_CHECK_PREFIX), ("outcome", OUTCOME_PREFIX), ("judge", JUDGE_PREFIX)):
+    for group, prefix in (("new_checks", NEW_CHECK_PREFIX), ("outcome", OUTCOME_PREFIX),
+                          ("convention", CONVENTION_PREFIX), ("judge", JUDGE_PREFIX)):
         if name.startswith(prefix):
             return group
     return "replicated"
@@ -1037,11 +1064,12 @@ SEVERITIES = ("critical", "major", "minor")
 
 def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None) -> dict:
     """{"critical"|"major"|"minor": [failed metric names]} for one (run, task), from the
-    `checks` severities in expectations.json. Judge metrics have no severity and are skipped."""
+    `checks` severities in expectations.json. Judge metrics have no severity and convention
+    metrics are reported in their own column, so both are skipped."""
     meta = (tasks or TASKS)[task_id]["checks"]
     out = {sev: [] for sev in SEVERITIES}
     for name, ok in metrics.items():
-        if name.startswith(JUDGE_PREFIX):
+        if name.startswith((JUDGE_PREFIX, CONVENTION_PREFIX)):
             continue
         if name not in meta:
             raise ValueError(f"{task_id}: no severity for metric {name!r} in expectations.json")
@@ -1051,16 +1079,24 @@ def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None) -> dict:
 
 
 def severity_table(scores_by_run: dict, pairs: list, tasks: dict = None) -> str:
-    """Markdown: per pair, per run, per task — raw counts of failed checks by severity and
-    whether the outcome group passed. No percentages, no single score."""
-    lines = ["| Pair | Run | Task | Critical failed | Major failed | Minor failed | Outcome passed |",
-             "|---|---|---|---|---|---|---|"]
+    """Markdown: per pair, per run (or run sample), per task — raw counts of failed checks by
+    severity, whether the outcome group passed, and the convention checks on their own
+    ("-" if none were scored). No percentages, no single score. `scores_by_run` may hold
+    extra samples of a run under "<run> <label>" keys (e.g. "baseline attempt 1"); each
+    is listed under its pair right after the run's primary sample."""
+    lines = ["| Pair | Run | Task | Critical failed | Major failed | Minor failed | Outcome passed "
+             "| Shared input format |",
+             "|---|---|---|---|---|---|---|---|"]
     for pair in pairs:
         for run in pair:
-            for task_id, metrics in sorted(scores_by_run[run].items()):
-                failed = failed_by_severity(task_id, metrics, tasks)
-                outcome = [ok for name, ok in metrics.items() if name.startswith(OUTCOME_PREFIX)]
-                lines.append(f"| {pair[0]} / {pair[1]} | {run} | {task_id} | "
-                             + " | ".join(str(len(failed[s])) for s in SEVERITIES)
-                             + f" | {'yes' if outcome and all(outcome) else 'no'} |")
+            samples = [run] + sorted(k for k in scores_by_run if k.startswith(f"{run} "))
+            for sample in samples:
+                for task_id, metrics in sorted(scores_by_run.get(sample, {}).items()):
+                    failed = failed_by_severity(task_id, metrics, tasks)
+                    outcome = [ok for name, ok in metrics.items() if name.startswith(OUTCOME_PREFIX)]
+                    convention = [ok for name, ok in metrics.items() if name.startswith(CONVENTION_PREFIX)]
+                    lines.append(f"| {pair[0]} / {pair[1]} | {sample} | {task_id} | "
+                                 + " | ".join(str(len(failed[s])) for s in SEVERITIES)
+                                 + f" | {'yes' if outcome and all(outcome) else 'no'}"
+                                 + f" | {('yes' if all(convention) else 'no') if convention else '-'} |")
     return "\n".join(lines)

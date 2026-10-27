@@ -51,8 +51,9 @@ open-weight-models; managed volume `owm_teddy_files`), named per run with `<run>
 | download folder | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_<run>/` | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_<run>/` |
 
 Exception this round: teddy-001 `with_skill` uses `<run>` = `skill_on`
-(`run_suffix_overrides`), because the first `baseline`/teddy-001 run was pasted with the
-`with_skill` names (see the round README).
+(`run_suffix_overrides`), because for the first `baseline`/teddy-001 run the run guide
+supplied the wrong prompt (the planned with-skill teddy-001 prompt, with `_001_with_skill`
+names); wording is otherwise identical to the teddy-001 request (see the round README).
 
 If a run's pasted prompt or resource names differ from the rendered ones, record what was
 actually used in its run record (`prompt_used`, `resources_created`, and a line in
@@ -104,8 +105,9 @@ never a run of one pair against a run of the other.
 | `expectations.json` | answer key: difficulty, model family, variant, capability, expected facts, checks, new checks, outcome checks, per-check severity / source / environment dependence | scoring only |
 | `scorers.py` | MLflow scorers (exports `scorers`) | scoring only |
 | `score_open_weight_models.py` | Databricks scoring notebook | scoring only |
-| `models/teddy/runs_20261026/<run_id>/<task_id>.py` | exported notebooks (after the runs) | scoring only |
-| `models/teddy/runs_20261026/run_records.json` | one record per run: skill state, environment, hidden codes (incl. extra skills), backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, discarded / reason, notes | scoring only |
+| `models/teddy/runs_20261026/<run_id>/<task_id>.py` | exported notebooks (after the runs; `<task_id>_attempt<n>.py` for a run repeated as attempts) | scoring only |
+| `models/teddy/runs_20261026/run_records.json` | one record per run: skill state, environment, hidden codes if opted in, backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, endpoint config, attempt, discarded / reason, notes | scoring only |
+| `models/teddy/runs_20261026/RESULTS.md` | results of the 2026-10-27 runs (draft) | — |
 | `models/teddy/runs_20261026/scores/` | per-task scores (after scoring) | — |
 | `eval_report.md` | results | — |
 | `README_environments.md` | known Genie Code runtime snapshots | — |
@@ -117,10 +119,10 @@ runs are done (step 13).
 
 ## Run protocol
 
-**Run order for this round:** `baseline`/teddy-001 (in progress), `baseline`/teddy-002,
-`with_skill`/teddy-002, `with_skill`/teddy-001; then, optionally, the replication pair
-(`old_prompt_baseline`, then `old_prompt_with_skill`). Both skill-off runs come before
-any with-skill run. Deviations from plan are recorded in
+**Run order:** both skill-off runs before any with-skill run; then, optionally, the
+replication pair (`old_prompt_baseline`, then `old_prompt_with_skill`). The standard pair
+of round `runs_20261026` was run on 2026-10-27 (results:
+`models/teddy/runs_20261026/RESULTS.md`; the replication pair was not run). Deviations from plan are recorded in
 `models/teddy/runs_20261026/README.md`.
 A skill-off run never follows a with-skill run in the same pair, so nothing about the
 skill is in a chat or memory before its baseline. Between a with-skill run and the next
@@ -140,7 +142,7 @@ Checklist for **each** (run, task):
    ```
    `off` for the two skill-off runs, `on` for the two with-skill runs. Add `--dry-run`
    first to see the commands. For `on`, the script first builds and checks the copy
-   locally (hidden codes inserted, no `eval/` or `tests/`), then installs it.
+   locally (the skill's own files, unchanged; no `eval/` or `tests/`), then installs it.
    - It stops if another copy of the skill (for example an old `oss-models` folder) is
      installed; move or delete it and run again.
    - It stops if `.assistant/skills/open-weight-models` already exists — for example
@@ -153,13 +155,19 @@ Checklist for **each** (run, task):
      will see: the user skills folder (each `SKILL.md` with size and sha256), the
      sha256 of `/Workspace/Users/<workspace-user>/.assistant_instructions.md` if present,
      and whether `/Workspace/.assistant/skills` and
-     `/Workspace/.assistant_workspace_instructions.md` exist. For `on` it prints the two
-     hidden codes.
+     `/Workspace/.assistant_workspace_instructions.md` exist.
    - Default: open-weight-models is the only skill installed. If a run needs other skills
      too, pass each with `--extra-skill-dir <skill folder>` (repeatable): each is staged
-     the same way (no `eval/` or `tests/`), gets its own hidden code in its `SKILL.md`
-     (`# skill-proof-<name>: <code>`), is recorded under `extra_skills`, and is checked in
-     step 6. Pass the same extra skills in both runs of a pair.
+     the same way (no `eval/` or `tests/`) and recorded under `extra_skills`. Pass the
+     same extra skills in both runs of a pair.
+   - **Hidden codes are off by default.** `--hidden-codes` (opt-in) appends to the
+     installed `SKILL.md` and `teddy.md` an instruction to put a random code at the top
+     of any notebook. Do not use it as proof of skill use: an instruction planted in a
+     skill file to make the agent emit an unrelated marker is a prompt-injection
+     pattern, and Genie Code may rightly refuse it — in `with_skill`/teddy-001
+     (2026-10-27) it declined the marker as "possibly injected". It also changes the
+     files Genie Code reads. A code found shows a file was read; a code missing shows
+     nothing.
 2. **Clear memory.** In Genie Code, ask it to delete any memories about this
    evaluation, TEDDY, or the open-weight-models skill. Close that chat.
 3. **Check the Skills panel — before pasting the prompt.** Hard refresh the browser
@@ -186,8 +194,9 @@ Checklist for **each** (run, task):
        /Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/<task_id> \
        --format SOURCE --file skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py -p <profile>
    ```
-   Then check the hidden codes (every installed skill has one; they are the proof of
-   which skill files Genie Code read):
+   A repeat of the same (run, task) is exported as `<task_id>_attempt<n>.py` with
+   `"attempt": n` in its record; the latest attempt is the primary sample, earlier ones are
+   scored as extra samples. Only for runs installed with `--hidden-codes`, check the codes:
    ```bash
    python3 skills/open-weight-models/eval/install_skill_for_run.py --run-id <run_id> \
        --task-id <task_id> --check-notebook skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py
@@ -207,8 +216,11 @@ Checklist for **each** (run, task):
      `runs_20260924/results/with_skill/oss-001.txt:23`). Record the answer
      Genie Code gave in the notebook or chat instead (`skills_self_report.source` is
      pre-filled accordingly).
-   - The self-report is **Genie Code's own claim, not verified**. The hidden codes
-     (step 6) remain the proof that open-weight-models was read.
+   - **Evidence of skill use** is read from three sources together, none of them proof
+     alone: the self-report (Genie Code's own claim), the visible steps (for example
+     "Read Skill File" on `SKILL.md` / `teddy.md`), and skill-specific choices in the
+     notebook (for example the `teddy.md` input format, the pinned Hugging Face revision,
+     the `run_go` gate). Write them up per run in the round's results.
 8. **Check `resources_created`, fill `uc_model_version` and `compute`** in the run's
    record in `models/teddy/runs_20261026/run_records.json`. Step 1 pre-fills
    `resources_created` with the names the prompt asked for (`family.json`, `<catalog>`
@@ -217,21 +229,31 @@ Checklist for **each** (run, task):
    `compute.runtime` from the notebook's runtime cell or the compute it ran on (for
    example "serverless GPU (GPU_1xA10)", "AI Runtime v5").
 9. **Outcome checks — before any teardown.** From the laptop (needs
-   `databricks-sdk`, verified with 0.157.0):
+   `databricks-sdk`, verified with 0.157.0, and `mlflow-skinny` to read the signature):
    ```bash
    python3 skills/open-weight-models/eval/check_outcome.py --profile <profile> \
        --run-id <run_id> --task-id <task_id> --catalog <catalog> [--reference-endpoint <name>]
    ```
    (`--catalog` fills the `<catalog>` placeholder at call time; the record keeps it.)
-   It checks the endpoint is READY and serves the recorded model version, sends the
-   fixed request in `models/teddy/fixtures/teddy_request.json` (3 cells × 100 real 70M-vocab genes,
-   built per the `teddy.md` serving contract) and checks one finite, non-zero,
-   512-dimensional embedding per cell (512 = `d_model` in the 70M `config.json`); for
-   teddy-002 it checks the Vector Search endpoint is ONLINE, the index is ready, and a
-   nearest-neighbour query with a fixture embedding returns rows with a cell-type
-   column. Results go into the record's `"outcome"`. `--reference-endpoint` (optional)
-   adds the per-cell cosine similarity against another TEDDY endpoint, as information
-   only — no pass/fail threshold is defined.
+   It checks the endpoint is READY and serves the recorded model version, reads the
+   input signature of that registered model version, and sends the fixed cells of
+   `models/teddy/fixtures/teddy_request.json` (3 cells × 100 real 70M-vocab genes, of
+   different lengths once zero counts are dropped) **in the format the endpoint declares**
+   — the shared `teddy.md` format, gene identifiers + values per cell, or pre-tokenized
+   token IDs per cell — so a valid format of the run's own is not penalised. It checks
+   one finite, non-zero, 512-dimensional embedding per cell (512 = `d_model` in the 70M
+   `config.json`), whether the endpoint takes cell expression rather than token IDs, and,
+   separately, whether it uses the shared format. The request is POSTed to
+   `/serving-endpoints/<name>/invocations` with inference controls under `"params"` (the
+   key the MLflow scoring server reads; `serving_endpoints.query(extra_params=...)` is
+   silently dropped). For teddy-002 it checks the Vector Search endpoint is ONLINE, the
+   index is ready, and a nearest-neighbour query with a fixture embedding — asking only
+   for columns the index holds — returns rows with a cell-type column. Results go into
+   the record's `"outcome"`, the endpoint's workload type, scale to zero and AI Gateway
+   flags into `"endpoint_config"`. A check that cannot be measured (no signature, an
+   unrecognised format) is recorded as `null` with the reason; measure it by hand before
+   teardown. `--reference-endpoint` (optional) adds the per-cell cosine similarity
+   against another TEDDY endpoint, as information only — no pass/fail threshold is defined.
 10. **Tear down what the run created** — and only that, using the names in
    `resources_created`:
    ```bash
@@ -255,7 +277,7 @@ Checklist for **each** (run, task):
 12. **Record.** Write anything unusual (questions asked and answers given, crashes,
     how long it ran) into the record's `"notes"`.
 
-After all eight (run, task) sessions:
+After all (run, task) sessions (four for the standard pair, eight with the replication pair):
 
 13. **Score.** Copy the repo to a workspace folder **outside** `.assistant/skills/`
     (for example a Git folder at `/Workspace/Users/<workspace-user>/<repo-folder>`),
@@ -265,18 +287,20 @@ After all eight (run, task) sessions:
     python3 skills/open-weight-models/eval/install_skill_for_run.py --profile <profile> \
         --user <workspace-user> --restore-original
     ```
-    It first checks that the installed copy carries an eval marker and that the recorded
-    pre-eval backup (if any) exists locally, and stops without deleting anything if not.
-    It then deletes the eval copy (it carries the hidden codes) and, if the user had the
-    skill installed before the eval, re-imports that original install from its backup —
-    the first backup whose record says `"backup_of": "pre-eval install"` (a copy without
-    the hidden codes). If there is none, the user had no install before the eval and the
+    It first checks that the installed copy is one the eval installed (its `SKILL.md`
+    sha256 matches an install fingerprinted in the run records, or it carries a
+    `--hidden-codes` marker) and that the recorded pre-eval backup (if any) exists
+    locally, and stops without deleting anything if not. It then deletes the eval copy
+    and, if the user had the skill installed before the eval, re-imports that original
+    install from its backup — the first backup whose record says
+    `"backup_of": "pre-eval install"`. If there is none, the user had no install before the eval and the
     skill is left removed. Add `--dry-run` first to see which applies. Extra skills
     (`--extra-skill-dir`) are not restored by this command: delete them, or re-import
     their recorded `extra_skills[].backup`, by hand.
 
-A with-skill run whose notebook shows neither code did not pick up the skill. Keep it
-and report it — that is a result, not a failed run.
+A with-skill run with no evidence of skill use (self-report, visible steps, notebook
+choices) did not pick up the skill. Keep it and report it — that is a result, not a
+failed run.
 
 ## Scorers
 
@@ -315,14 +339,22 @@ each result's rationale says why it passed or failed):
 
 **Outcome group** (metric names start with `outcome/`): did what the run built actually
 work? Measured live by `check_outcome.py` (step 9, before teardown), stored in the run
-record, and read by the scorer — nothing is re-measured at scoring time.
+record, and read by the scorer — nothing is re-measured at scoring time. Requests use the
+endpoint's own declared input format.
 
 | Check | Passes when | Tasks |
 |---|---|---|
 | `endpoint_ready`, `serves_recorded_version` | the endpoint is READY and serves the recorded UC model + version | both |
-| `one_embedding_per_cell`, `embeddings_finite`, `embedding_dim` | the fixture request returns one embedding per cell, all finite and non-zero, each of dimension 512 | both |
+| `returns_valid_embeddings` | the fixed cells, in the declared format and of different lengths in one request, get one finite, non-zero, 512-dimension embedding each | both |
+| `accepts_expression_input` | the endpoint takes cell expression + gene identifiers, not pre-tokenized token IDs (which leave TEDDY's tokenization to every client) | both |
 | `vs_endpoint_online`, `index_ready` | the Vector Search endpoint is ONLINE and the index ready | teddy-002 |
-| `nn_query_returns_rows`, `nn_has_cell_type_column` | a nearest-neighbour query with a fixture embedding returns rows that include a cell-type column | teddy-002 |
+| `nn_returns_cell_type` | a nearest-neighbour query with a fixture embedding, asking only for columns the index holds, returns rows that include a cell-type column | teddy-002 |
+
+**Convention check** (metric name `convention/shared_single_cell_format`, read from the
+same record, scored and compared on its own): the endpoint takes the shared single-cell
+format (`adata_sparsematrix` + `adata_obs` + `adata_var`) of `teddy.md`, also used by
+`scgpt.md` and Genesis Workbench. A convention, not correctness: it is shown in its own
+column of the severity table and not counted as a failure.
 
 **Optional, off by default:** `--reference-endpoint` cosine similarity (information
 only), and an LLM judge over each task's `guidelines` (`guideline_judges()`,
@@ -339,7 +371,9 @@ Every check in every group has an entry in `expectations.json` → `"checks"`:
   inference table, no provenance, deletes without looking, unvalidated);
   **minor** — robustness or style.
 - `source`: the `SKILL.md` / `teddy.md` line the check rests on (required for critical
-  and major), and `why`.
+  and major), its `quote`, and `why`. The test matches the quote anywhere in the cited
+  file and warns with the line it finds if the line number has drifted, so editing the
+  skill does not break the answer key.
 - `depends_on`: `model` (true because of TEDDY itself — `HF_HUB_DISABLE_XET` because the
   Hugging Face repo uses Xet, `teddy.md:130`; `transformers==4.41.0` because of the
   model code, `teddy.md:177`; the 512 dimension), `compute` (`/tmp` vs `/local_disk0`,
@@ -349,9 +383,10 @@ Every check in every group has an entry in `expectations.json` → `"checks"`:
   actual compute and runtime (step 8), so a check that depends on compute can be read
   against what the run used.
 
-The scoring notebook prints, per pair, run and task, the **raw counts of failed checks
-per severity** and whether the **outcome group passed** — no percentages and no single
-score — so every failure can be read against whether the run actually worked.
+The scoring notebook prints, per pair, run (and extra attempt) and task, the **raw counts
+of failed checks per severity**, whether the **outcome group passed**, and the convention
+check on its own — no percentages and no single score — so every failure can be read
+against whether the run actually worked.
 
 ### Known false negatives in the replicated set
 
@@ -369,6 +404,8 @@ valid alternatives fail them anyway; read such failures by hand.
 | `endpoint_deployment/sdk_enums` | REST deployment with `"workload_type": "GPU_SMALL"` (valid for the REST API) | — |
 | `ai_search/graceful_skip` | `try/except AnalysisException` around reading the table | — |
 | `endpoint_deployment/run_go_gate` | a widget guard with another name (e.g. `deploy`) | `SKILL.md:251` suggests `run_go` |
+| `model_registration/infer_signature` | an explicit `ModelSignature(inputs=Schema([...]))` (seen in the 2026-10-27 baselines) | — |
+| `download_staging/deps_pinned` | no `transformers` dependency at all, e.g. the encoder re-implemented in plain PyTorch (2026-10-27 `baseline`/teddy-002) | — |
 
 Checked and **not** false negatives:
 
@@ -385,14 +422,15 @@ Checked and **not** false negatives:
 `score_open_weight_models.py` evaluates each (run, task) with `mlflow.genai.evaluate`,
 logging as the row's `query` the prompt actually pasted in that run (the evalset query,
 or the `old_prompt_*.md` text with placeholders as written); it stops if the latest
-record of any (run, task) is marked discarded or has no recorded outcome. It extracts
-scores with `compare_runs.extract_scores()`, writes `models/teddy/runs_20261026/scores/`
-`baseline_scores.json`, `with_skill_scores.json`, `old_prompt_baseline_scores.json` and
-`old_prompt_with_skill_scores.json` (all metrics) and
-`models/teddy/runs_20261026/scores/<run_id>_<group>.json`, runs `compare_runs.main()` within each pair
-only — `baseline` vs `with_skill`, `old_prompt_baseline` vs `old_prompt_with_skill` —
-once per group (replicated, new checks, outcome, and the judge if enabled), and prints
-the severity table.
+scores only the pairs that were run (a pair whose records are all discarded is skipped)
+and stops if a counted record has no recorded outcome or a protocol gap. Discarded
+records are left out. It extracts scores with `compare_runs.extract_scores()`, writes
+`models/teddy/runs_20261026/scores/<run_id>_scores.json` (all metrics; extra attempts as
+`<run_id>_attempt_<n>_scores.json`) and `<run_id>_<group>.json`, runs
+`compare_runs.main()` within each pair only — `baseline` vs `with_skill`,
+`old_prompt_baseline` vs `old_prompt_with_skill`, primary samples — once per group
+(replicated, new checks, outcome, convention, and the judge if enabled), and prints the
+severity table.
 
 A task passes a group only if every check in that group passes. Ship gate (skill-eval
 default): at least one task-level win and zero regressions, judged on the standard pair,

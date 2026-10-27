@@ -5,11 +5,8 @@ Run from a laptop with the Databricks CLI before each run (see eval/README.md).
 Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
 
   ON   first stages a copy locally — SKILL.md + references/ (+ assets/, scripts/ if
-       present; never eval/ or tests/) — and appends to the copied SKILL.md and
-       references/models/teddy.md a line asking Genie Code to put a random code at the
-       top of any notebook it creates, so the exported notebook shows which file was
-       read. The staged copy is validated before anything touches the workspace.
-       Then imports it to the target.
+       present; never eval/ or tests/), unchanged — validates it before anything touches
+       the workspace, then imports it to the target.
   OFF  leaves the target absent.
   BOTH refuse to run if another copy of the skill is installed (an oss-models folder,
        or any folder whose SKILL.md is named open-weight-models, in the user or the
@@ -21,9 +18,10 @@ Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
        (default: family.json current_round; --family / --round / --records): the environment
        (both skills-folder listings, size + sha256 of each user-folder SKILL.md and of
        the user's .assistant_instructions.md, whether /Workspace/.assistant/skills and
-       /Workspace/.assistant_workspace_instructions.md exist), the codes, the backup
+       /Workspace/.assistant_workspace_instructions.md exist), the codes (if any), the backup
        path and whether it holds the user's "pre-eval install" or an "eval copy" (an
-       installed SKILL.md with a marker line), the skill's git commit, a UTC timestamp,
+       installed SKILL.md whose sha256 matches an install recorded by this script, or that
+       carries a marker line), the skill's git commit, a UTC timestamp,
        the fields filled in by hand after the run ("compute", "resources_created",
        "discarded", "discard_reason", "notes"), and "outcome", written by
        check_outcome.py.
@@ -32,13 +30,22 @@ Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
   backup of the user's pre-eval install, or, if there is none, leaves the skill removed.
 
   --extra-skill-dir <skill folder> (repeatable; default none) also installs another skill
-  for the run, staged the same way with its own code in its SKILL.md
-  (`# skill-proof-<name>: <code>`), recorded under "extra_skills" and checked by
-  --check-notebook. Extra skills are not handled by --restore-original: remove or restore
-  them by hand from their recorded backups.
+  for the run, staged the same way, recorded under "extra_skills". Extra skills are not
+  handled by --restore-original: remove or restore them by hand from their recorded backups.
+
+  --hidden-codes (opt-in, OFF by default) appends to the staged SKILL.md and
+  references/models/teddy.md (and each extra skill's SKILL.md) a "## Notebook marker"
+  section asking Genie Code to put a random code at the top of any notebook it creates.
+  Not proof of skill use: an instruction planted in a skill file to make the agent emit an
+  unrelated marker is a prompt-injection pattern, and Genie Code may rightly refuse it (it
+  did in with_skill/teddy-001, 2026-10-27, flagging the text as possibly injected). It also
+  changes what Genie Code reads. A code in a notebook shows the file was read; a missing code
+  shows nothing. Use skill-use evidence instead: the self-report, the chat's visible steps
+  and skill-specific choices in the notebook (eval/README.md).
 
   --check-notebook <exported .py> reports which codes from the latest record for
-  --run-id/--task-id appear in that notebook. Nothing is sent to the workspace.
+  --run-id/--task-id appear in that notebook (runs installed with --hidden-codes only).
+  Nothing is sent to the workspace.
 
 Records hold no user name, profile or host: the user folder is written as
 /Workspace/Users/<workspace-user>, so run_records.json can be committed.
@@ -167,9 +174,9 @@ def insert_codes(staged: Path, codes: dict[str, str]) -> None:
         append_marker(staged / rel, marker_line(rel, code))
 
 
-def stage_extra_skill(skill_dir: Path, dest_root: Path) -> tuple:
-    """Stage an extra skill (installed alongside open-weight-models for a run) with its own
-    hidden code in its SKILL.md. Returns (name, staged folder, code)."""
+def stage_extra_skill(skill_dir: Path, dest_root: Path, hidden_code: bool = False) -> tuple:
+    """Stage an extra skill (installed alongside open-weight-models for a run); with
+    `hidden_code`, its SKILL.md gets its own marker. Returns (name, staged folder, code or None)."""
     skill_dir = Path(skill_dir)
     name = skill_dir.name
     skill_md = skill_dir / "SKILL.md"
@@ -181,9 +188,10 @@ def stage_extra_skill(skill_dir: Path, dest_root: Path) -> tuple:
     staged = Path(dest_root) / name
     staged.mkdir()
     stage_skill(skill_dir, staged)
-    code = secrets.token_hex(4)
-    append_marker(staged / "SKILL.md", extra_marker_line(name, code))
-    validate_staged(staged, {"SKILL.md": code}, line_for=lambda rel, c: extra_marker_line(name, c))
+    code = secrets.token_hex(4) if hidden_code else None
+    if code:
+        append_marker(staged / "SKILL.md", extra_marker_line(name, code))
+    validate_staged(staged, {"SKILL.md": code} if code else {}, line_for=lambda rel, c: extra_marker_line(name, c))
     return name, staged, code
 
 
@@ -208,8 +216,10 @@ def check_notebook(text: str, codes: dict[str, str]) -> dict[str, bool]:
 
 
 def all_codes(record: dict) -> dict[str, str]:
-    """Every hidden code of a run: open-weight-models files plus "<extra skill>/SKILL.md"."""
-    return {**record["codes"], **{f"{e['name']}/SKILL.md": e["code"] for e in record.get("extra_skills", [])}}
+    """Every hidden code of a run: open-weight-models files plus "<extra skill>/SKILL.md"
+    (empty unless the run was installed with --hidden-codes)."""
+    return {**record["codes"], **{f"{e['name']}/SKILL.md": e["code"]
+                                  for e in record.get("extra_skills", []) if e.get("code")}}
 
 
 def expected_panel(state: str, extra_names: list) -> list:
@@ -247,8 +257,22 @@ def latest_record(records: list[dict], run_id: str, task_id: str) -> dict:
     return matches[-1]
 
 
+def run_samples(records: list[dict], run_id: str, task_id: str) -> list[dict]:
+    """Records of (run, task) that count, oldest first: discarded ones left out. The last is
+    the primary sample; earlier ones (repeat attempts) are extra samples."""
+    return [r for r in records if r["run_id"] == run_id and r["task_id"] == task_id and not r.get("discarded")]
+
+
+def export_file(record: dict) -> str:
+    """The exported notebook of a run, relative to the round folder:
+    <run_id>/<task_id>.py, or <run_id>/<task_id>_attempt<n>.py when the record has "attempt"."""
+    attempt = record.get("attempt")
+    return f"{record['run_id']}/{record['task_id']}" + (f"_attempt{attempt}" if attempt else "") + ".py"
+
+
 def build_record(*, run_id, task_id, state, user, codes, environment, skill_commit, backup=None,
-                 backup_of=None, extra_skills=(), timestamp=None, family=family_settings.DEFAULT_FAMILY) -> dict:
+                 backup_of=None, extra_skills=(), timestamp=None, family=family_settings.DEFAULT_FAMILY,
+                 hidden_codes=False) -> dict:
     """One run record. `skills_panel`, `visible_steps`, `skills_self_report`, `compute`,
     `resources_created`, `discarded`, `discard_reason` and `notes` are filled in by hand
     around the run; `outcome` by check_outcome.py."""
@@ -260,6 +284,7 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
         "timestamp": timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "skill_commit": skill_commit,
         "target": redact_user(target_dir(user), user),
+        "hidden_codes": hidden_codes,                  # --hidden-codes given (off by default; not proof)
         "codes": codes,
         "backup": str(backup) if backup else None,
         "backup_of": backup_of,
@@ -273,7 +298,7 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
             "observed_all_skills_tab": [],
         },
         "visible_steps": {"text": "", "screenshot": ""},  # the chat's visible step list, after the run
-        "skills_self_report": {                        # Genie Code's own answer; NOT verified (codes are the proof)
+        "skills_self_report": {                        # Genie Code's own answer; read with visible_steps + the notebook
             "source": SELF_REPORT_IN_NOTEBOOK if run_id.startswith("old_prompt") else SELF_REPORT_FOLLOW_UP,
             "text": "",
         },
@@ -289,7 +314,8 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
 
 def protocol_gaps(record: dict) -> list:
     """Hand-filled protocol fields still empty in a run record. A field may say "not
-    available" only if `notes` explains why. The scoring notebook refuses runs with gaps."""
+    available" only with a reason — after it in the field ("not available: <why>") or in
+    `notes`. The scoring notebook refuses runs with gaps."""
     fields = {
         "skills_panel.screenshot": (record.get("skills_panel") or {}).get("screenshot", ""),
         "visible_steps.text": (record.get("visible_steps") or {}).get("text", ""),
@@ -300,8 +326,10 @@ def protocol_gaps(record: dict) -> list:
         value = str(value).strip()
         if not value:
             gaps.append(f"{name} is empty")
-        elif value.lower() == NOT_AVAILABLE and not str(record.get("notes", "")).strip():
-            gaps.append(f"{name} is '{NOT_AVAILABLE}' but notes do not say why")
+        elif value.lower().startswith(NOT_AVAILABLE):
+            reason = value[len(NOT_AVAILABLE):].strip(" :;,.-")
+            if not reason and not str(record.get("notes", "")).strip():
+                gaps.append(f"{name} is '{NOT_AVAILABLE}' but neither it nor notes say why")
     return gaps
 
 
@@ -311,10 +339,31 @@ def first_backup(records: list[dict]) -> str | None:
     return next((r["backup"] for r in records if r.get("backup") and r.get("backup_of") == PRE_EVAL), None)
 
 
-def is_eval_copy(skill_md: bytes | None, name: str = SKILL_NAME) -> bool:
-    """True if an installed SKILL.md is one this script installed (it carries a marker)."""
+def eval_install_hashes(records: list[dict], name: str = SKILL_NAME) -> set:
+    """sha256 of every SKILL.md of `name` that this script installed, as fingerprinted in the
+    records' environment (collected right after the install): open-weight-models in "on"
+    runs, an extra skill in the runs that list it under extra_skills."""
+    hashes = set()
+    for record in records:
+        managed = name == SKILL_NAME and record.get("state") == "on" or \
+            name in {e.get("name") for e in record.get("extra_skills") or []}
+        if not managed:
+            continue
+        for entry in (record.get("environment") or {}).get("user_skills") or []:
+            if entry.get("name") == name and entry.get("skill_md"):
+                hashes.add(entry["skill_md"]["sha256"])
+    return hashes
+
+
+def is_eval_copy(skill_md: bytes | None, name: str = SKILL_NAME, records: list[dict] = ()) -> bool:
+    """True if an installed SKILL.md is one this script installed: its sha256 matches an
+    install recorded in `records`, or it carries a --hidden-codes marker. (Without markers the
+    eval copy is byte-identical to the skill at that commit, so the records decide.)"""
+    if skill_md is None:
+        return False
     label = MARKED_FILES["SKILL.md"] if name == SKILL_NAME else f"skill-proof-{name}"
-    return skill_md is not None and f"# {label}: ".encode() in skill_md
+    return (f"# {label}: ".encode() in skill_md
+            or hashlib.sha256(skill_md).hexdigest() in eval_install_hashes(records, name))
 
 
 def fingerprint(data: bytes | None) -> dict | None:
@@ -470,13 +519,14 @@ def set_state(args, cli: Cli | None = None) -> int:
         if args.state == "on":
             staged.mkdir()
             files = stage_skill(Path(args.skill_dir), staged)
-            codes = make_codes()
-            insert_codes(staged, codes)
+            if args.hidden_codes:
+                codes = make_codes()
+                insert_codes(staged, codes)
             validate_staged(staged, codes)
             print(f"staged {len(files)} files: {', '.join(files)}")
         extras_root = Path(tmp) / "extra"
         extras_root.mkdir()
-        extras = [stage_extra_skill(Path(d), extras_root) for d in args.extra_skill_dir]
+        extras = [stage_extra_skill(Path(d), extras_root, args.hidden_codes) for d in args.extra_skill_dir]
         extra_names = [name for name, _, _ in extras]
         if len(set(extra_names)) != len(extra_names):
             raise ValueError(f"extra skills given twice: {extra_names}")
@@ -504,6 +554,7 @@ def set_state(args, cli: Cli | None = None) -> int:
             print("Re-run with --replace-existing to back it up locally, delete it, and continue.")
             return 3
         backups = {}                                   # name -> (local backup folder, backup_of)
+        records = load_records(Path(args.records))
         for n in names:
             if n in installed or (args.dry_run and args.replace_existing):
                 folder = f"{user_skills_dir(args.user)}/{n}"
@@ -513,7 +564,8 @@ def set_state(args, cli: Cli | None = None) -> int:
                     print(f"(dry run: the next commands run only if {n} is installed)")
                 else:
                     backup.parent.mkdir(parents=True, exist_ok=True)
-                backups[n] = (backup, EVAL_COPY if is_eval_copy(cli.export_bytes(f"{folder}/SKILL.md"), n) else PRE_EVAL)
+                installed_md = cli.export_bytes(f"{folder}/SKILL.md")
+                backups[n] = (backup, EVAL_COPY if is_eval_copy(installed_md, n, records) else PRE_EVAL)
                 cli.run("workspace", "export-dir", folder, str(backup))
                 cli.run("workspace", "delete", folder, "--recursive")
 
@@ -536,7 +588,8 @@ def set_state(args, cli: Cli | None = None) -> int:
             for rel, code in codes.items():
                 print(f"code for {rel}: {marker_line(rel, code)}")
             for n, _, code in extras:
-                print(f"code for {n}/SKILL.md: {extra_marker_line(n, code)}")
+                if code:
+                    print(f"code for {n}/SKILL.md: {extra_marker_line(n, code)}")
 
     if args.dry_run:
         print("(dry run: no record written)")
@@ -547,7 +600,7 @@ def set_state(args, cli: Cli | None = None) -> int:
         run_id=args.run_id, task_id=args.task_id, state=args.state, user=args.user, codes=codes,
         environment=collect_environment(cli, args.user), skill_commit=skill_commit(Path(args.skill_dir)),
         backup=main_backup.relative_to(records_dir) if main_backup else None, backup_of=main_backup_of,
-        family=args.family,
+        family=args.family, hidden_codes=args.hidden_codes,
         extra_skills=[{"name": n, "code": code,
                        "backup": str(backups[n][0].relative_to(records_dir)) if n in backups else None,
                        "backup_of": backups[n][1] if n in backups else None} for n, _, code in extras],
@@ -561,7 +614,8 @@ def restore_original(args, cli: Cli | None = None) -> int:
     """After all runs: put back the install that existed before the eval, or leave the skill removed."""
     cli = cli or Cli(args.profile, args.dry_run)
     target = target_dir(args.user)
-    recorded = first_backup(load_records(Path(args.records)))
+    records = load_records(Path(args.records))
+    recorded = first_backup(records)
     backup = str(Path(args.records).parent / recorded) if recorded else None
     # Check everything before deleting anything.
     if backup and not Path(backup).is_dir() and not args.dry_run:
@@ -570,12 +624,13 @@ def restore_original(args, cli: Cli | None = None) -> int:
         return 1
     entries = cli.list_dir(user_skills_dir(args.user)) or []
     installed = args.dry_run or any(e["name"] == SKILL_NAME for e in entries)
-    if installed and not args.dry_run and not is_eval_copy(cli.export_bytes(f"{target}/SKILL.md")):
-        print(f"Refusing to continue: {target} has no eval marker, so it is not a copy this script "
-              "installed (perhaps the user reinstalled the skill). Nothing was deleted.")
+    if installed and not args.dry_run and not is_eval_copy(cli.export_bytes(f"{target}/SKILL.md"), records=records):
+        print(f"Refusing to continue: {target} is not a copy this script installed (its SKILL.md matches "
+              "no recorded eval install and has no marker; perhaps the user reinstalled the skill). "
+              "Nothing was deleted.")
         return 1
     if installed:
-        cli.run("workspace", "delete", target, "--recursive")    # the eval copy, with hidden codes
+        cli.run("workspace", "delete", target, "--recursive")    # the eval copy
     if recorded is None:
         print("No install existed before the eval (no backup recorded): the skill is left removed.")
         return 0
@@ -590,7 +645,7 @@ def check_mode(args) -> int:
     found = check_notebook(Path(args.check_notebook).read_text(encoding="utf-8"), all_codes(record))
     print(f"{args.run_id}/{args.task_id} (skill {record['state']}, recorded {record['timestamp']})")
     if not found:
-        print("  no codes recorded (skill was off)")
+        print("  no codes recorded (skill off, or installed without --hidden-codes)")
     for rel, present in found.items():
         print(f"  {rel}: {'code found' if present else 'code NOT found'}")
     return 0
@@ -608,8 +663,11 @@ def parse_args(argv=None):
     parser.add_argument("--round", help="runs_<date> folder (default: family.json current_round)")
     parser.add_argument("--records", help="default: eval/models/<family>/<round>/run_records.json")
     parser.add_argument("--extra-skill-dir", action="append", default=[], metavar="SKILL_DIR",
-                        help="also install this skill for the run (repeatable), with its own hidden code; "
-                             "default: none")
+                        help="also install this skill for the run (repeatable); default: none")
+    parser.add_argument("--hidden-codes", action="store_true",
+                        help="opt-in, off by default: append a notebook-marker instruction with a random code "
+                             "to the installed skill files. Not proof of skill use (a planted instruction is a "
+                             "prompt-injection pattern that Genie Code may rightly refuse); see the docstring")
     parser.add_argument("--replace-existing", action="store_true",
                         help="if the skill is already installed, back it up to "
                              "<records folder>/<run-id>/backup/ and delete it before continuing")

@@ -57,6 +57,12 @@ def outcome_checks(settings: dict, task_id: str) -> list:
         list(out["checks_vector_search"]) if task_id in out["vector_search_tasks"] else [])
 
 
+def convention_checks(settings: dict) -> list:
+    """Convention check names (reported apart from the outcome group): e.g. whether the
+    endpoint takes the shared single-cell input format of the family's reference notes."""
+    return list(settings["outcome"].get("convention_checks", []))
+
+
 def render_query(query: str, settings: dict, run_id: str, task_id: str | None = None) -> str:
     """An evalset.json query with {run} replaced by the run's name suffix."""
     return query.replace("{run}", run_suffix(settings, run_id, task_id))

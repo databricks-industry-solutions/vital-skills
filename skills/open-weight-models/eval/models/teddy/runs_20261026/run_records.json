@@ -47,9 +47,10 @@
       "vector_search_index": ""
     },
     "outcome": null,
-    "discarded": false,
-    "discard_reason": "",
-    "notes": ""
+    "discarded": true,
+    "discard_reason": "setup record only; run order changed",
+    "notes": "",
+    "hidden_codes": false
   },
   {
     "run_id": "baseline",
@@ -105,46 +106,107 @@
     "outcome": {
       "outcome/endpoint_ready": {
         "passed": true,
-        "detail": "state.ready=READY"
+        "detail": "state.ready=READY",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/serves_recorded_version": {
         "passed": true,
-        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1')"
+        "detail": "serves the recorded UC model version 1",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/one_embedding_per_cell": {
-        "passed": false,
-        "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "own declared format {gene_ids: array<string> Ensembl IDs, counts: array<double> raw counts}: request built from 2 of the fixture cells (fixture: 3 cells x 100 genes) -> 2 x 512-dim finite cell_emb (+cell_emb_first, n_tokens)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embeddings_finite": {
-        "passed": false,
-        "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+      "outcome/accepts_expression_input": {
+        "passed": true,
+        "detail": "declared input: gene_ids array<string> + counts array<double> (cell expression + gene IDs)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embedding_dim": {
+      "convention/shared_single_cell_format": {
         "passed": false,
-        "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+        "detail": "own format, not adata_sparsematrix + adata_obs + adata_var",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/vs_endpoint_online": {
         "passed": true,
-        "detail": "endpoint state=ONLINE"
+        "detail": "endpoint state=ONLINE (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/index_ready": {
         "passed": true,
-        "detail": "ready=True, indexed rows=3538"
+        "detail": "ready=True, indexed rows=3538 (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/nn_query_returns_rows": {
-        "passed": false,
-        "detail": "query index: no fixture embedding to query with"
-      },
-      "outcome/nn_has_cell_type_column": {
-        "passed": false,
-        "detail": "query index: no fixture embedding to query with"
+      "outcome/nn_returns_cell_type": {
+        "passed": true,
+        "detail": "manual query with the own-format embedding: 5 rows incl. cell_subtype + cell_type",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       }
     },
     "discarded": false,
     "discard_reason": "",
     "notes": "Notebook created as baseline/teddy-02, renamed by user to teddy-002 (same notebook id). Memory check before run: none found. Genie reported: TeddyGModel fails on current transformers ('all_tied_weights_keys'); it re-implemented the encoder in plain PyTorch with the same weights (strict load, MLM decoder dropped). Input = raw counts + Ensembl IDs, normalised by TEDDY gene medians, top-2048 ranked. Mean pooling chosen (held-out-donor kNN subtype accuracy 98.3% vs 92.4% first-token, 41.5% majority) on TEDDY sample data (3,538 interneurons, 7 subtypes). Endpoint on CPU Small, scale-to-zero; ~15 s per cell; demo 7/8 correct. One code-execution step was blocked by a product safety guardrail (HTTP GET to an external URL). User answered 'Yes, go ahead.' to the endpoint-creation question. | Outcome (check_outcome.py, teddy.md contract): endpoint READY + serves v1 PASS; VS endpoint ONLINE + index ready (3,538 rows) PASS; fixture request FAILS only because this endpoint uses its own input format {gene_ids: Ensembl strings, counts: raw counts} instead of adata_sparsematrix/obs/var. Own-format check (polly, same 3 fixture cells x 100 genes): 2 cells -> 2 x 512-dim finite cell_emb (+cell_emb_first, n_tokens); VS query with that embedding returns 5 rows incl. cell_subtype + cell_type. => functionally works end to end on real expression input; the contract-specific outcome checks are a check-design bias to fix.",
     "prompt_used": null,
-    "outcome_checked_at": "2026-10-27T06:59:03+00:00"
+    "outcome_checked_at": "2026-10-27T06:59:03+00:00",
+    "hidden_codes": false,
+    "outcome_superseded": {
+      "note": "check_outcome.py results with the teddy.md-format fixture only, before the outcome group was restructured (2026-10-27) to send the request in the endpoint's own declared format. Kept as evidence; superseded by \"outcome\".",
+      "checked_at": "2026-10-27T06:59:03+00:00",
+      "results": {
+        "outcome/endpoint_ready": {
+          "passed": true,
+          "detail": "state.ready=READY"
+        },
+        "outcome/serves_recorded_version": {
+          "passed": true,
+          "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline', '1')"
+        },
+        "outcome/one_embedding_per_cell": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+        },
+        "outcome/embeddings_finite": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+        },
+        "outcome/embedding_dim": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_002_baseline': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(string) (required), 'counts': Array(double) (required)]'. Error: Model is missing inputs ['gene_ids', 'counts']. Note that there were extra inputs: ['adata_sparsematrix', 'adata_obs', 'adata_var']."
+        },
+        "outcome/vs_endpoint_online": {
+          "passed": true,
+          "detail": "endpoint state=ONLINE"
+        },
+        "outcome/index_ready": {
+          "passed": true,
+          "detail": "ready=True, indexed rows=3538"
+        },
+        "outcome/nn_query_returns_rows": {
+          "passed": false,
+          "detail": "query index: no fixture embedding to query with"
+        },
+        "outcome/nn_has_cell_type_column": {
+          "passed": false,
+          "detail": "query index: no fixture embedding to query with"
+        }
+      }
+    },
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline",
+          "version": "1",
+          "workload_type": "CPU",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": false,
+      "ai_gateway_usage_tracking": false,
+      "provenance": "measured by orchestrator 2026-10-27, before teardown"
+    }
   },
   {
     "run_id": "baseline",
@@ -200,28 +262,33 @@
     "outcome": {
       "outcome/endpoint_ready": {
         "passed": true,
-        "detail": "state.ready=READY"
+        "detail": "state.ready=READY",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/serves_recorded_version": {
         "passed": true,
-        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1')"
+        "detail": "serves the recorded UC model version 1",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/one_embedding_per_cell": {
+      "outcome/returns_valid_embeddings": {
         "passed": false,
-        "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        "detail": "own declared format (gene_ids array<long>): equal-length batch (2 cells x 50 ids) returns 2 x 512-dim finite cell_emb; mixed-length batch (50, 80 ids) fails 'index out of range' because predict() pads with config.pad_value -100 used as a token id",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embeddings_finite": {
+      "outcome/accepts_expression_input": {
         "passed": false,
-        "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        "detail": "declared input: gene_ids array<long> (pre-tokenized TEDDY token IDs); tokenization left to the client",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embedding_dim": {
+      "convention/shared_single_cell_format": {
         "passed": false,
-        "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        "detail": "own format, not adata_sparsematrix + adata_obs + adata_var",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       }
     },
     "discarded": false,
     "discard_reason": "",
-    "notes": "Deviation: this baseline (skill off) run was pasted with the with_skill names by mistake (model <catalog>.skills_owm_202610.owm_teddy_model_001_with_skill, endpoint owm_teddy_ep_001_with_skill, files /Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/); wording otherwise identical to the standard teddy-001 query. resources_created and prompt_used record what was actually used; the later with_skill/teddy-001 run uses suffix skill_on instead. | Attempt 1. Endpoint READY on CPU workload, scale_to_zero True, no ai_gateway (checked 2026-10-27). Notebook 11 cells. Before the run: 9 Genie Code memories deleted; temporary 3-line instructions file; notebook recreated once. Self-report mentions only built-in skills. Decision: keep as attempt 1; clean rerun (attempt 2, _001_baseline names) later. | Outcome extra (polly, 2026-10-27): endpoint input is pre-tokenized `gene_ids` (Array(long)), not cell expression, so the teddy.md-contract fixture fails (missing gene_ids). Own-contract query: equal-length batch (2x50 ids) returns 2 x 512-dim finite 'cell_emb'; unequal-length batch (50, 80) fails 'index out of range' because padding uses pad_value -100 as a token id (notebook predict(), padded with config.pad_value). | Teardown 2026-10-27: serving endpoint deleted (user OK). Registered model v1 and volume files kept as evidence. | Renamed 2026-10-27 (user request): model -> owm_teddy_model_001_baseline_attempt1 (v1 READY). Download folder (165 files, 2.58 GB) kept as 001_with_skill for now; notebook rename to teddy-001_attempt1 by user in UI. | Workspace notebook renamed by user to baseline/teddy-001-01.",
+    "notes": "Deviation: the run guide supplied the wrong prompt (the planned with-skill teddy-001 prompt, with `_001_with_skill` names); wording is otherwise identical to the teddy-001 request. Names used: model <catalog>.skills_owm_202610.owm_teddy_model_001_with_skill, endpoint owm_teddy_ep_001_with_skill, files /Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/. The skill was off. resources_created and prompt_used record what was actually used; the later with_skill/teddy-001 run uses suffix skill_on instead. | Attempt 1. Endpoint READY on CPU workload, scale_to_zero True, no ai_gateway (checked 2026-10-27). Notebook 11 cells. Before the run: 9 Genie Code memories deleted; temporary 3-line instructions file; notebook recreated once. Self-report mentions only built-in skills. Decision: keep as attempt 1; clean rerun (attempt 2, _001_baseline names) later. | Outcome extra (polly, 2026-10-27): endpoint input is pre-tokenized `gene_ids` (Array(long)), not cell expression, so the teddy.md-contract fixture fails (missing gene_ids). Own-contract query: equal-length batch (2x50 ids) returns 2 x 512-dim finite 'cell_emb'; unequal-length batch (50, 80) fails 'index out of range' because padding uses pad_value -100 as a token id (notebook predict(), padded with config.pad_value). | Teardown 2026-10-27: serving endpoint deleted (user OK). Registered model v1 and volume files kept as evidence. | Renamed 2026-10-27 (user request): model -> owm_teddy_model_001_baseline_attempt1 (v1 READY). Download folder (165 files, 2.58 GB) kept as 001_with_skill for now; notebook rename to teddy-001_attempt1 by user in UI. | Workspace notebook renamed by user to baseline/teddy-001-01.",
     "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill`, serving endpoint `owm_teddy_ep_001_with_skill`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/`. Write the code and explain your decisions.",
     "outcome_checked_at": "2026-10-27T05:44:56+00:00",
     "original_names": {
@@ -229,6 +296,48 @@
       "serving_endpoint": "owm_teddy_ep_001_with_skill (deleted)",
       "download_folder": "/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/",
       "notebook": "teddy-eval-2026-10/baseline/teddy-001"
+    },
+    "attempt": 1,
+    "hidden_codes": false,
+    "outcome_superseded": {
+      "note": "check_outcome.py results with the teddy.md-format fixture only, before the outcome group was restructured (2026-10-27) to send the request in the endpoint's own declared format. Kept as evidence; superseded by \"outcome\".",
+      "checked_at": "2026-10-27T05:44:56+00:00",
+      "results": {
+        "outcome/endpoint_ready": {
+          "passed": true,
+          "detail": "state.ready=READY"
+        },
+        "outcome/serves_recorded_version": {
+          "passed": true,
+          "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill', '1')"
+        },
+        "outcome/one_embedding_per_cell": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        },
+        "outcome/embeddings_finite": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        },
+        "outcome/embedding_dim": {
+          "passed": false,
+          "detail": "query 'owm_teddy_ep_001_with_skill': Failed to enforce schema of data '                                  adata_sparsematrix  ...                                          adata_var\n0  [[0.0, 3.0, 6.0, 2.0, 5.0, 1.0, 4.0, 0.0, 3.0,...  ...  {\"columns\":[\"index\"],\"index\":[0,1,2,3,4,5,6,7,...\n\n[1 rows x 3 columns]' with schema '['gene_ids': Array(long) (required)]'. Error: Model is missing inputs ['gene_ids']. Note that there were extra inputs: ['adata_var', 'adata_obs', 'adata_sparsematrix']."
+        }
+      }
+    },
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill",
+          "version": "1",
+          "workload_type": "CPU",
+          "workload_size": null,
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": false,
+      "ai_gateway_usage_tracking": false,
+      "provenance": "measured by orchestrator 2026-10-27, before teardown"
     }
   },
   {
@@ -283,11 +392,53 @@
       "vector_search_index": ""
     },
     "prompt_used": null,
-    "outcome": null,
+    "outcome": {
+      "outcome/endpoint_ready": {
+        "passed": true,
+        "detail": "state.ready=READY",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
+      },
+      "outcome/serves_recorded_version": {
+        "passed": true,
+        "detail": "serves the recorded UC model version 1",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
+      },
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "own declared format (pre-tokenized gene_ids): equal-length and mixed-length batches both return one 512-dim finite cell_emb per cell (+cell_emb_mean, n_tokens)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
+      },
+      "outcome/accepts_expression_input": {
+        "passed": false,
+        "detail": "declared input: gene_ids array<long> (pre-tokenized TEDDY token IDs); tokenization left to the client",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
+      },
+      "convention/shared_single_cell_format": {
+        "passed": false,
+        "detail": "own format, not adata_sparsematrix + adata_obs + adata_var",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
+      }
+    },
     "discarded": false,
     "discard_reason": "",
     "notes": "Attempt 2 (clean _001_baseline names); notebook baseline/teddy-001-02. Attempt 1 kept as an extra sample. | Result: endpoint READY on CPU Small, scale_to_zero, no ai_gateway. Input = pre-tokenized TEDDY gene token IDs (tokenization left to the client via TEDDY's pipeline); own-format check: equal and mixed-length batches both return 512-dim finite cell_emb (+cell_emb_mean, n_tokens) -> padding handled correctly (unlike attempt 1). Pinned HF revision 8c880aa; transformers pinned 4.57.6 (<5); clean-env test with GPU hidden. Two code steps blocked by product guardrails (shutil.rmtree), and it avoided deletes per instructions.",
-    "attempt": 2
+    "attempt": 2,
+    "hidden_codes": false,
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_001_baseline",
+          "version": "1",
+          "workload_type": "CPU",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": false,
+      "ai_gateway_usage_tracking": false,
+      "provenance": "measured by orchestrator 2026-10-27, before teardown"
+    },
+    "outcome_checked_at": "2026-10-27 (orchestrator, before teardown)"
   },
   {
     "run_id": "with_skill",
@@ -358,45 +509,106 @@
     "outcome": {
       "outcome/endpoint_ready": {
         "passed": true,
-        "detail": "state.ready=READY"
+        "detail": "state.ready=READY",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/serves_recorded_version": {
         "passed": true,
-        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1')"
+        "detail": "serves the recorded UC model version 1",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/one_embedding_per_cell": {
+      "outcome/returns_valid_embeddings": {
         "passed": true,
-        "detail": "3 embeddings for 3 cells"
+        "detail": "shared format (teddy.md fixture, 3 cells x 100 genes): 3 x 512-dim finite embeddings (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embeddings_finite": {
+      "outcome/accepts_expression_input": {
         "passed": true,
-        "detail": "all finite, none all-zero"
+        "detail": "declared input: adata_sparsematrix + adata_obs + adata_var (cell expression + gene IDs)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embedding_dim": {
+      "convention/shared_single_cell_format": {
         "passed": true,
-        "detail": "dimensions [512], expected 512"
+        "detail": "adata_sparsematrix + adata_obs + adata_var",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/vs_endpoint_online": {
         "passed": true,
-        "detail": "endpoint state=ONLINE"
+        "detail": "endpoint state=ONLINE (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/index_ready": {
         "passed": true,
-        "detail": "ready=True, indexed rows=1000"
+        "detail": "ready=True, indexed rows=1000 (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/nn_query_returns_rows": {
-        "passed": false,
-        "detail": "query index: Requested columns to fetch are not present in index: dataset_id,n_genes_used,census_version,model_version,model_name"
-      },
-      "outcome/nn_has_cell_type_column": {
-        "passed": false,
-        "detail": "query index: Requested columns to fetch are not present in index: dataset_id,n_genes_used,census_version,model_version,model_name"
+      "outcome/nn_returns_cell_type": {
+        "passed": true,
+        "detail": "manual query asking for cell_id + cell_type returns rows with cell_type; check_outcome.py had failed only because it asked for table columns the index does not hold (dataset_id, n_genes_used, census_version, model_version, model_name)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       }
     },
     "discarded": false,
     "discard_reason": "",
     "notes": "Result: endpoint READY on GPU_SMALL, scale_to_zero, AI Gateway inference table + usage tracking ON. Hidden codes: teddy.md code FOUND in notebook (x2), SKILL.md code not found. Pinned HF revision 8c880aa + checksums + provenance manifest; Census 2025-01-30 reference (1,000 cells, 40 types); run_go widget gate (switched to true during the run). Reported held-out 10-NN cell-type accuracy 80% (chance ~2.5%). Leak check 0. | Outcome: 7/9 PASS incl. teddy.md-format fixture -> 3 x 512-dim finite embeddings; VS ONLINE, index 1,000 rows. 2 NN checks FAILED due to a check bug (check_outcome requests table columns not in the index: dataset_id, n_genes_used, census_version, model_version, model_name). Manual query (polly) with cell_id + cell_type returns rows with cell_type -> NN lookup works.",
-    "outcome_checked_at": "2026-10-27T13:20:36+00:00"
+    "outcome_checked_at": "2026-10-27T13:20:36+00:00",
+    "hidden_codes": true,
+    "outcome_superseded": {
+      "note": "check_outcome.py results with the teddy.md-format fixture only, before the outcome group was restructured (2026-10-27) to send the request in the endpoint's own declared format. Kept as evidence; superseded by \"outcome\".",
+      "checked_at": "2026-10-27T13:20:36+00:00",
+      "results": {
+        "outcome/endpoint_ready": {
+          "passed": true,
+          "detail": "state.ready=READY"
+        },
+        "outcome/serves_recorded_version": {
+          "passed": true,
+          "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill', '1')"
+        },
+        "outcome/one_embedding_per_cell": {
+          "passed": true,
+          "detail": "3 embeddings for 3 cells"
+        },
+        "outcome/embeddings_finite": {
+          "passed": true,
+          "detail": "all finite, none all-zero"
+        },
+        "outcome/embedding_dim": {
+          "passed": true,
+          "detail": "dimensions [512], expected 512"
+        },
+        "outcome/vs_endpoint_online": {
+          "passed": true,
+          "detail": "endpoint state=ONLINE"
+        },
+        "outcome/index_ready": {
+          "passed": true,
+          "detail": "ready=True, indexed rows=1000"
+        },
+        "outcome/nn_query_returns_rows": {
+          "passed": false,
+          "detail": "query index: Requested columns to fetch are not present in index: dataset_id,n_genes_used,census_version,model_version,model_name"
+        },
+        "outcome/nn_has_cell_type_column": {
+          "passed": false,
+          "detail": "query index: Requested columns to fetch are not present in index: dataset_id,n_genes_used,census_version,model_version,model_name"
+        }
+      }
+    },
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill",
+          "version": "1",
+          "workload_type": "GPU_SMALL",
+          "workload_size": null,
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": true,
+      "ai_gateway_usage_tracking": true,
+      "provenance": "measured by orchestrator 2026-10-27, before teardown"
+    }
   },
   {
     "run_id": "with_skill",
@@ -467,28 +679,74 @@
     "outcome": {
       "outcome/endpoint_ready": {
         "passed": true,
-        "detail": "state.ready=READY"
+        "detail": "state.ready=READY",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
       "outcome/serves_recorded_version": {
         "passed": true,
-        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1')"
+        "detail": "serves the recorded UC model version 1",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/one_embedding_per_cell": {
+      "outcome/returns_valid_embeddings": {
         "passed": true,
-        "detail": "3 embeddings for 3 cells"
+        "detail": "shared format (teddy.md fixture, 3 cells x 100 genes): 3 x 512-dim finite embeddings (check_outcome.py)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embeddings_finite": {
+      "outcome/accepts_expression_input": {
         "passed": true,
-        "detail": "all finite, none all-zero"
+        "detail": "declared input: adata_sparsematrix + adata_obs + adata_var (cell expression + gene IDs)",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       },
-      "outcome/embedding_dim": {
+      "convention/shared_single_cell_format": {
         "passed": true,
-        "detail": "dimensions [512], expected 512"
+        "detail": "adata_sparsematrix + adata_obs + adata_var",
+        "provenance": "measured by orchestrator 2026-10-27, before teardown"
       }
     },
     "discarded": false,
     "discard_reason": "",
     "notes": "Runs in parallel with with_skill/teddy-002, sharing the SAME skill install (no reinstall, same hidden codes 1e4c2717 / 56b8c5a1) to avoid replacing files under the running chat. Notebook with_skill/teddy-001. | Genie DECLINED to add the '# skill-proof-teddy' marker: it said the text in the reference notes was flagged as possibly injected (so the hidden-code method is not reliable; its explicit mention is itself evidence teddy.md was read). Endpoint READY GPU_SMALL, scale_to_zero, AI Gateway inference table + usage tracking, model alias champion after tests. Followed teddy.md contract (adata_sparsematrix/obs/var). FINDING for the skill: Genie verified on the endpoint that SDK extra_params are IGNORED by the scoring server; params must go under the REST body 'params' key (contradicts SKILL.md troubleshooting #13 / teddy.md guidance). Also: licence mismatch (model card Apache-2.0 vs pyproject MIT).",
-    "outcome_checked_at": "2026-10-27T13:31:32+00:00"
+    "outcome_checked_at": "2026-10-27T13:31:32+00:00",
+    "hidden_codes": true,
+    "outcome_superseded": {
+      "note": "check_outcome.py results with the teddy.md-format fixture only, before the outcome group was restructured (2026-10-27) to send the request in the endpoint's own declared format. Kept as evidence; superseded by \"outcome\".",
+      "checked_at": "2026-10-27T13:31:32+00:00",
+      "results": {
+        "outcome/endpoint_ready": {
+          "passed": true,
+          "detail": "state.ready=READY"
+        },
+        "outcome/serves_recorded_version": {
+          "passed": true,
+          "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on', '1')"
+        },
+        "outcome/one_embedding_per_cell": {
+          "passed": true,
+          "detail": "3 embeddings for 3 cells"
+        },
+        "outcome/embeddings_finite": {
+          "passed": true,
+          "detail": "all finite, none all-zero"
+        },
+        "outcome/embedding_dim": {
+          "passed": true,
+          "detail": "dimensions [512], expected 512"
+        }
+      }
+    },
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_001_skill_on",
+          "version": "1",
+          "workload_type": "GPU_SMALL",
+          "workload_size": null,
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": true,
+      "ai_gateway_usage_tracking": true,
+      "provenance": "measured by orchestrator 2026-10-27, before teardown"
+    }
   }
 ]

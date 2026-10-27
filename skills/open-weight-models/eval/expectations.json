@@ -320,27 +320,27 @@
         "why": "The endpoint serves something other than the model the run registered.",
         "depends_on": "none"
       },
-      "outcome/one_embedding_per_cell": {
+      "outcome/returns_valid_embeddings": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
         "quote": "config.d_model",
-        "why": "The serving contract returns one embedding per input cell.",
-        "depends_on": "none"
-      },
-      "outcome/embeddings_finite": {
-        "severity": "critical",
-        "source": "references/models/teddy.md:570",
-        "quote": "non-degenerate",
-        "why": "Non-finite or all-zero embeddings are wrong.",
-        "depends_on": "none"
-      },
-      "outcome/embedding_dim": {
-        "severity": "critical",
-        "source": "references/models/teddy.md:48",
-        "quote": "config.d_model",
-        "why": "Embedding size must equal config.d_model (512 for 70M); anything else is wrong or mixed.",
+        "why": "In the endpoint's own declared input format, cells of different lengths in one request must each get one finite, non-zero embedding of size config.d_model (512 for 70M); otherwise the endpoint does not work.",
         "depends_on": "model",
         "assumes": "TEDDY 70M, config.json d_model=512 (fixtures/teddy_request.json)"
+      },
+      "outcome/accepts_expression_input": {
+        "severity": "major",
+        "source": "references/models/teddy.md:17",
+        "quote": "from gene expression profiles",
+        "why": "An endpoint that takes only pre-tokenized token IDs leaves TEDDY's tokenization (gene medians, ranking, vocabulary) to every client, so it cannot embed a cell's expression as served.",
+        "depends_on": "none"
+      },
+      "convention/shared_single_cell_format": {
+        "severity": "minor",
+        "source": "references/models/teddy.md:27",
+        "quote": "adata_sparsematrix",
+        "why": "Convention, not correctness: the shared single-cell format (adata_sparsematrix + adata_obs + adata_var, also scgpt.md and Genesis Workbench) lets one client call several models. Reported in its own column, not counted in the severity table.",
+        "depends_on": "none"
       },
       "ai_search": {
         "severity": "minor",
@@ -678,27 +678,27 @@
         "why": "The endpoint serves something other than the model the run registered.",
         "depends_on": "none"
       },
-      "outcome/one_embedding_per_cell": {
+      "outcome/returns_valid_embeddings": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
         "quote": "config.d_model",
-        "why": "The serving contract returns one embedding per input cell.",
-        "depends_on": "none"
-      },
-      "outcome/embeddings_finite": {
-        "severity": "critical",
-        "source": "references/models/teddy.md:570",
-        "quote": "non-degenerate",
-        "why": "Non-finite or all-zero embeddings are wrong.",
-        "depends_on": "none"
-      },
-      "outcome/embedding_dim": {
-        "severity": "critical",
-        "source": "references/models/teddy.md:48",
-        "quote": "config.d_model",
-        "why": "Embedding size must equal config.d_model (512 for 70M); anything else is wrong or mixed.",
+        "why": "In the endpoint's own declared input format, cells of different lengths in one request must each get one finite, non-zero embedding of size config.d_model (512 for 70M); otherwise the endpoint does not work.",
         "depends_on": "model",
         "assumes": "TEDDY 70M, config.json d_model=512 (fixtures/teddy_request.json)"
+      },
+      "outcome/accepts_expression_input": {
+        "severity": "major",
+        "source": "references/models/teddy.md:17",
+        "quote": "from gene expression profiles",
+        "why": "An endpoint that takes only pre-tokenized token IDs leaves TEDDY's tokenization (gene medians, ranking, vocabulary) to every client, so it cannot embed a cell's expression as served.",
+        "depends_on": "none"
+      },
+      "convention/shared_single_cell_format": {
+        "severity": "minor",
+        "source": "references/models/teddy.md:27",
+        "quote": "adata_sparsematrix",
+        "why": "Convention, not correctness: the shared single-cell format (adata_sparsematrix + adata_obs + adata_var, also scgpt.md and Genesis Workbench) lets one client call several models. Reported in its own column, not counted in the severity table.",
+        "depends_on": "none"
       },
       "ai_search/index_creation": {
         "severity": "critical",
@@ -747,18 +747,11 @@
         "why": "The index is not ready, so search does not work.",
         "depends_on": "none"
       },
-      "outcome/nn_query_returns_rows": {
+      "outcome/nn_returns_cell_type": {
         "severity": "critical",
-        "source": "references/models/teddy.md:312",
-        "quote": "Result count",
-        "why": "Nearest-neighbour search returns nothing.",
-        "depends_on": "none"
-      },
-      "outcome/nn_has_cell_type_column": {
-        "severity": "major",
         "source": "references/models/teddy.md:296",
         "quote": "cell_type",
-        "why": "Results carry no cell type, so 'cell-type search' answers nothing (teddy.md syncs cell_type).",
+        "why": "A nearest-neighbour query (asking only for columns the index holds) must return rows with a cell type, or 'cell-type search' answers nothing.",
         "depends_on": "none"
       }
     },

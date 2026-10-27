@@ -215,12 +215,13 @@ class FakeCli(inst.Cli):
         return [c[1] for c in self.calls if c[1] in ("export-dir", "delete", "mkdirs", "import-dir")]
 
 
-def _args(fake_skill, tmp_path, state="on", replace=False):
+def _args(fake_skill, tmp_path, state="on", replace=False, hidden_codes=False):
     return inst.parse_args(
         ["--profile", "PROFILE", "--user", USER, "--state", state, "--run-id", "with_skill",
          "--task-id", "teddy-001", "--skill-dir", str(fake_skill),
          "--records", str(tmp_path / "outputs" / "run_records.json")]
         + (["--replace-existing"] if replace else [])
+        + (["--hidden-codes"] if hidden_codes else [])
     )
 
 
@@ -234,7 +235,36 @@ def test_on_fresh_install_imports_without_deleting(fake_skill, tmp_path, no_git)
     assert inst.set_state(_args(fake_skill, tmp_path), cli) == 0
     assert cli.mutations() == ["mkdirs", "import-dir"]
     record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
-    assert set(record["codes"]) == set(inst.MARKED_FILES) and record["notes"] == ""
+    assert record["codes"] == {} and record["hidden_codes"] is False and record["notes"] == ""
+
+
+def test_hidden_codes_are_off_by_default_and_opt_in(fake_skill, tmp_path, no_git, monkeypatch):
+    """Default install: the staged files are the skill's own, byte for byte (no planted
+    marker instruction). --hidden-codes adds the markers and records the codes."""
+    staged_texts = {}
+
+    def capture(staged, codes, line_for=None):
+        staged_texts.update({rel: (staged / rel).read_text() for rel in inst.MARKED_FILES})
+    monkeypatch.setattr(inst, "validate_staged", capture)
+    assert inst.set_state(_args(fake_skill, tmp_path), FakeCli(installed=False)) == 0
+    assert staged_texts == {rel: (fake_skill / rel).read_text() for rel in inst.MARKED_FILES}
+    monkeypatch.undo()
+    assert inst.set_state(_args(fake_skill, tmp_path, hidden_codes=True), FakeCli(installed=False)) == 0
+    record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
+    assert set(record["codes"]) == set(inst.MARKED_FILES) and record["hidden_codes"] is True
+
+
+def test_eval_copy_without_marker_is_recognised_from_the_records():
+    skill_md = b"---\nname: open-weight-models\n---\n# Skill\n"
+    on = {"state": "on", "extra_skills": [], "environment": {"user_skills": [
+        {"name": "open-weight-models", "skill_md": inst.fingerprint(skill_md)}]}}
+    off = {"state": "off", "extra_skills": [], "environment": {"user_skills": [
+        {"name": "bulk-rnaseq", "skill_md": inst.fingerprint(b"other")}]}}
+    assert inst.is_eval_copy(skill_md, records=[off, on])
+    assert not inst.is_eval_copy(skill_md, records=[off])          # before any eval install
+    assert not inst.is_eval_copy(b"other", "bulk-rnaseq", records=[off])  # not installed by the eval
+    extra = {"state": "off", "extra_skills": [{"name": "bulk-rnaseq"}], "environment": off["environment"]}
+    assert inst.is_eval_copy(b"other", "bulk-rnaseq", records=[extra])
 
 
 def test_existing_target_stops_without_flag(fake_skill, tmp_path, no_git):
@@ -345,11 +375,15 @@ def _extra_skill(tmp_path, name="bulk-rnaseq"):
 def test_stage_extra_skill_gets_its_own_marker(tmp_path):
     root = tmp_path / "staged"
     root.mkdir()
-    name, staged, code = inst.stage_extra_skill(_extra_skill(tmp_path), root)
+    name, staged, code = inst.stage_extra_skill(_extra_skill(tmp_path), root, hidden_code=True)
     assert name == "bulk-rnaseq" and not (staged / "eval").exists()
     assert f"`# skill-proof-bulk-rnaseq: {code}`" in (staged / "SKILL.md").read_text()
     assert inst.is_eval_copy((staged / "SKILL.md").read_bytes(), "bulk-rnaseq")
     assert not inst.is_eval_copy((staged / "SKILL.md").read_bytes())  # not an open-weight-models marker
+    plain_root = tmp_path / "plain"
+    plain_root.mkdir()
+    _, plain, none = inst.stage_extra_skill(_extra_skill(tmp_path / "again"), plain_root)
+    assert none is None and "Notebook marker" not in (plain / "SKILL.md").read_text()
 
 
 def test_stage_extra_skill_rejects_bad_names(tmp_path):
@@ -366,6 +400,7 @@ def test_all_codes_and_expected_panel():
               "extra_skills": [{"name": "bulk-rnaseq", "code": "c"}]}
     assert inst.all_codes(record) == {"SKILL.md": "a", "references/models/teddy.md": "b", "bulk-rnaseq/SKILL.md": "c"}
     assert inst.all_codes({"codes": {}}) == {}
+    assert inst.all_codes({"codes": {}, "extra_skills": [{"name": "bulk-rnaseq", "code": None}]}) == {}
     assert inst.expected_panel("off", []) == []
     assert inst.expected_panel("on", []) == ["open-weight-models"]
     assert inst.expected_panel("on", ["bulk-rnaseq"]) == ["bulk-rnaseq", "open-weight-models"]
@@ -396,7 +431,7 @@ def test_extra_skill_installed_and_recorded(fake_skill, tmp_path, no_git):
     args = inst.parse_args(
         ["--profile", "PROFILE", "--user", USER, "--state", "on", "--run-id", "with_skill", "--task-id", "teddy-001",
          "--skill-dir", str(fake_skill), "--records", str(tmp_path / "outputs" / "run_records.json"),
-         "--extra-skill-dir", str(extra)])
+         "--extra-skill-dir", str(extra), "--hidden-codes"])
     cli = FakeCli(installed=False)
     assert inst.set_state(args, cli) == 0
     imports = [c[3] for c in cli.calls if c[1] == "import-dir"]
@@ -433,7 +468,17 @@ def test_restore_original_refuses_a_copy_without_marker(tmp_path, capsys):
     cli = FakeCli(installed=True, files=user_copy)
     assert inst.restore_original(_restore_args(tmp_path), cli) == 1
     assert cli.mutations() == []
-    assert "no eval marker" in capsys.readouterr().out
+    assert "not a copy this script installed" in capsys.readouterr().out
+
+
+def test_restore_original_deletes_an_unmarked_eval_copy_it_recorded(tmp_path):
+    installed = b"---\nname: open-weight-models\n---\n# Skill\n"   # no marker: default install
+    inst.append_record(tmp_path / "outputs" / "run_records.json", {
+        "run_id": "with_skill", "state": "on", "backup": None, "extra_skills": [],
+        "environment": {"user_skills": [{"name": inst.SKILL_NAME, "skill_md": inst.fingerprint(installed)}]}})
+    cli = FakeCli(installed=True, files={f"{TARGET}/SKILL.md": installed})
+    assert inst.restore_original(_restore_args(tmp_path), cli) == 0
+    assert cli.mutations() == ["delete"]
 
 
 def test_restore_original_refuses_when_recorded_backup_is_missing(tmp_path, capsys):
@@ -482,8 +527,10 @@ def test_protocol_gaps():
     assert inst.protocol_gaps(_filled()) == []
     assert inst.protocol_gaps(_filled(visible_steps={"text": ""})) == ["visible_steps.text is empty"]
     no_note = _filled(skills_self_report={"text": "not available"})
-    assert inst.protocol_gaps(no_note) == ["skills_self_report.text is 'not available' but notes do not say why"]
+    assert inst.protocol_gaps(no_note) == ["skills_self_report.text is 'not available' but neither it nor notes say why"]
     assert inst.protocol_gaps({**no_note, "notes": "chat closed before the follow-up"}) == []
+    inline = _filled(visible_steps={"text": "not available: chat steps were not captured"})
+    assert inst.protocol_gaps(inline) == []
     fresh = inst.build_record(run_id="baseline", task_id="teddy-002", state="off", user="u",
                               codes={}, environment={}, skill_commit="abc")
     assert len(inst.protocol_gaps(fresh)) == 3
@@ -503,3 +550,23 @@ def test_live_round_records_deviation_is_recorded():
     assert first_001["resources_created"]["serving_endpoint"] == "owm_teddy_ep_001_with_skill"
     assert "owm_teddy_ep_001_with_skill" in first_001["prompt_used"] and "{run}" not in first_001["prompt_used"]
     assert "Deviation" in first_001["notes"]
+
+
+def test_live_round_passes_the_scoring_preflight():
+    """Every counted 2026-10-27 record has its protocol fields and an outcome; the stray
+    setup record is discarded; the two baseline/teddy-001 attempts map to their own exports."""
+    records = inst.load_records(inst.default_records())
+    stray = next(r for r in records if r["run_id"] == "old_prompt_baseline")
+    assert stray["discarded"] and stray["discard_reason"]
+    folder = inst.default_records().parent
+    for run in ("baseline", "with_skill"):
+        for task in ("teddy-001", "teddy-002"):
+            samples = inst.run_samples(records, run, task)
+            assert samples, (run, task)
+            for record in samples:
+                assert inst.protocol_gaps(record) == [], (run, task)
+                assert record["outcome"], (run, task)
+                assert (folder / inst.export_file(record)).is_file(), inst.export_file(record)
+    attempts = inst.run_samples(records, "baseline", "teddy-001")
+    assert [inst.export_file(r) for r in attempts] == ["baseline/teddy-001_attempt1.py", "baseline/teddy-001_attempt2.py"]
+    assert inst.export_file({"run_id": "with_skill", "task_id": "teddy-002"}) == "with_skill/teddy-002.py"

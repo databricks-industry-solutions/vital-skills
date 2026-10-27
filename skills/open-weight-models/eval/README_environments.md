@@ -11,6 +11,7 @@ state with previous runs or with the eval harness.
 | Model download + register + deploy | Serverless GPU (GPU_1xA10) | AI Runtime v5 | TEDDY needs GPU for `log_model` dry-load and serving |
 | Census + Vector Search | Same session (serverless GPU) | AI Runtime v5 | Census API is CPU but runs in same notebook |
 | Eval harness (03_eval) | Serverless CPU | Standard Python env | No GPU needed — scores exported .txt files |
+| TEDDY retest, 2026-10-27 (`models/teddy/runs_20261026/`) | Serverless GPU (A10) | serverless environment v6 (user-selected) | All five runs; package versions not snapshotted — each notebook's own `%pip` cells pin what it used |
 
 ## Known serverless GPU environment (AI Runtime v5, as of Oct 2026)
 

@@ -11,6 +11,7 @@ import importlib.util
 import json
 import re
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -306,7 +307,8 @@ def test_existing_resource_check_must_come_first(scorers):
 
 
 def test_exports(scorers):
-    assert scorers.scorers == scorers.replicated_scorers + scorers.new_check_scorers + scorers.outcome_scorers
+    assert scorers.scorers == (scorers.replicated_scorers + scorers.new_check_scorers + scorers.outcome_scorers
+                               + scorers.convention_scorers)
     assert len(scorers.replicated_scorers) == 8 and len(scorers.new_check_scorers) == 3
 
 
@@ -352,7 +354,8 @@ def test_run_prompts_standard_pair_renders_evalset_query(scorers):
     assert set(prompts) == set(scorers.RUN_IDS)
     for run in ("baseline", "with_skill"):
         assert prompts[run] == {tid: fs.render_query(t["query"], settings, run, tid) for tid, t in scorers.TASKS.items()}
-    # teddy-001 with_skill uses suffix skill_on (the first baseline run used the with_skill names)
+    # teddy-001 with_skill uses suffix skill_on (for baseline attempt 1 the run guide supplied the
+    # planned with-skill teddy-001 prompt, with `_001_with_skill` names)
     assert "owm_teddy_ep_001_skill_on" in prompts["with_skill"]["teddy-001"]
     assert "_with_skill" not in prompts["with_skill"]["teddy-001"]
     assert "owm_teddy_ep_002_with_skill" in prompts["with_skill"]["teddy-002"]
@@ -369,7 +372,21 @@ def _all_metric_names(scorers, task_id: str) -> set:
     task = scorers.TASKS[task_id]
     names = {scorers.mlflow_metric_name(k) for k in scorers.sub_check_scores(task, GOOD_SOURCE)}
     names |= set(scorers.new_check_scores(task, GOOD_SOURCE))
-    return names | set(task["outcome_checks"])
+    return names | set(task["outcome_checks"]) | set(task["convention_checks"])
+
+
+def _quote_lines(path: Path, quote: str) -> list:
+    """1-based numbers of the lines of `path` that contain `quote`."""
+    return [i for i, text in enumerate(path.read_text().splitlines(), 1) if quote in text]
+
+
+def test_citations_match_on_the_quote_not_the_line_number(tmp_path):
+    cited = tmp_path / "SKILL.md"
+    cited.write_text("intro\nuse usage_tracking_config here\n")
+    assert _quote_lines(cited, "usage_tracking_config") == [2]
+    cited.write_text("intro\nnew paragraph\nuse usage_tracking_config here\n")   # the skill was edited
+    assert _quote_lines(cited, "usage_tracking_config") == [3]                   # still found, line reported
+    assert _quote_lines(cited, "removed text") == []
 
 
 @pytest.mark.parametrize("task_id", ["teddy-001", "teddy-002"])
@@ -385,10 +402,14 @@ def test_every_check_has_severity_and_cited_source(scorers, task_id):
             path, line = m["source"].rsplit(":", 1)
             target = SKILL_DIR / path
             assert target.is_file(), m["source"]
-            lines = target.read_text().splitlines()
-            assert 1 <= int(line) <= len(lines), m["source"]
-            # the cited line must say what the check relies on, not just exist
-            assert m.get("quote") and m["quote"] in lines[int(line) - 1], (name, m["source"], m.get("quote"))
+            # the cited file must say what the check relies on. Matched on the quote, not the
+            # line number, so the answer key survives edits to the skill; a drifted line number
+            # is reported (warning) with the line(s) where the quote is now.
+            assert m.get("quote"), name
+            found = _quote_lines(target, m["quote"])
+            assert found, (name, m["source"], m["quote"])
+            if int(line) not in found:
+                warnings.warn(f"{name}: quote {m['quote']!r} cited at {m['source']} is now at {path}:{found}")
             assert m.get("why"), name
 
 
@@ -412,19 +433,20 @@ def test_failed_by_severity_and_table(scorers):
         scorers.failed_by_severity("teddy-001", {"made_up/check": False})
     table = scorers.severity_table({"baseline": {"teddy-001": metrics}, "with_skill": {"teddy-001": {}}},
                                    [("baseline", "with_skill")])
-    assert "| baseline / with_skill | baseline | teddy-001 | 1 | 1 | 1 | yes |" in table
-    assert "| baseline / with_skill | with_skill | teddy-001 | 0 | 0 | 0 | no |" in table
+    assert "| baseline / with_skill | baseline | teddy-001 | 1 | 1 | 1 | yes | - |" in table
+    assert "| baseline / with_skill | with_skill | teddy-001 | 0 | 0 | 0 | no | - |" in table
     assert "%" not in table
 
 
 def test_metric_group(scorers):
     assert [scorers.metric_group(n) for n in ("smoke_tests/endpoint_query", "new_checks/ai_gateway/usage_tracking",
-                                              "outcome/index_ready", "judge/guidelines")] == list(scorers.GROUPS)
+                                              "outcome/index_ready", "convention/shared_single_cell_format",
+                                              "judge/guidelines")] == list(scorers.GROUPS)
 
 
 def test_outcome_scorer_reads_recorded_outcome(scorers):
     checks = scorers.TASKS["teddy-001"]["outcome_checks"]
-    measured = {c: True for c in checks} | {"outcome/embedding_dim": False}
+    measured = {c: True for c in checks} | {"outcome/returns_valid_embeddings": False}
     feedbacks = scorers.outcome_checks(inputs={"task_id": "teddy-001"}, outputs={"outcome": measured})
     assert {f.name: f.value for f in feedbacks} == measured
     with pytest.raises(ValueError, match="no outcome"):
@@ -432,6 +454,20 @@ def test_outcome_scorer_reads_recorded_outcome(scorers):
     with pytest.raises(ValueError, match="not measured"):
         scorers.outcome_checks(inputs={"task_id": "teddy-001"}, outputs={"outcome": {checks[0]: True}})
     assert scorers.outcome_checks in scorers.scorers
+    convention = scorers.convention_checks(inputs={"task_id": "teddy-001"},
+                                           outputs={"outcome": {"convention/shared_single_cell_format": False}})
+    assert [(f.name, f.value) for f in convention] == [("convention/shared_single_cell_format", False)]
+
+
+def test_convention_checks_are_outside_the_severity_counts(scorers):
+    metrics = {"outcome/endpoint_ready": True, "convention/shared_single_cell_format": False}
+    assert scorers.failed_by_severity("teddy-001", metrics) == {"critical": [], "major": [], "minor": []}
+    scores = {"baseline": {"teddy-001": metrics}, "baseline attempt 1": {"teddy-001": metrics},
+              "with_skill": {"teddy-001": {"outcome/endpoint_ready": True}}}
+    table = scorers.severity_table(scores, [("baseline", "with_skill")]).splitlines()
+    assert "| baseline / with_skill | baseline | teddy-001 | 0 | 0 | 0 | yes | no |" in table
+    assert table.index("| baseline / with_skill | baseline attempt 1 | teddy-001 | 0 | 0 | 0 | yes | no |") == 3
+    assert "| baseline / with_skill | with_skill | teddy-001 | 0 | 0 | 0 | yes | - |" in table
 
 
 def test_guideline_judge_is_optional_and_binary(scorers):
@@ -450,6 +486,8 @@ def test_guideline_judge_is_optional_and_binary(scorers):
     ("endpoint_deployment/sdk_enums", 'body = {"served_entities": [{"workload_type": "GPU_SMALL"}]}\n'),
     ("ai_search/graceful_skip", "try:\n    df = spark.table(T)\nexcept AnalysisException:\n    df = None\n"),
     ("endpoint_deployment/run_go_gate", 'DEPLOY = dbutils.widgets.get("deploy") == "yes"\n'),
+    ("model_registration/infer_signature", 'sig = ModelSignature(inputs=Schema([ColSpec(Array(DataType.string), "g")]))\n'),
+    ("download_staging/deps_pinned", 'pip_requirements = ["torch==2.5.1", "safetensors==0.4.5"]\n'),
 ])
 def test_known_false_negatives(scorers, key, source):
     """The README's 'Known false negatives' table: valid alternatives the replicated checks fail."""
@@ -539,3 +577,30 @@ def test_uc_registry_kwargs(scorers):
     for source in (opaque, 'mlflow.set_registry_uri("databricks-uc")\n' + opaque):
         ok, reason = _uc(scorers, source)
         assert ok is False and reason.startswith("indeterminate")
+
+
+def test_self_referencing_assignment_does_not_recurse_forever(scorers):
+    """runs_20261026 baseline/teddy-002 has `x = x + self.position_embeddings(pos)`; following
+    `x` through its own assignment used to raise RecursionError in the AI Gateway check."""
+    source = ('x = "https://host/api/2.0/serving-endpoints"\n'
+              'x = x + "/ep"\n'
+              'requests.put(x, json={"ai_gateway": {"inference_table_config": {"enabled": True}}})\n')
+    details = scorers.new_check_details(scorers.TASKS["teddy-001"], source, groups={"ai_gateway"})
+    assert details["new_checks/ai_gateway/inference_table"][0] is True
+    assert details["new_checks/ai_gateway/usage_tracking"][0] is False
+
+
+def test_conditional_gateway_config_is_followed(scorers):
+    """runs_20261026 with_skill/teddy-002 builds `ai_gateway = AiGatewayConfig(...) if FLAG else None`
+    and passes it to serving_endpoints.create; the conditional used to hide the config."""
+    source = ("from databricks.sdk import WorkspaceClient\n"
+              "from databricks.sdk.service.serving import AiGatewayConfig, AiGatewayInferenceTableConfig, "
+              "AiGatewayUsageTrackingConfig\n"
+              "w = WorkspaceClient()\n"
+              "ai_gateway = AiGatewayConfig(\n"
+              "    inference_table_config=AiGatewayInferenceTableConfig(catalog_name=C, enabled=True),\n"
+              "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True),\n"
+              ") if ENABLE else None\n"
+              "w.serving_endpoints.create(name=N, config=cfg, ai_gateway=ai_gateway)\n")
+    details = scorers.new_check_details(scorers.TASKS["teddy-002"], source, groups={"ai_gateway"})
+    assert details["new_checks/ai_gateway/inference_table"][0] and details["new_checks/ai_gateway/usage_tracking"][0]

@@ -19,7 +19,7 @@
       "with_skill": "skill_on"
     }
   },
-  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because the first baseline/teddy-001 run (2026-10-27) was pasted with the with_skill names by mistake; see runs_20261026/README.md.",
+  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because for the first baseline/teddy-001 run (2026-10-27) the run guide supplied the wrong prompt (the planned with-skill teddy-001 prompt, with `_001_with_skill` names); see runs_20261026/README.md.",
   "names": {
     "teddy-001": {
       "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_{run}",
@@ -45,16 +45,18 @@
     "checks_all_tasks": [
       "outcome/endpoint_ready",
       "outcome/serves_recorded_version",
-      "outcome/one_embedding_per_cell",
-      "outcome/embeddings_finite",
-      "outcome/embedding_dim"
+      "outcome/returns_valid_embeddings",
+      "outcome/accepts_expression_input"
     ],
     "checks_vector_search": [
       "outcome/vs_endpoint_online",
       "outcome/index_ready",
-      "outcome/nn_query_returns_rows",
-      "outcome/nn_has_cell_type_column"
-    ]
+      "outcome/nn_returns_cell_type"
+    ],
+    "convention_checks": [
+      "convention/shared_single_cell_format"
+    ],
+    "convention_checks_note": "Shared single-cell input format (adata_sparsematrix + adata_obs + adata_var) of references/models/teddy.md, also used by scgpt.md and Genesis Workbench. Reported on its own, not as a failure of the run."
   },
   "old_prompts": {
     "old_prompt_baseline": {
