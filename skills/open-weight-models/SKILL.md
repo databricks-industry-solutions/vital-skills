@@ -125,6 +125,7 @@ For endpoint observability, usage tracking, or request logging, use supported AI
 12. **Use file-based model logging (`python_model=<path>`) when the model code is shipped via `code_paths`, not pip-installed.** Passing a live instance (`python_model=wrapper`) triggers cloudpickle serialisation, which captures `import <package>` references. If the package is not pip-installable (only available via `code_paths`), the serving container will fail at unpickle time with `ModuleNotFoundError` because `cloudpickle.load()` runs **before** `code_paths` are placed on `sys.path`. The fix: write the PyFunc class to a standalone `.py` file, add `mlflow.models.set_model(MyWrapper())` at module level, and pass `python_model=<path_to_wrapper.py>` to `log_model`. This makes MLflow import the file directly after `code_paths` are on `sys.path`, bypassing cloudpickle entirely. This applies to all HLS models whose source code is bundled (TEDDY, Geneformer custom tokenizers, scGPT, etc.).
 13. **Use SDK enum classes for endpoint configuration, not string literals.** When setting `workload_type`, use `ServingModelWorkloadType.GPU_SMALL` (from `databricks.sdk.service.serving`), not the string `"GPU_SMALL"`. String literals bypass SDK validation and can silently produce invalid configs. The same principle applies to other typed fields: `EndpointStateReady`, `EndpointStateConfigUpdate`, `ServedModelStateDeployment`, etc.
 14. **Construct test payloads from the declared signature, not from "typical" template code.** Before running a smoke test against a deployed endpoint, read the model's MLflow signature and ensure every required field is present with the correct type. A missing required column (e.g. `adata_obs`) produces a schema-enforcement `BadRequest` that is distinct from the model logic itself. Use real input values from the model's vocabulary or reference data — synthetic values that map to the OOV token produce degenerate outputs that cannot validate the tokenisation path.
+15. **Write to existing tables and indexes additively; confirm before replacing anything.** Before writing an embeddings table, check whether it exists (`spark.catalog.tableExists(name)`). If it does, append, or `MERGE` on the primary key (for example `cell_id`), instead of overwriting; overwrite, drop, or recreate an existing table, index, endpoint, or model version only after the user confirms that exact name. Offer a new name (for example a variant- or date-suffixed one) as the safe alternative. Resources the current run created itself can be cleaned up without asking.
 
 ## Example
 
@@ -304,7 +305,8 @@ artifacts:
 4. **Define the serving contract before the wrapper.** Build the `input_example`, signature, and documented SDK + HTTP examples (see Best Practices §1).
 5. **Package for reproducibility.** Pin and manifest all provenance-controlled inputs. Read `pip_requirements` from the model's own dependency specification (`pyproject.toml`, `requirements.txt`, or `setup.cfg`) rather than inferring them from PyFunc class imports — the PyFunc imports miss the bundled package's full import chain (see Best Practices §9). Test an offline startup path (see Best Practices §2–3).
 6. **Implement and register.** Use the standard custom PyFunc pattern, add only the HLS adapter behavior, and register to Unity Catalog with a versioning/promotion strategy (see Best Practices §4–5).
-7. **Validate scientifically and operationally.** Run at minimum: import/dependency smoke test; offline artifact and checksum test; wrapper initialization test; signature and `input_example` test; Python SDK and HTTP payload tests; a small known-input regression test; malformed-input and resource-limit tests; a serving or Job deployment test in the target runtime; and output sanity checks for the model family.
+7. **Validate scientifically and operationally.** Run at minimum: import/dependency smoke test; offline artifact and checksum test; wrapper initialization test; signature and `input_example` test; Python SDK and HTTP payload tests; an **upstream-parity test**; malformed-input and resource-limit tests; a serving or Job deployment test in the target runtime; and output sanity checks for the model family.
+   - *Upstream-parity test*: run a few real samples through the model's **own** upstream preprocessing and inference code (the functions named in `references/models/<model>.md`) and through your wrapper, then compare both stages — the same selected tokens/inputs, and output embeddings with cosine similarity ~1.0 per sample. A wrapper validated only against itself (for example endpoint output vs. the same wrapper run in the notebook) is **not** validated: it proves the deployment reproduces the wrapper, not that the wrapper reproduces the model. If upstream code cannot be run, say so and report the wrapper as unverified against upstream.
 
 ## Model-family references
 
@@ -344,7 +346,7 @@ Every new model reference should include:
 6. Serving-versus-Jobs recommendation.
 7. Wrapper boundary and serialization rules.
 8. Registration and deployment path.
-9. Smoke, regression, and negative tests.
+9. Smoke, regression, upstream-parity, and negative tests.
 10. Open questions requiring deeper exploration.
 11. Date reviewed and upstream version.
 
@@ -368,6 +370,7 @@ Every new model reference should include:
 5. Validate the exact serving serializer against the deployed endpoint before depending on a `params` path, arrays, or nested lists; prefer explicit fields/columns for controls, and never treat a successful call as proof an inference control was applied — compare output against a non-default value.
 6. When a model name is ambiguous, stop and ask for the exact upstream project (repository, package, model card) rather than guessing tensor shapes, tokenizer names, database paths, or APIs.
 7. Never treat a green technical deployment as scientific or clinical validity; report technical validation separately and defer scientific, clinical, and regulatory sign-off to the appropriate review.
+8. Never delete, drop, overwrite, or recreate an existing table, AI Search index, endpoint, or model version that the current run did not create without asking the user first; offer reuse under a new name, and replace only with explicit confirmation.
 
 ## References
 

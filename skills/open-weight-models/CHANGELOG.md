@@ -112,6 +112,34 @@ frontmatter `version` is the source of truth for releases.
   `SKILL.md` Troubleshooting #27 notes it. The TEDDY signature example is now
   explicit (`infer_signature(..., params=default_params)` with string defaults) and
   the checklist validates the params schema.
+- Validation now requires an **upstream-parity test** (`SKILL.md` Workflow step 7 and
+  Protocol Guidelines item 9, `model-template.md`, `teddy.md` checklist item 13 and a new
+  "Upstream-parity test" section): run a few real samples through the model's own
+  upstream preprocessing and inference and through the wrapper, and compare tokens and
+  output embeddings (cosine ~1.0). Motivating case, 2026-10-27 TEDDY runs: with-skill
+  teddy-002 compared the endpoint only with its own wrapper
+  (`eval/models/teddy/runs_20261026/with_skill/teddy-002.py:583`), while with-skill
+  teddy-001 compared against TEDDY's `_build_batch_tensors` with `GeneTokenizer`
+  (`with_skill/teddy-001.py:336-355`) and measured cosine 1.000000. `teddy.md` names the
+  upstream functions to compare against (checked at HF revision `8c880aa`).
+- `teddy.md`: out-of-vocabulary (OOV) genes are now **dropped**, as upstream does
+  (`_check_genes_in_tokenizer`, `tokenization.py:129-146` and `:230`; upstream raises
+  when under 10% of genes are in the vocabulary), instead of being mapped to `<unk>`. The
+  wrapper recipe now also applies upstream preprocessing — each cell normalised to
+  10,000 total counts, then each gene divided by its TEDDY median (`preprocess.py:272-306`;
+  settings from the model card's pretraining config, `README.md:136-155`) — and drops
+  zero-expression genes after top-K (`include_zero_genes=False`, `tokenization.py:261-264`).
+  The all-OOV test now expects a clear error, not an embedding. `cell_emb` is described
+  as the first-position encoder output (`model.py:261`), not a pooled embedding.
+- No silent deletes: `teddy.md` AI Search steps (dimension check, sync, index name,
+  checklist item 12), notebook setup/teardown rows and `geneformer.md`'s cleanup cell now
+  stop and ask before deleting or recreating an index, endpoint or model version the run
+  did not create, and offer reuse under a new name. New `SKILL.md` Guardrail 8.
+- Safe table writes: new `SKILL.md` Best Practices §15 and `teddy.md` Census step 8 —
+  check whether the embeddings table exists, then append or `MERGE` on the primary key;
+  overwrite only after the user confirms the table name. Motivating case: the 2026-10-27
+  baseline teddy-002 run wrote its cells table with `insertInto(..., overwrite=True)`
+  (`eval/models/teddy/runs_20261026/baseline/teddy-002.py:404`).
 - `scgpt.md`: wrapper example casts every documented string param
   (`filter_gene_by_counts`, `normalize_total`, `subset_hvg`, `binning`, explicit
   boolean parse), handles `params=None`, and wraps `pd.read_json` input in
