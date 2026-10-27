@@ -63,7 +63,8 @@ CHECKS = {
     "xet_download_ok": {
         "severity": "critical",
         "goal": "The Hugging Face download of the TEDDY repository (Xet storage) completes.",
-        "accepts": ["the download runs in a subprocess whose environment sets HF_HUB_DISABLE_XET "
+        "accepts": ["(every way below needs a disabling value: 1 / true / yes / on, any case)",
+                    "the download runs in a subprocess whose environment sets HF_HUB_DISABLE_XET "
                     "(env= dict) or whose script sets it before importing huggingface_hub "
                     "(teddy.md, 'Hugging Face download')",
                     "a %sh / ! `hf download` command with HF_HUB_DISABLE_XET set on that line or "
@@ -73,8 +74,9 @@ CHECKS = {
                     "recorded evidence the download completed: a later cell loads files it wrote "
                     "(from_pretrained, safetensors load_file, load_state_dict, log_model artifacts) "
                     "and the run record shows the endpoint READY serving the registered version"],
-        "fails": "no download call; HF_HUB_DISABLE_XET set only after the download or import; a "
-                 "subprocess without it; and no recorded evidence",
+        "fails": "no download call; HF_HUB_DISABLE_XET set only after the download or import, or to a "
+                 "value that does not disable Xet ('0', 'false'); a subprocess without it; and no "
+                 "recorded evidence",
         "evidence": "code + record",
     },
     "model_loads_with_pinned_deps": {
@@ -172,15 +174,19 @@ CHECKS = {
         "goal": "The upstream revision is pinned to a commit and the licence is recorded in a "
                 "persisted record.",
         "accepts": ["revision: the Hugging Face download uses a 40-character hexadecimal commit SHA, or "
-                    "the commit resolved at download time (`model_info(...).sha`) when that resolved "
-                    "value is also recorded (a revision/commit/sha key in a persisted sink)",
+                    "the commit resolved at download time (`model_info(...).sha`) when that same value "
+                    "is recorded under a revision/commit/sha key in a persisted sink — followed from the "
+                    "resolved variable, or back from a subprocess through its printed output or a file "
+                    "it wrote (also after a shutil copy) — or a 40-character SHA literal is recorded",
                     "licence: a non-empty licence value (not unknown / none / n/a) under a licence key "
                     "in a persisted sink — MLflow params or tags (set_tag(s), log_param(s), "
-                    "start_run / log_model tags), registered-model or model-version tags, or a "
-                    "manifest file (json.dump to a file, mlflow.log_dict)"],
-        "fails": "no revision, a branch or tag name ('main', 'dev', 'v1'), an unresolved expression; "
-                 "a licence that is missing, empty or unknown, or only in comments, markdown or a "
-                 "model description",
+                    "start_run / log_model tags, log_dict / log_text), registered-model or "
+                    "model-version tags, or a manifest file (json.dump to a file opened for writing, "
+                    "Path(...).write_text)"],
+        "fails": "no revision, a branch or tag name ('main', 'dev', 'v1'), an unresolved expression; a "
+                 "resolved commit whose recorded value is something else (e.g. 'main'); a licence that "
+                 "is missing, empty or unknown, only in comments, markdown or a model description, or "
+                 "json.dump-ed to something that is not a file (io.StringIO())",
         "evidence": "code",
     },
     "similarity_search_works": {
@@ -325,34 +331,41 @@ def _reaching(nb: PracticalCode, name: str, line: int) -> list:
     return [v for v in before if v.lineno == latest]
 
 
-def origins(nb: PracticalCode, node, packages: tuple, upstream_model: bool, _seen=None) -> set:
-    """What a value is derived from: UPSTREAM (a call into the upstream package, or a direct
-    forward pass `<x>.model(...)` when `upstream_model`), PREDICT (a `.predict(...)` of the
-    wrapper / logged model) and/or ENDPOINT (a serving-endpoint query). Names are followed
-    through assignments, loop / augmented-assignment sources and `with` targets anywhere in the
-    notebook (the latest one before the use, see _reaching); a call to a notebook function also
-    counts what its body calls."""
+def flow_nodes(nb: PracticalCode, node, _seen=None):
+    """Every AST node a value is derived from. Names are followed through assignments, loop /
+    augmented-assignment sources and `with` targets anywhere in the notebook (the latest one
+    before the use, see _reaching); a call to a notebook function also yields its body."""
     seen = set() if _seen is None else _seen
-    out = set()
     for n in ast.walk(node):
+        yield n
         if isinstance(n, ast.Call):
-            called = nb.dotted(n.func)
-            if any(d.split(".")[0] in packages and "." in d for d in called):
-                out.add(UPSTREAM)
-            elif upstream_model and any(d.endswith(".model") for d in called):
-                out.add(UPSTREAM)
-            if any(d.endswith(".predict") for d in called):
-                out.add(PREDICT)
-            if _is_endpoint_query(nb, n):
-                out.add(ENDPOINT)
             name = n.func.id if isinstance(n.func, ast.Name) else None
             if name in nb.functions and ("def", name) not in seen:
                 seen.add(("def", name))
-                out |= origins(nb, nb.functions[name], packages, upstream_model, seen)
+                yield from flow_nodes(nb, nb.functions[name], seen)
         elif isinstance(n, ast.Name) and (n.id, n.lineno) not in seen:
             seen.add((n.id, n.lineno))
             for value in _reaching(nb, n.id, n.lineno):
-                out |= origins(nb, value, packages, upstream_model, seen)
+                yield from flow_nodes(nb, value, seen)
+
+
+def origins(nb: PracticalCode, node, packages: tuple, upstream_model: bool) -> set:
+    """What a value is derived from (see flow_nodes): UPSTREAM (a call into the upstream
+    package, or a direct forward pass `<x>.model(...)` when `upstream_model`), PREDICT (a
+    `.predict(...)` of the wrapper / logged model) and/or ENDPOINT (a serving-endpoint query)."""
+    out = set()
+    for n in flow_nodes(nb, node):
+        if not isinstance(n, ast.Call):
+            continue
+        called = nb.dotted(n.func)
+        if any(d.split(".")[0] in packages and "." in d for d in called):
+            out.add(UPSTREAM)
+        elif upstream_model and any(d.endswith(".model") for d in called):
+            out.add(UPSTREAM)
+        if any(d.endswith(".predict") for d in called):
+            out.add(PREDICT)
+        if _is_endpoint_query(nb, n):
+            out.add(ENDPOINT)
     return out
 
 
@@ -390,26 +403,46 @@ def numeric_comparisons(nb: PracticalCode) -> list:
 # ---- Environment: HF_HUB_DISABLE_XET -----------------------------------------------------------
 
 XET_VAR = "HF_HUB_DISABLE_XET"
+_TRUTHY = {"1", "true", "yes", "on"}        # values huggingface_hub reads as "disable"
+
+
+def _is_truthy_text(text: str) -> bool:
+    return text.strip().strip("\"'").lower() in _TRUTHY
+
+
+def _disables(nb: PracticalCode, node) -> bool:
+    """The value set for XET_VAR is a disabling one ("1", "true", "yes", "on", any case; True; 1)."""
+    if node is None:
+        return False
+    return any((isinstance(v, ast.Constant) and (v.value is True or v.value == 1
+                                                  or (isinstance(v.value, str) and _is_truthy_text(v.value))))
+               for v in nb.values(node))
+
+
+def _mapping_disables(nb: PracticalCode, node) -> bool:
+    """A dict / dict(...) value whose XET_VAR entry disables Xet."""
+    return any(XET_VAR in m and _disables(nb, m[XET_VAR]) for v in nb.values(node) for m in nb.members(v))
 
 
 def _xet_set_lines(nb: PracticalCode, receiver) -> list:
-    """Lines where XET_VAR is set on an environment mapping: `receiver(name)` says whether an
-    expression is that mapping (os.environ, or an env dict passed to a subprocess)."""
+    """Lines where XET_VAR is set to a disabling value on an environment mapping: `receiver(node)`
+    says whether an expression is that mapping (os.environ, or an env dict for a subprocess)."""
     lines = []
     for node in nb.nodes(ast.Assign):
         for target in node.targets:
             if (isinstance(target, ast.Subscript) and receiver(target.value)
-                    and XET_VAR in nb.strings(target.slice)):
+                    and XET_VAR in nb.strings(target.slice) and _disables(nb, node.value)):
                 lines.append(node.lineno)
     for call in nb.calls:
         func = call.func
-        if isinstance(func, ast.Attribute) and func.attr in ("update", "setdefault") and receiver(func.value):
-            keys = [k for a in call.args for m in nb.members(a) for k in m] + [k.arg for k in call.keywords]
-            keys += [s for a in call.args[:1] for s in nb.strings(a)] if func.attr == "setdefault" else []
-            if XET_VAR in keys:
+        if isinstance(func, ast.Attribute) and func.attr == "update" and receiver(func.value):
+            if any(_mapping_disables(nb, a) for a in call.args) or any(
+                    k.arg == XET_VAR and _disables(nb, k.value) for k in call.keywords):
                 lines.append(call.lineno)
-        elif any(d.endswith("putenv") for d in nb.dotted(func)) and call.args and XET_VAR in nb.strings(call.args[0]):
-            lines.append(call.lineno)
+        elif (isinstance(func, ast.Attribute) and func.attr == "setdefault" and receiver(func.value)
+              or any(d.endswith("putenv") for d in nb.dotted(func))):
+            if len(call.args) >= 2 and XET_VAR in nb.strings(call.args[0]) and _disables(nb, call.args[1]):
+                lines.append(call.lineno)
     return sorted(lines)
 
 
@@ -420,7 +453,8 @@ def _is_os_environ(nb: PracticalCode):
 def _in_process_xet_lines(nb: PracticalCode, response: str = "") -> list:
     lines = _xet_set_lines(nb, _is_os_environ(nb))
     lines += [i for i, text in enumerate(response.splitlines(), 1)
-              if re.match(rf"^\s*(?:# MAGIC\s*)?%env\s+{XET_VAR}\s*=", text)]
+              if (m := re.match(rf"^\s*(?:# MAGIC\s*)?%env\s+{XET_VAR}\s*=\s*(\S+)", text))
+              and _is_truthy_text(m.group(1))]
     return sorted(lines)
 
 
@@ -441,7 +475,7 @@ def _set_before_import(nb: PracticalCode, response: str, before: int):
         return True, f"set at line {early[0]}, before the huggingface_hub import (line {first_import})"
     if sets:
         return False, f"set at line {sets[0]}, after the huggingface_hub import / download (line {limit})"
-    return False, "not set"
+    return False, "not set to a disabling value (1 / true / yes / on)"
 
 
 # ---- Hugging Face downloads -------------------------------------------------------------
@@ -456,10 +490,12 @@ ACCEPTED_LOCATIONS = {"tmp", "volume", "tempfile"}
 class Download:
     """One Hugging Face download: line, how it ran, destination kinds, revision, Xet setting."""
 
-    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple):
+    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple, resolved=None):
         self.line, self.how, self.kinds = line, how, kinds
         self.revision = revision      # (kind, text): kind "sha" | "resolved" | None
         self.xet = xet                # (ok, reason) for HF_HUB_DISABLE_XET
+        # for a resolved commit: is a notebook node the source of that commit? (see _resolved_sources)
+        self.resolved = resolved or (lambda node: False)
 
     def describe(self) -> str:
         return f"line {self.line} ({self.how}): {', '.join(sorted(self.kinds))}"
@@ -536,8 +572,57 @@ def _direct_downloads(nb: PracticalCode, response: str, how: str = "notebook", l
             dest = kwargs.get("local_dir") or kwargs.get("cache_dir")
             kinds = _path_kinds(nb, dest) if dest is not None else {"hf_default_cache"}
             setting = xet or _set_before_import(nb, response, call.lineno)
-            out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs), setting))
+            sources = _resolved_nodes(nb, kwargs.get("revision"))
+            out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs), setting,
+                                lambda node, s=sources: any(node is x for x in s)))
     return out
+
+
+def _resolved_nodes(nb: PracticalCode, revision) -> list:
+    """The `model_info(...).sha` expressions a download's revision= comes from."""
+    if revision is None:
+        return []
+    return [v for v in nb.values(revision) if any(d.endswith("model_info().sha") for d in nb.dotted(v))]
+
+
+def _derives(nb: PracticalCode, node, test) -> bool:
+    return any(test(n) for n in flow_nodes(nb, node))
+
+
+def _written_paths(nb: PracticalCode, test) -> set:
+    """Paths of files the code writes a value matching `test` to: json.dump(x, open(P, "w")),
+    open(P, "w").write(x), Path(P).write_text(x)."""
+    paths = set()
+    for call in nb.calls:
+        name = _call_name(call)
+        if name == "dump" and len(call.args) >= 2 and _derives(nb, call.args[0], test):
+            paths |= {s for v in _file_targets(nb, call.args[1]) for s in nb.strings(v.args[0])}
+        elif name in ("write", "write_text") and call.args and _derives(nb, call.args[0], test):
+            holder = call.func.value if isinstance(call.func, ast.Attribute) else None
+            for v in (nb.values(holder) if holder is not None else []):
+                if isinstance(v, ast.Call) and v.args and _call_name(v) in ("open", "Path"):
+                    paths |= set(nb.strings(v.args[0]))
+    return paths
+
+
+def _resolved_sources(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode, download) -> callable:
+    """For a download in a subprocess script with a resolved commit: notebook nodes that carry
+    that commit back — the subprocess call itself (its output) when the script prints it, and a
+    read of a file the script wrote it to (directly or through a shutil copy)."""
+    in_script = download.resolved
+    prints = any(_call_name(c) == "print" and any(_derives(script_nb, a, in_script) for a in c.args)
+                 for c in script_nb.calls)
+    files = _written_paths(script_nb, in_script)
+    for copy in [c for c in nb.calls if _call_name(c) in _STAGING_CALLS and len(c.args) >= 2]:
+        if set(nb.strings(copy.args[0])) & files:
+            files |= set(nb.strings(copy.args[1]))
+
+    def carries(node) -> bool:
+        if prints and node is call:
+            return True
+        return (isinstance(node, ast.Call) and _call_name(node) in ("open", "Path", "read_text") and node.args
+                and bool(set(nb.strings(node.args[0])) & files))
+    return carries
 
 
 def _subprocess_xet(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode, script: str) -> tuple:
@@ -545,14 +630,14 @@ def _subprocess_xet(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode,
     huggingface_hub import."""
     env = next((k.value for k in call.keywords if k.arg == "env"), None)
     if env is not None:
-        in_dict = any(XET_VAR in m for v in nb.values(env) for m in nb.members(v))
+        in_dict = _mapping_disables(nb, env)
         names = {env.id} if isinstance(env, ast.Name) else set()
         on_name = _xet_set_lines(nb, lambda node: isinstance(node, ast.Name) and node.id in names)
         if in_dict or on_name:
             return True, f"set in the subprocess env (line {on_name[0] if on_name else call.lineno})"
     ok, why = _set_before_import(script_nb, script, 10 ** 9)
     return (True, f"set in the subprocess script before its huggingface_hub import") if ok else (
-        False, f"subprocess without it (script: {why}; env: {'not given' if env is None else 'no ' + XET_VAR})")
+        False, f"subprocess without it (script: {why}; env: {'not given' if env is None else 'no disabling ' + XET_VAR})")
 
 
 def _subprocess_downloads(nb: PracticalCode) -> list:
@@ -575,11 +660,13 @@ def _subprocess_downloads(nb: PracticalCode) -> list:
             for download in _direct_downloads(script_nb, script, "subprocess", call.lineno, xet):
                 if download.kinds <= {"unknown"} and path_args:
                     download.kinds = path_args
+                download.resolved = _resolved_sources(nb, call, script_nb, download)
                 out.append(download)
         for command in texts:
             match = _CLI_DOWNLOAD.search(command)
             if match:
-                xet = (XET_VAR in command, "set on the command line" if XET_VAR in command else "not set")
+                on_line = _shell_disables(command)
+                xet = (on_line, "set on the command line" if on_line else "not set to a disabling value")
                 out.append(_cli_download(match.group("rest"), call.lineno, xet))
     return out
 
@@ -597,6 +684,11 @@ def _cli_download(rest: str, line: int, xet: tuple) -> Download:
     return Download(line, "shell", kinds, rev, xet)
 
 
+def _shell_disables(command: str) -> bool:
+    """`HF_HUB_DISABLE_XET=<disabling value>` given in a shell command (before the download)."""
+    return any(_is_truthy_text(v) for v in re.findall(rf"\b{XET_VAR}=(\S+)", command))
+
+
 def _shell_downloads(response: str) -> list:
     """`%sh` / `!` cells: `huggingface-cli download` or `hf download` (run in their own process)."""
     out, in_sh, exported = [], False, False
@@ -610,11 +702,12 @@ def _shell_downloads(response: str) -> list:
             in_sh = text.lstrip().startswith("%sh")     # a cell's magic decides its language
         if not ((in_sh and magic) or text.lstrip().startswith("!")):
             continue
-        if re.search(rf"\bexport\s+{XET_VAR}=", text):
-            exported = True
+        export = re.search(rf"\bexport\s+{XET_VAR}=(\S+)", text)
+        if export:
+            exported = _is_truthy_text(export.group(1))
         match = _CLI_DOWNLOAD.search(text)
         if match:
-            on_line = bool(re.search(rf"\b{XET_VAR}=\S+\s+.*\bdownload\b", text))
+            on_line = _shell_disables(text[:match.start()])
             xet = (exported or on_line, "exported earlier in the cell" if exported else
                    "set on the command line" if on_line else "not set")
             out.append(_cli_download(match.group("rest"), number, xet))
@@ -635,7 +728,33 @@ _EMPTY = {"", "unknown", "none", "null", "n/a", "na", "tbd", "todo", "?"}
 # a dict (None = all). A model description is not a sink: it is free text, not a recorded field.
 _KEYED_SINKS = {"set_tag": 0, "log_param": 0, "set_registered_model_tag": 1, "set_model_version_tag": 2}
 _DICT_SINKS = {"set_tags": None, "log_params": None, "set_logged_model_tags": None, "log_dict": None,
-               "dump": None, "log_model": ("tags", "metadata"), "start_run": ("tags",)}
+               "log_text": None, "dump": None, "write_text": None, "log_model": ("tags", "metadata"),
+               "start_run": ("tags",)}
+_FILE_MODES = re.compile(r"[wax]")
+
+
+def _file_targets(nb: PracticalCode, node) -> list:
+    """open(path, "w"/"a"/"x") calls a json.dump target can stand for (a name or `with` target)."""
+    candidates = nb.values(node) + (nb.with_values.get(node.id, []) if isinstance(node, ast.Name) else [])
+    out = []
+    for v in candidates:
+        if isinstance(v, ast.Call) and _call_name(v) == "open" and v.args:
+            mode = v.args[1] if len(v.args) > 1 else next((k.value for k in v.keywords if k.arg == "mode"), None)
+            if mode is not None and any(_FILE_MODES.search(m) for m in nb.strings(mode)):
+                out.append(v)
+    return out
+
+
+def _persists(nb: PracticalCode, call: ast.Call) -> bool:
+    """json.dump writes to a file opened for writing (not e.g. io.StringIO()); write_text is
+    called on a Path; the other sinks are MLflow / registry calls."""
+    name = _call_name(call)
+    if name == "dump":
+        return len(call.args) >= 2 and bool(_file_targets(nb, call.args[1]))
+    if name == "write_text":
+        holder = call.func.value if isinstance(call.func, ast.Attribute) else None
+        return holder is not None and any(d.endswith("Path()") or "Path()" in d for d in nb.dotted(holder))
+    return True
 
 
 def _filled(texts: list) -> bool:
@@ -659,8 +778,23 @@ def _keyed_values(nb: PracticalCode, node, key: re.Pattern, depth: int = 0) -> l
     return out
 
 
+def _keyed_nodes(nb: PracticalCode, node, key: re.Pattern, depth: int = 0) -> list:
+    """Value nodes under keys matching `key` (nested dicts too), for following where they came from."""
+    out = []
+    for fields in nb.members(node):
+        for name, value in fields.items():
+            if value is None:
+                continue
+            if key.search(name):
+                out.append(value)
+            elif depth < 4:
+                out += _keyed_nodes(nb, value, key, depth + 1)
+    return out
+
+
 def persisted_records(nb: PracticalCode, key: re.Pattern) -> list:
-    """(line, sink, values) for every persisted record under a key matching `key`."""
+    """(line, sink, values, value nodes) for every persisted record under a key matching `key`
+    (the nodes are the recorded values themselves, for following where they came from)."""
     out = []
     for call in nb.calls:
         name = _call_name(call)
@@ -670,14 +804,16 @@ def persisted_records(nb: PracticalCode, key: re.Pattern) -> list:
             if len(args) > position and any(key.search(s) for s in nb.strings(args[position])):
                 value = args[position + 1] if len(args) > position + 1 else next(
                     (k.value for k in call.keywords if k.arg == "value"), None)
-                out.append((call.lineno, name, nb.value_texts(value) if value is not None else [""]))
-        elif name in _DICT_SINKS:
+                out.append((call.lineno, name, nb.value_texts(value) if value is not None else [""],
+                            [value] if value is not None else []))
+        elif name in _DICT_SINKS and _persists(nb, call):
             wanted = _DICT_SINKS[name]
             nodes = list(call.args) + [k.value for k in call.keywords] if wanted is None else [
                 k.value for k in call.keywords if k.arg in wanted]
             values = [v for n in nodes for v in _keyed_values(nb, n, key)]
             if values or any(key.search(k) for n in nodes for m in nb.members(n) for k in m):
-                out.append((call.lineno, "json.dump manifest" if name == "dump" else name, values))
+                out.append((call.lineno, {"dump": "json.dump manifest file", "write_text": "manifest file"}
+                            .get(name, name), values, [v for n in nodes for v in _keyed_nodes(nb, n, key)]))
     # for k, v in {...}.items(): <keyed sink>(..., k, v)
     for loop in nb.nodes(ast.For):
         it = loop.iter
@@ -687,7 +823,7 @@ def persisted_records(nb: PracticalCode, key: re.Pattern) -> list:
                  if isinstance(c, ast.Call) and _call_name(c) in _KEYED_SINKS]
         values = _keyed_values(nb, it.func.value, key)
         if sinks and values:
-            out.append((sinks[0].lineno, _call_name(sinks[0]), values))
+            out.append((sinks[0].lineno, _call_name(sinks[0]), values, _keyed_nodes(nb, it.func.value, key)))
     return sorted(out, key=lambda item: item[0])
 
 
@@ -947,18 +1083,27 @@ def governance_logging(nb, response, record, task):
 def provenance_recorded(nb, response, record, task):
     found = downloads(nb, response)
     revisions = persisted_records(nb, _REVISION_KEY)
-    recorded_revision = [line for line, _, values in revisions if _filled(values)]
-    pinned = [d for d in found if d.revision[0] == "sha"
-              or (d.revision[0] == "resolved" and recorded_revision)]
-    licences = [(line, sink) for line, sink, values in persisted_records(nb, _LICENCE_KEY) if _filled(values)]
+
+    def recorded(download) -> list:
+        """Lines where the commit a download resolved is persisted: a value derived from it, or
+        a 40-character SHA literal."""
+        out = []
+        for line, _, values, nodes in revisions:
+            if any(_SHA.match(t) for t in values) or any(_derives(nb, v, download.resolved) for v in nodes):
+                out.append(line)
+        return out
+
+    pinned = [(d, recorded(d)) for d in found if d.revision[0] == "sha" or d.revision[0] == "resolved"]
+    pinned = [(d, lines) for d, lines in pinned if d.revision[0] == "sha" or lines]
+    licences = [(line, sink) for line, sink, values, _ in persisted_records(nb, _LICENCE_KEY) if _filled(values)]
     if pinned:
-        d = pinned[0]
+        d, lines = pinned[0]
         revision = (f"revision pinned at line {d.line} ({d.revision[1]})" if d.revision[0] == "sha" else
-                    f"revision pinned at line {d.line} ({d.revision[1]}; recorded at line {recorded_revision[0]})")
+                    f"revision pinned at line {d.line} ({d.revision[1]}; that commit recorded at line {lines[0]})")
     elif found:
         revision = "no download pinned to a commit: " + "; ".join(f"line {d.line} {d.revision[1]}" for d in found)
         if any(d.revision[0] == "resolved" for d in found):
-            revision += " (resolved commit never recorded)"
+            revision += " (the resolved commit itself is never recorded)"
     else:
         revision = "no Hugging Face download call found"
     where = (f"licence recorded: {', '.join(f'line {line} {sink}' for line, sink in licences)}" if licences

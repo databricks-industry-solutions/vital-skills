@@ -158,6 +158,29 @@ def test_xet_setting_rejected_without_recorded_evidence(pc, source):
     assert not _check(pc, "xet_download_ok", source, NOT_READY)[0]
 
 
+@pytest.mark.parametrize("source", [
+    _nb("import os\nos.environ['HF_HUB_DISABLE_XET'] = 'TRUE'", IMPORT + "\n" + DOWNLOAD),
+    _nb("import os\nos.environ.setdefault('HF_HUB_DISABLE_XET', 'on')", IMPORT + "\n" + DOWNLOAD),
+    _nb("# MAGIC %sh\n# MAGIC HF_HUB_DISABLE_XET=yes hf download Merck/TEDDY --local-dir /tmp/t"),
+])
+def test_xet_disabling_values_accepted(pc, source):
+    assert _check(pc, "xet_download_ok", source, NOT_READY)[0]
+
+
+@pytest.mark.parametrize("source", [   # set, but to a value that does not disable Xet (review case: '0')
+    _nb("import os\nos.environ['HF_HUB_DISABLE_XET'] = '0'", IMPORT + "\n" + DOWNLOAD),
+    _nb("import os\nos.environ.setdefault('HF_HUB_DISABLE_XET', 'false')", IMPORT + "\n" + DOWNLOAD),
+    _nb(TEDDY_MD.replace("'HF_HUB_DISABLE_XET': '1'", "'HF_HUB_DISABLE_XET': '0'")),
+    _nb("import os\nenv = dict(os.environ)\nenv.update({'HF_HUB_DISABLE_XET': 'no'})",
+        "import subprocess, sys\nsubprocess.run([sys.executable, '-c', \"from huggingface_hub import "
+        "snapshot_download; snapshot_download('r', local_dir='/tmp/t')\"], env=env)"),
+    _nb("# MAGIC %sh\n# MAGIC export HF_HUB_DISABLE_XET=0\n# MAGIC hf download Merck/TEDDY --local-dir /tmp/t"),
+    _nb("# MAGIC %env HF_HUB_DISABLE_XET=0", IMPORT + "\n" + DOWNLOAD),
+])
+def test_xet_non_disabling_values_rejected(pc, source):
+    assert not _check(pc, "xet_download_ok", source, NOT_READY)[0]
+
+
 def test_xet_recorded_evidence(pc):
     source = _nb(IMPORT, DOWNLOAD, LATER_LOAD)
     ok, reason = _check(pc, "xet_download_ok", source, READY)
@@ -347,9 +370,20 @@ def test_governance_logging(pc):
 # ---- provenance_recorded ----------------------------------------------------------------------
 
 PINNED = f"from huggingface_hub import snapshot_download\nsnapshot_download('r', revision='{SHA}', local_dir='/tmp/t')"
-RESOLVED = ("import subprocess, sys\nscript = '''\nfrom huggingface_hub import HfApi, snapshot_download\n"
-            "sha = HfApi().model_info('r').sha\nsnapshot_download('r', revision=sha, local_dir='/tmp/t')\n'''\n"
-            "subprocess.run([sys.executable, '-c', script])\nREV = read_sha()")
+RESOLVED = ("import subprocess, sys, json\nscript = '''\nimport json\nfrom huggingface_hub import HfApi, snapshot_download\n"
+            "sha = HfApi().model_info('r').sha\nsnapshot_download('r', revision=sha, local_dir='/tmp/t')\n"
+            "print(json.dumps({'sha': sha}))\n'''\n"
+            "res = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True)\n"
+            "REV = json.loads(res.stdout)['sha']")
+RESOLVED_FILE = ("import subprocess, sys, json, shutil\nscript = '''\nimport json\n"
+                 "from huggingface_hub import HfApi, snapshot_download\nsha = HfApi().model_info('r').sha\n"
+                 "snapshot_download('r', revision=sha, local_dir='/tmp/t')\n"
+                 "json.dump({'sha': sha}, open('/tmp/rev.json', 'w'))\n'''\n"
+                 "subprocess.check_call([sys.executable, '-c', script])\n"
+                 "shutil.copy2('/tmp/rev.json', '/Volumes/c/s/v/.rev.json')\n"
+                 "REV = json.load(open('/Volumes/c/s/v/.rev.json'))['sha']")
+RESOLVED_HERE = ("from huggingface_hub import HfApi, snapshot_download\nsha = HfApi().model_info('r').sha\n"
+                 "snapshot_download('r', revision=sha, local_dir='/tmp/t')")
 TAGS = "import mlflow\nmlflow.set_tags({'license': 'apache-2.0'})"
 
 
@@ -359,7 +393,10 @@ TAGS = "import mlflow\nmlflow.set_tags({'license': 'apache-2.0'})"
     (PINNED, "import json\nm = {'model': {}, 'license': {'code': 'Apache-2.0'}}\njson.dump(m, open(P, 'w'))"),
     (PINNED, "c = MlflowClient()\nfor k, v in {'license': 'Apache-2.0', 'variant': '70M'}.items():\n"
              "    c.set_model_version_tag(NAME, '1', k, v)"),
-    (RESOLVED, "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': REV})"),   # resolved + recorded
+    (RESOLVED, "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': REV})"),   # resolved, via stdout
+    (RESOLVED_FILE, "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': REV})"),  # via a copied file
+    (RESOLVED_HERE, "import mlflow\nmlflow.set_tag('hf_revision', sha)\nmlflow.set_tag('license', 'MIT')"),
+    (PINNED, "import json\nfrom pathlib import Path\nPath(P).write_text(json.dumps({'license': 'MIT'}))"),
 ])
 def test_provenance_accepted(pc, cells):
     assert _check(pc, "provenance_recorded", _nb(*cells))[0]
@@ -371,6 +408,12 @@ def test_provenance_accepted(pc, cells):
     (PINNED.replace(SHA, "dev"), TAGS),                                       # branch (review case)
     (PINNED.replace(f"'{SHA}'", "get_rev()"), TAGS),                          # unresolved expression
     (RESOLVED, TAGS),                                                         # resolved, never recorded
+    (RESOLVED, "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': 'main'})"),  # review case
+    (RESOLVED_HERE, "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': get_rev()})"),  # not that commit
+    (RESOLVED_FILE.replace("open('/Volumes/c/s/v/.rev.json')", "open('/Volumes/c/s/v/other.json')"),
+     "import mlflow\nmlflow.set_tags({'license': 'MIT', 'hf_revision': REV})"),                # a different file
+    (PINNED, "import io, json\njson.dump({'license': 'MIT'}, io.StringIO())"),                # not a file (review case)
+    (PINNED, "import json\njson.dump({'license': 'MIT'}, open(P))"),                         # opened for reading
     (PINNED, "import mlflow\nmlflow.set_tags({'license': None})"),            # null licence
     (PINNED, "import mlflow\nmlflow.set_tag('license', 'unknown')"),          # unknown licence
     (PINNED, "import mlflow\nmlflow.log_params({'license': ''})"),            # empty licence

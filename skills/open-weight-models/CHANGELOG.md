@@ -16,6 +16,8 @@ frontmatter `version` is the source of truth for releases.
   recorded evidence), cross-cell upstream-vs-candidate comparison for fidelity, commit-SHA
   revision and non-empty persisted licence, outcome split by severity, GPU serving as a
   separately reported guideline, and endpoint smoke-test and existing-resource checks.
+  Then: disabling `HF_HUB_DISABLE_XET` values only, the recorded revision must carry the
+  resolved commit itself, and `json.dump` counts only into a file opened for writing.
 - `references/models/midnight.md` for the `kaiko-ai/midnight` pathology tile
   encoder.
 - Evaluation prompt-template library (now
