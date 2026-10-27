@@ -4,16 +4,22 @@
 Not wired into score_open_weight_models.py and not part of `scorers.scorers`. Each check
 scores whether a GOAL of the task was reached, accepting any valid way of reaching it,
 instead of matching strings from teddy.md. Code goals are read by parsing the notebook's
-Python cells with `ast` (scorers.NotebookCode); behaviour goals read the outcome measured
-before teardown and kept in the run record (run_records.json "outcome" / "endpoint_config").
-Metric names start with "practical/". Every check's goal, severity and accepted
-alternatives are in CHECKS; models/teddy/runs_20261026/PRACTICAL_TRIAL.md compares these
-checks with the current ones on the 2026-10-27 runs.
+Python cells with `ast` (scorers.NotebookCode), following values across cells; behaviour
+goals read the outcome measured before teardown and kept in the run record
+(run_records.json "outcome" / "endpoint_config"). Metric names start with "practical/".
+Every check's goal, severity and accepted alternatives are in CHECKS.
+
+Reported apart from the practical score (like the shared-format convention check):
+GUIDELINES — task guidelines the prompts do not ask for, read from the run record only
+(metric names "guideline/..."; not counted as failures).
+
+models/teddy/runs_20261026/PRACTICAL_TRIAL.md compares these checks with the current ones
+on the 2026-10-27 runs.
 
   python3 skills/open-weight-models/eval/practical_checks.py [--round runs_20261026]
 
-prints each run's practical results (reason per check, with notebook line numbers).
-Needs mlflow-skinny (scorers.py imports it); no workspace, no network.
+prints each run's practical and guideline results (reason per check, with notebook line
+numbers). Needs mlflow-skinny (scorers.py imports it); no workspace, no network.
 """
 
 from __future__ import annotations
@@ -31,10 +37,11 @@ EVAL_DIR = Path(__file__).resolve().parent
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 
-import scorers  # noqa: E402 — same folder; reused: NotebookCode, AI Gateway and UC registry logic
-from scorers import NotebookCode, _call_name, _strip_comments  # noqa: E402
+import scorers  # noqa: E402 — same folder; reused: NotebookCode, AI Gateway, UC registry, existing-resource logic
+from scorers import NotebookCode, _call_name  # noqa: E402
 
 PRACTICAL_PREFIX = "practical/"
+GUIDELINE_PREFIX = "guideline/"
 SEVERITIES = scorers.SEVERITIES
 
 # Python package of each family's upstream code: a call into it is an upstream reference.
@@ -43,24 +50,31 @@ UPSTREAM_PACKAGES = {"teddy": ("teddy",)}
 CHECKS = {
     "download_location_ok": {
         "severity": "critical",
-        "goal": "Model files are downloaded to a location that exists on serverless compute.",
+        "goal": "Model files are downloaded and staged where serverless compute can write.",
         "accepts": ["a /tmp path", "tempfile.mkdtemp() / TemporaryDirectory() (both under /tmp)",
                     "a Unity Catalog Volume path (/Volumes/...)",
                     "the same, as the destination of a download run in a subprocess or shell command"],
-        "fails": "any /local_disk0 path in the code; a download whose destination is none of the above "
-                 "(including the default Hugging Face cache, which is not stated in the code)",
+        "fails": "/local_disk0 as a download destination or as the destination of a copy/move of the "
+                 "files (staging); a download destination that is none of the above, including the "
+                 "default Hugging Face cache (not stated in the code). Other /local_disk0 strings "
+                 "(messages, unrelated paths) do not count",
         "evidence": "code",
     },
     "xet_download_ok": {
         "severity": "critical",
         "goal": "The Hugging Face download of the TEDDY repository (Xet storage) completes.",
-        "accepts": ["HF_HUB_DISABLE_XET set anywhere in the code (env var, env dict, subprocess script)",
-                    "the download run in a subprocess / clean environment (including a %sh or ! "
-                    "`hf download` / `huggingface-cli download` command)",
-                    "evidence the download completed: a later cell loads files it wrote "
+        "accepts": ["the download runs in a subprocess whose environment sets HF_HUB_DISABLE_XET "
+                    "(env= dict) or whose script sets it before importing huggingface_hub "
+                    "(teddy.md, 'Hugging Face download')",
+                    "a %sh / ! `hf download` command with HF_HUB_DISABLE_XET set on that line or "
+                    "exported earlier in the cell",
+                    "in the notebook: HF_HUB_DISABLE_XET set before the first huggingface_hub import "
+                    "and before the download (teddy.md warns this is not reliable on AI Runtime)",
+                    "recorded evidence the download completed: a later cell loads files it wrote "
                     "(from_pretrained, safetensors load_file, load_state_dict, log_model artifacts) "
-                    "and the endpoint built from them reached READY (run record)"],
-        "fails": "no download call, or none of the above",
+                    "and the run record shows the endpoint READY serving the registered version"],
+        "fails": "no download call; HF_HUB_DISABLE_XET set only after the download or import; a "
+                 "subprocess without it; and no recorded evidence",
         "evidence": "code + record",
     },
     "model_loads_with_pinned_deps": {
@@ -78,26 +92,32 @@ CHECKS = {
     },
     "fidelity_verified": {
         "severity": "major",
-        "goal": "The model's (or endpoint's) embeddings were compared against an upstream reference.",
-        "accepts": ["a cell that compares outputs (cosine, allclose, max absolute difference) and "
-                    "computes the reference with the upstream package's own code (e.g. TEDDY's "
-                    "tokenizer or tokenization functions)",
-                    "a cell that compares the wrapper with a direct forward pass of the upstream model "
-                    "(`<x>.model(...)`), in a notebook that loads the upstream package and defines no "
-                    "torch nn.Module of its own"],
-        "fails": "no such comparison; a re-implementation (own nn.Module) compared only with itself "
-                 "(a riskier valid alternative: scientific-risk check); endpoint-vs-notebook checks of "
-                 "the same wrapper",
+        "goal": "The wrapper's or endpoint's embeddings were compared against an upstream reference.",
+        "accepts": ["a comparison (cosine, allclose / isclose, largest absolute difference) whose one "
+                    "side is derived from upstream code — a call into the upstream package (e.g. "
+                    "TEDDY's tokenizer or tokenization functions), or a direct forward pass of the "
+                    "upstream model (`<x>.model(...)`) in a notebook that loads the upstream package "
+                    "and defines no nn.Module of its own — and whose other side comes from the "
+                    "candidate (a `.predict(...)` of the wrapper / logged model, or an endpoint "
+                    "query). Values are followed through assignments, loops and notebook functions "
+                    "across cells"],
+        "fails": "no such comparison; comparisons of two candidate outputs (endpoint vs the same "
+                 "wrapper); a re-implementation (own nn.Module) compared only with itself (a riskier "
+                 "valid alternative: scientific-risk check); an upstream call that does not feed a "
+                 "side of the comparison",
         "evidence": "code",
     },
     "signature_and_example": {
         "severity": "critical",
         "goal": "The logged model carries a signature and an input example (Unity Catalog needs the "
                 "signature; the example grounds it in a real request).",
-        "accepts": ["mlflow.<flavor>.log_model(signature=..., input_example=...) with the signature from "
-                    "infer_signature(...), an explicit ModelSignature(...), or any other value"],
-        "fails": "no log_model call that passes both",
-        "evidence": "code",
+        "accepts": ["mlflow.<flavor>.log_model(signature=..., input_example=...) with the signature "
+                    "built by infer_signature(...) or ModelSignature(...)",
+                    "another signature expression, if the run record shows the endpoint READY serving "
+                    "the registered version (the registration, which needs a signature, succeeded)"],
+        "fails": "no log_model call with both; a signature that is None, or unrecognisable without "
+                 "that recorded evidence",
+        "evidence": "code (+ record)",
     },
     "registered_in_uc": {
         "severity": "major",
@@ -106,22 +126,38 @@ CHECKS = {
         "fails": "as that check",
         "evidence": "code",
     },
-    "serves_real_cell_data": {
+    "serves_valid_embeddings": {
         "severity": "critical",
-        "goal": "The endpoint embeds a cell from its expression (not pre-tokenized IDs) and returns "
-                "valid embeddings.",
-        "accepts": ["run record outcome/accepts_expression_input AND outcome/returns_valid_embeddings, "
-                    "each in the endpoint's own declared input format"],
-        "fails": "either not passed or not measured",
+        "goal": "The endpoint returns valid embeddings (one finite vector of the model size per cell, "
+                "in its own declared input format).",
+        "accepts": ["run record outcome/returns_valid_embeddings"],
+        "fails": "not passed or not measured",
         "evidence": "record",
     },
-    "gpu_serving": {
+    "serves_expression_input": {
         "severity": "major",
-        "goal": "The model is served on a GPU workload (task guidelines: GPU_SMALL).",
-        "accepts": ["run record endpoint_config: every served entity has a GPU_* workload type",
-                    "if the record has no endpoint_config: ServingModelWorkloadType.GPU_* in the code"],
-        "fails": "a CPU workload (baseline/teddy-002 measured about 15 s per cell on CPU)",
-        "evidence": "record (code fallback)",
+        "goal": "The endpoint embeds a cell from its expression (not pre-tokenized token IDs).",
+        "accepts": ["run record outcome/accepts_expression_input"],
+        "fails": "not passed or not measured",
+        "evidence": "record",
+    },
+    "endpoint_smoke_tested": {
+        "severity": "major",
+        "goal": "The run queried its own endpoint and checked the result.",
+        "accepts": ["an endpoint query (serving_endpoints.query, or a POST to .../invocations) whose "
+                    "result feeds an assert, a comparison (==, <, >, ...) or a numeric comparison "
+                    "(cosine, allclose, absolute difference); values followed across cells and "
+                    "through notebook functions"],
+        "fails": "no endpoint query, or its result only printed / displayed",
+        "evidence": "code",
+    },
+    "existing_resources_checked": {
+        "severity": "major",
+        "goal": "The run looked for an existing endpoint / table / index before creating or deleting it.",
+        "accepts": ["scorers.existing_resources() (the new check's logic, unchanged) for the resources "
+                    "listed for the task in expectations.json new_checks"],
+        "fails": "as that check, for any listed resource",
+        "evidence": "code",
     },
     "governance_logging": {
         "severity": "major",
@@ -133,13 +169,18 @@ CHECKS = {
     },
     "provenance_recorded": {
         "severity": "major",
-        "goal": "The upstream revision is pinned and the licence is recorded durably.",
-        "accepts": ["revision: the Hugging Face download uses an explicit revision (a commit SHA "
-                    "constant, or the SHA resolved from model_info), not 'main'",
-                    "licence: a licence key or value in ANY durable record — MLflow tags or params, "
-                    "logged-model tags/metadata, registered-model or model-version tags, the "
-                    "registered-model description, or a provenance manifest (json.dump / log_dict)"],
-        "fails": "no pinned revision, or no licence in any durable record",
+        "goal": "The upstream revision is pinned to a commit and the licence is recorded in a "
+                "persisted record.",
+        "accepts": ["revision: the Hugging Face download uses a 40-character hexadecimal commit SHA, or "
+                    "the commit resolved at download time (`model_info(...).sha`) when that resolved "
+                    "value is also recorded (a revision/commit/sha key in a persisted sink)",
+                    "licence: a non-empty licence value (not unknown / none / n/a) under a licence key "
+                    "in a persisted sink — MLflow params or tags (set_tag(s), log_param(s), "
+                    "start_run / log_model tags), registered-model or model-version tags, or a "
+                    "manifest file (json.dump to a file, mlflow.log_dict)"],
+        "fails": "no revision, a branch or tag name ('main', 'dev', 'v1'), an unresolved expression; "
+                 "a licence that is missing, empty or unknown, or only in comments, markdown or a "
+                 "model description",
         "evidence": "code",
     },
     "similarity_search_works": {
@@ -150,6 +191,18 @@ CHECKS = {
         "fails": "either not passed or not measured",
         "evidence": "record",
         "search_only": True,
+    },
+}
+
+GUIDELINES = {
+    "gpu_serving": {
+        "goal": "Served on a GPU workload, as the task guidelines suggest (GPU_SMALL). The prompts do "
+                "not ask for a GPU and CPU endpoints worked, so this is reported on its own, not "
+                "counted as a failure.",
+        "accepts": ["run record endpoint_config: every served entity has a GPU_* workload type "
+                    "(recorded settings only; code is never read)"],
+        "context": "on CPU, baseline/teddy-002's endpoint took about 15 s per cell (run record notes)",
+        "evidence": "record",
     },
 }
 
@@ -182,18 +235,43 @@ def _line_preserving(response: str) -> str:
         "\n" * (first - (1 if i == 0 else 2)) + "\n".join(lines) for i, (first, lines) in enumerate(cells))
 
 
+def _target_names(target) -> list:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [n for elt in target.elts for n in _target_names(elt)]
+    return []
+
+
+RUNTIME = "<value known at run time>"
+
+
 class PracticalCode(NotebookCode):
-    """NotebookCode whose node line numbers are notebook file lines, plus `with ... as x` targets."""
+    """NotebookCode whose node line numbers are notebook file lines, plus what NotebookCode does
+    not follow: `with ... as x` targets, loop / comprehension / augmented-assignment /
+    tuple-unpacking sources and the notebook's own functions."""
 
     def __init__(self, response: str):
         super().__init__(_line_preserving(response))
-        self.with_values = {}
+        self.with_values, self.sources, self.functions = {}, {}, {}
         for tree in self.trees:
             for node in ast.walk(tree):
                 if isinstance(node, (ast.With, ast.AsyncWith)):
                     for item in node.items:
                         if isinstance(item.optional_vars, ast.Name):
                             self.with_values.setdefault(item.optional_vars.id, []).append(item.context_expr)
+                elif isinstance(node, (ast.For, ast.comprehension)):
+                    for name in _target_names(node.target):
+                        self.sources.setdefault(name, []).append(node.iter)
+                elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+                    self.sources.setdefault(node.target.id, []).append(node.value)
+                elif isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, (ast.Tuple, ast.List)):     # a, b = ...: both from the value
+                            for name in _target_names(target):
+                                self.sources.setdefault(name, []).append(node.value)
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    self.functions[node.name] = node
 
     def nodes(self, kind):
         return [node for tree in self.trees for node in ast.walk(tree) if isinstance(node, kind)]
@@ -204,20 +282,184 @@ class PracticalCode(NotebookCode):
     def imports_package(self, packages: tuple) -> bool:
         return any(path.split(".")[0] in packages for path in self.imports.values())
 
+    def value_texts(self, node) -> list:
+        """What a recorded value can be: its string values, "" for None, RUNTIME for a value
+        only known when the notebook runs (e.g. a commit read from the download)."""
+        out = []
+        for value in self.values(node):
+            if isinstance(value, ast.Constant):
+                out.append("" if value.value is None else str(value.value))
+            else:
+                out += [s for s in self.strings(value) if s.replace("{}", "").strip()] or [RUNTIME]
+        return out
+
+
+# ---- Where a value comes from (across cells) -------------------------------------------------
+
+UPSTREAM, PREDICT, ENDPOINT = "upstream", "candidate predict", "endpoint query"
+
+
+_HTTP_CALLS = ("post", "do", "request", "urlopen")   # requests.post, api_client.do, urllib urlopen, ...
+
+
+def _is_endpoint_query(nb: PracticalCode, call: ast.Call) -> bool:
+    """serving_endpoints.query(...), or an HTTP call (not e.g. print) to a .../invocations URL."""
+    if any(d.endswith("serving_endpoints.query") for d in nb.dotted(call.func)):
+        return True
+    if _call_name(call) not in _HTTP_CALLS:
+        return False
+    args = list(call.args) + [k.value for k in call.keywords]
+    return any("/invocations" in s for a in args for s in nb.strings(a))
+
+
+def _reaching(nb: PracticalCode, name: str, line: int) -> list:
+    """Values a name can hold when used at `line`: its latest assignment (or loop / comprehension /
+    augmented assignment / with / tuple-unpacking source) up to that line. Inside a notebook
+    function, a name with no earlier source is a global set later: all its sources count."""
+    found = nb.assigned.get(name, []) + nb.sources.get(name, []) + nb.with_values.get(name, [])
+    before = [v for v in found if getattr(v, "lineno", 0) <= line]
+    if not before:
+        in_function = any(f.lineno <= line <= f.end_lineno for f in nb.functions.values())
+        return found if in_function else []
+    latest = max(v.lineno for v in before)
+    return [v for v in before if v.lineno == latest]
+
+
+def origins(nb: PracticalCode, node, packages: tuple, upstream_model: bool, _seen=None) -> set:
+    """What a value is derived from: UPSTREAM (a call into the upstream package, or a direct
+    forward pass `<x>.model(...)` when `upstream_model`), PREDICT (a `.predict(...)` of the
+    wrapper / logged model) and/or ENDPOINT (a serving-endpoint query). Names are followed
+    through assignments, loop / augmented-assignment sources and `with` targets anywhere in the
+    notebook (the latest one before the use, see _reaching); a call to a notebook function also
+    counts what its body calls."""
+    seen = set() if _seen is None else _seen
+    out = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call):
+            called = nb.dotted(n.func)
+            if any(d.split(".")[0] in packages and "." in d for d in called):
+                out.add(UPSTREAM)
+            elif upstream_model and any(d.endswith(".model") for d in called):
+                out.add(UPSTREAM)
+            if any(d.endswith(".predict") for d in called):
+                out.add(PREDICT)
+            if _is_endpoint_query(nb, n):
+                out.add(ENDPOINT)
+            name = n.func.id if isinstance(n.func, ast.Name) else None
+            if name in nb.functions and ("def", name) not in seen:
+                seen.add(("def", name))
+                out |= origins(nb, nb.functions[name], packages, upstream_model, seen)
+        elif isinstance(n, ast.Name) and (n.id, n.lineno) not in seen:
+            seen.add((n.id, n.lineno))
+            for value in _reaching(nb, n.id, n.lineno):
+                out |= origins(nb, value, packages, upstream_model, seen)
+    return out
+
+
+_COMPARE_CALLS = ("allclose", "assert_allclose", "isclose", "assert_close", "cosine_similarity")
+
+
+def _product_sides(node):
+    """The two operands of the first product (a @ b, a * b, dot(a, b)) inside a cosine numerator."""
+    for n in ast.walk(node):
+        if isinstance(n, ast.BinOp) and isinstance(n.op, (ast.MatMult, ast.Mult)):
+            return [n.left, n.right]
+        if isinstance(n, ast.Call) and _call_name(n) == "dot" and len(n.args) >= 2:
+            return list(n.args[:2])
+    return None
+
+
+def numeric_comparisons(nb: PracticalCode) -> list:
+    """(line, [side a, side b]) for every output comparison: allclose-style calls, a cosine
+    (product / norm) and an absolute difference abs(a - b)."""
+    out = []
+    for node in nb.nodes((ast.Call, ast.BinOp)):
+        if isinstance(node, ast.Call) and _call_name(node) in _COMPARE_CALLS and len(node.args) >= 2:
+            out.append((node.lineno, list(node.args[:2])))
+        elif (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+              and any(isinstance(n, ast.Call) and _call_name(n) == "norm" for n in ast.walk(node.right))):
+            sides = _product_sides(node.left)
+            if sides:
+                out.append((node.lineno, sides))
+        elif (isinstance(node, ast.Call) and _call_name(node) == "abs" and node.args
+              and isinstance(node.args[0], ast.BinOp) and isinstance(node.args[0].op, ast.Sub)):
+            out.append((node.lineno, [node.args[0].left, node.args[0].right]))
+    return sorted(out, key=lambda item: item[0])
+
+
+# ---- Environment: HF_HUB_DISABLE_XET -----------------------------------------------------------
+
+XET_VAR = "HF_HUB_DISABLE_XET"
+
+
+def _xet_set_lines(nb: PracticalCode, receiver) -> list:
+    """Lines where XET_VAR is set on an environment mapping: `receiver(name)` says whether an
+    expression is that mapping (os.environ, or an env dict passed to a subprocess)."""
+    lines = []
+    for node in nb.nodes(ast.Assign):
+        for target in node.targets:
+            if (isinstance(target, ast.Subscript) and receiver(target.value)
+                    and XET_VAR in nb.strings(target.slice)):
+                lines.append(node.lineno)
+    for call in nb.calls:
+        func = call.func
+        if isinstance(func, ast.Attribute) and func.attr in ("update", "setdefault") and receiver(func.value):
+            keys = [k for a in call.args for m in nb.members(a) for k in m] + [k.arg for k in call.keywords]
+            keys += [s for a in call.args[:1] for s in nb.strings(a)] if func.attr == "setdefault" else []
+            if XET_VAR in keys:
+                lines.append(call.lineno)
+        elif any(d.endswith("putenv") for d in nb.dotted(func)) and call.args and XET_VAR in nb.strings(call.args[0]):
+            lines.append(call.lineno)
+    return sorted(lines)
+
+
+def _is_os_environ(nb: PracticalCode):
+    return lambda node: any(d.endswith("environ") for d in nb.dotted(node))
+
+
+def _in_process_xet_lines(nb: PracticalCode, response: str = "") -> list:
+    lines = _xet_set_lines(nb, _is_os_environ(nb))
+    lines += [i for i, text in enumerate(response.splitlines(), 1)
+              if re.match(rf"^\s*(?:# MAGIC\s*)?%env\s+{XET_VAR}\s*=", text)]
+    return sorted(lines)
+
+
+def _first_hf_import(nb: PracticalCode):
+    lines = [n.lineno for n in nb.nodes((ast.Import, ast.ImportFrom))
+             if (isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "huggingface_hub")
+             or (isinstance(n, ast.Import) and any(a.name.split(".")[0] == "huggingface_hub" for a in n.names))]
+    return min(lines) if lines else None
+
+
+def _set_before_import(nb: PracticalCode, response: str, before: int):
+    """(ok, reason) for XET_VAR set in-process before the first huggingface_hub import and `before`."""
+    sets = _in_process_xet_lines(nb, response)
+    first_import = _first_hf_import(nb)
+    limit = min(x for x in (first_import, before) if x is not None)
+    early = [line for line in sets if line < limit]
+    if early:
+        return True, f"set at line {early[0]}, before the huggingface_hub import (line {first_import})"
+    if sets:
+        return False, f"set at line {sets[0]}, after the huggingface_hub import / download (line {limit})"
+    return False, "not set"
+
 
 # ---- Hugging Face downloads -------------------------------------------------------------
 
 _HF_DOWNLOADS = ("snapshot_download", "hf_hub_download")
 _SUBPROCESS = re.compile(r"^(?:subprocess\.(?:run|call|check_call|check_output|Popen)|os\.system)$")
 _CLI_DOWNLOAD = re.compile(r"\b(?:huggingface-cli|hf)\s+download\b(?P<rest>.*)")
+_SHA = re.compile(r"^[0-9a-f]{40}$")
 ACCEPTED_LOCATIONS = {"tmp", "volume", "tempfile"}
 
 
 class Download:
-    """One Hugging Face download: where in the notebook, how it ran, destination kinds, revision."""
+    """One Hugging Face download: line, how it ran, destination kinds, revision, Xet setting."""
 
-    def __init__(self, line: int, how: str, kinds: set, revision):
-        self.line, self.how, self.kinds, self.revision = line, how, kinds, revision
+    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple):
+        self.line, self.how, self.kinds = line, how, kinds
+        self.revision = revision      # (kind, text): kind "sha" | "resolved" | None
+        self.xet = xet                # (ok, reason) for HF_HUB_DISABLE_XET
 
     def describe(self) -> str:
         return f"line {self.line} ({self.how}): {', '.join(sorted(self.kinds))}"
@@ -267,21 +509,22 @@ def _path_kinds(nb: PracticalCode, node, depth: int = 0) -> set:
     return kinds or {"unknown"}
 
 
-def _revision(nb: PracticalCode, kwargs: dict):
-    """The revision= of a download as text: a string constant, 'resolved at run time' for any
-    other expression, or None when not given (or None / 'main')."""
+def _revision(nb: PracticalCode, kwargs: dict) -> tuple:
+    """(kind, text) of a download's revision=: ("sha", sha) for a 40-hex commit, ("resolved", how)
+    for the commit resolved with model_info(...).sha, else (None, why)."""
     node = kwargs.get("revision")
     if node is None:
-        return None
-    texts = nb.strings(node)
-    if texts and all(t in ("main", "") for t in texts):
-        return None
-    if any(isinstance(v, ast.Constant) and v.value is None for v in nb.values(node)):
-        return None
-    return texts[0] if texts and "{}" not in texts[0] else "resolved at run time"
+        return None, "no revision"
+    texts = [t for t in nb.strings(node) if "{}" not in t]
+    if texts and all(_SHA.match(t) for t in texts):
+        return "sha", texts[0]
+    if any(d.endswith("model_info().sha") for v in nb.values(node) for d in nb.dotted(v)):
+        return "resolved", "commit resolved with model_info(...).sha"
+    return None, f"revision {texts[0]!r} is not a commit SHA" if texts else "revision is an unresolved expression"
 
 
-def _direct_downloads(nb: PracticalCode, how: str = "notebook", line: int | None = None) -> list:
+def _direct_downloads(nb: PracticalCode, response: str, how: str = "notebook", line: int | None = None,
+                      xet=None) -> list:
     out = []
     for call in nb.calls:
         name = _call_name(call)
@@ -292,8 +535,24 @@ def _direct_downloads(nb: PracticalCode, how: str = "notebook", line: int | None
         for kwargs in nb.keyword_maps(call):
             dest = kwargs.get("local_dir") or kwargs.get("cache_dir")
             kinds = _path_kinds(nb, dest) if dest is not None else {"hf_default_cache"}
-            out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs)))
+            setting = xet or _set_before_import(nb, response, call.lineno)
+            out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs), setting))
     return out
+
+
+def _subprocess_xet(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode, script: str) -> tuple:
+    """(ok, reason): XET_VAR in the subprocess env= mapping, or set in the script before its
+    huggingface_hub import."""
+    env = next((k.value for k in call.keywords if k.arg == "env"), None)
+    if env is not None:
+        in_dict = any(XET_VAR in m for v in nb.values(env) for m in nb.members(v))
+        names = {env.id} if isinstance(env, ast.Name) else set()
+        on_name = _xet_set_lines(nb, lambda node: isinstance(node, ast.Name) and node.id in names)
+        if in_dict or on_name:
+            return True, f"set in the subprocess env (line {on_name[0] if on_name else call.lineno})"
+    ok, why = _set_before_import(script_nb, script, 10 ** 9)
+    return (True, f"set in the subprocess script before its huggingface_hub import") if ok else (
+        False, f"subprocess without it (script: {why}; env: {'not given' if env is None else 'no ' + XET_VAR})")
 
 
 def _subprocess_downloads(nb: PracticalCode) -> list:
@@ -311,18 +570,21 @@ def _subprocess_downloads(nb: PracticalCode) -> list:
         # path-like arguments, for a script that reads its destination from sys.argv
         path_args = set().union(*[_path_kinds(nb, e) for e in elements]) & (ACCEPTED_LOCATIONS | {"local_disk0"})
         for script in [t for t in texts if re.search(r"\b(?:snapshot_download|hf_hub_download)\s*\(", t)]:
-            for download in _direct_downloads(PracticalCode(script), "subprocess", call.lineno):
+            script_nb = PracticalCode(script)
+            xet = _subprocess_xet(nb, call, script_nb, script)
+            for download in _direct_downloads(script_nb, script, "subprocess", call.lineno, xet):
                 if download.kinds <= {"unknown"} and path_args:
                     download.kinds = path_args
                 out.append(download)
         for command in texts:
             match = _CLI_DOWNLOAD.search(command)
             if match:
-                out.append(_cli_download(match.group("rest"), call.lineno))
+                xet = (XET_VAR in command, "set on the command line" if XET_VAR in command else "not set")
+                out.append(_cli_download(match.group("rest"), call.lineno, xet))
     return out
 
 
-def _cli_download(rest: str, line: int) -> Download:
+def _cli_download(rest: str, line: int, xet: tuple) -> Download:
     try:
         words = shlex.split(rest)
     except ValueError:
@@ -330,30 +592,103 @@ def _cli_download(rest: str, line: int) -> Download:
     dest = next((words[i + 1] for i, w in enumerate(words[:-1]) if w in ("--local-dir", "--cache-dir")), None)
     revision = next((words[i + 1] for i, w in enumerate(words[:-1]) if w == "--revision"), None)
     kinds = {_classify(dest)} if dest else {"hf_default_cache"}
-    return Download(line, "subprocess", kinds, None if revision in (None, "main") else revision)
+    rev = ("sha", revision) if revision and _SHA.match(revision) else (
+        None, f"revision {revision!r} is not a commit SHA" if revision else "no revision")
+    return Download(line, "shell", kinds, rev, xet)
 
 
 def _shell_downloads(response: str) -> list:
     """`%sh` / `!` cells: `huggingface-cli download` or `hf download` (run in their own process)."""
-    out, in_sh = [], False
+    out, in_sh, exported = [], False, False
     for number, line in enumerate(response.splitlines(), 1):
         if _CELL_SEPARATOR.match(line):
-            in_sh = False
+            in_sh = exported = False
             continue
         magic = re.match(r"^\s*# MAGIC\s?(.*)", line)
         text = magic.group(1) if magic else line
         if magic and text.lstrip().startswith("%"):
             in_sh = text.lstrip().startswith("%sh")     # a cell's magic decides its language
-        if (in_sh and magic) or text.lstrip().startswith("!"):
-            match = _CLI_DOWNLOAD.search(text)
-            if match:
-                out.append(_cli_download(match.group("rest"), number))
+        if not ((in_sh and magic) or text.lstrip().startswith("!")):
+            continue
+        if re.search(rf"\bexport\s+{XET_VAR}=", text):
+            exported = True
+        match = _CLI_DOWNLOAD.search(text)
+        if match:
+            on_line = bool(re.search(rf"\b{XET_VAR}=\S+\s+.*\bdownload\b", text))
+            xet = (exported or on_line, "exported earlier in the cell" if exported else
+                   "set on the command line" if on_line else "not set")
+            out.append(_cli_download(match.group("rest"), number, xet))
     return out
 
 
 def downloads(nb: PracticalCode, response: str) -> list:
-    return sorted(_direct_downloads(nb) + _subprocess_downloads(nb) + _shell_downloads(response),
+    return sorted(_direct_downloads(nb, response) + _subprocess_downloads(nb) + _shell_downloads(response),
                   key=lambda d: d.line)
+
+
+# ---- Persisted records (MLflow, registry, manifest) ---------------------------------------------
+
+_LICENCE_KEY = re.compile(r"licen[cs]e", re.I)
+_REVISION_KEY = re.compile(r"revision|commit|\bsha\b|_sha$", re.I)
+_EMPTY = {"", "unknown", "none", "null", "n/a", "na", "tbd", "todo", "?"}
+# Persisted sinks: call name -> position of the key argument (keyed) or the arguments that hold
+# a dict (None = all). A model description is not a sink: it is free text, not a recorded field.
+_KEYED_SINKS = {"set_tag": 0, "log_param": 0, "set_registered_model_tag": 1, "set_model_version_tag": 2}
+_DICT_SINKS = {"set_tags": None, "log_params": None, "set_logged_model_tags": None, "log_dict": None,
+               "dump": None, "log_model": ("tags", "metadata"), "start_run": ("tags",)}
+
+
+def _filled(texts: list) -> bool:
+    """A non-empty value: a string that is not empty / unknown, or a value known at run time."""
+    return any(t.strip().lower() not in _EMPTY for t in texts)
+
+
+def _keyed_values(nb: PracticalCode, node, key: re.Pattern, depth: int = 0) -> list:
+    """String values under keys matching `key` in a dict / constructor value (nested dicts too);
+    a nested dict under a matching key contributes all its string values."""
+    out = []
+    for fields in nb.members(node):
+        for name, value in fields.items():
+            if value is None:
+                continue
+            if key.search(name):
+                out += nb.value_texts(value) + [s for m in nb.members(value) for v in m.values()
+                                                  if v is not None for s in nb.value_texts(v)]
+            elif depth < 4:
+                out += _keyed_values(nb, value, key, depth + 1)
+    return out
+
+
+def persisted_records(nb: PracticalCode, key: re.Pattern) -> list:
+    """(line, sink, values) for every persisted record under a key matching `key`."""
+    out = []
+    for call in nb.calls:
+        name = _call_name(call)
+        if name in _KEYED_SINKS:
+            position = _KEYED_SINKS[name]
+            args = list(call.args)
+            if len(args) > position and any(key.search(s) for s in nb.strings(args[position])):
+                value = args[position + 1] if len(args) > position + 1 else next(
+                    (k.value for k in call.keywords if k.arg == "value"), None)
+                out.append((call.lineno, name, nb.value_texts(value) if value is not None else [""]))
+        elif name in _DICT_SINKS:
+            wanted = _DICT_SINKS[name]
+            nodes = list(call.args) + [k.value for k in call.keywords] if wanted is None else [
+                k.value for k in call.keywords if k.arg in wanted]
+            values = [v for n in nodes for v in _keyed_values(nb, n, key)]
+            if values or any(key.search(k) for n in nodes for m in nb.members(n) for k in m):
+                out.append((call.lineno, "json.dump manifest" if name == "dump" else name, values))
+    # for k, v in {...}.items(): <keyed sink>(..., k, v)
+    for loop in nb.nodes(ast.For):
+        it = loop.iter
+        if not (isinstance(it, ast.Call) and _call_name(it) == "items" and isinstance(it.func, ast.Attribute)):
+            continue
+        sinks = [c for stmt in loop.body for c in ast.walk(stmt)
+                 if isinstance(c, ast.Call) and _call_name(c) in _KEYED_SINKS]
+        values = _keyed_values(nb, it.func.value, key)
+        if sinks and values:
+            out.append((sinks[0].lineno, _call_name(sinks[0]), values))
+    return sorted(out, key=lambda item: item[0])
 
 
 # ---- Run-record evidence ---------------------------------------------------------------
@@ -373,18 +708,28 @@ def _record_checks(record, names: list) -> tuple:
     return not failed, ("run record: " + ", ".join(f"{n} {'pass' if v else 'fail'}" for n, v in values.items()))
 
 
+def _endpoint_serves_registration(record) -> bool:
+    return bool(_measured(record, "outcome/endpoint_ready") and _measured(record, "outcome/serves_recorded_version"))
+
+
 # ---- The checks --------------------------------------------------------------------------
 # Each takes (nb, response, record, task) and returns (passed, reason).
 
+_STAGING_CALLS = ("copytree", "copy", "copy2", "copyfile", "move")
+
+
 def download_location_ok(nb, response, record, task):
-    disk0 = sorted({n.lineno for n in nb.string_constants() if n.value.startswith("/local_disk0")})
     found = downloads(nb, response)
     if not found:
         return False, "no Hugging Face download call found"
+    staging = [c.lineno for c in nb.calls if _call_name(c) in _STAGING_CALLS
+               and any(d.startswith("shutil.") for d in nb.dotted(c.func))
+               and "local_disk0" in _path_kinds(nb, c.args[1] if len(c.args) > 1 else next(
+                   (k.value for k in c.keywords if k.arg == "dst"), ast.Constant("")))]
     bad = [d for d in found if not d.kinds <= ACCEPTED_LOCATIONS]
     where = "; ".join(d.describe() for d in found)
-    if disk0:
-        return False, f"/local_disk0 path in the code (lines {disk0}); downloads: {where}"
+    if staging:
+        return False, f"files staged to /local_disk0 (lines {staging}); downloads: {where}"
     if bad:
         return False, f"destination not an accepted location: {'; '.join(d.describe() for d in bad)}"
     return True, f"downloads: {where}"
@@ -409,22 +754,18 @@ def xet_download_ok(nb, response, record, task):
     found = downloads(nb, response)
     if not found:
         return False, "no Hugging Face download call found"
-    code = _strip_comments(response)
-    if "HF_HUB_DISABLE_XET" in code:
-        line = next(i for i, text in enumerate(response.splitlines(), 1)
-                    if "HF_HUB_DISABLE_XET" in text and not text.lstrip().startswith("#"))
-        return True, f"HF_HUB_DISABLE_XET set (line {line})"
-    isolated = [d for d in found if d.how == "subprocess"]
-    if isolated:
-        return True, f"download run in a subprocess (line {isolated[0].line})"
+    if all(d.xet[0] for d in found):
+        return True, "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
     first = found[0].line
     used = _later_weight_load(nb, first)
-    ready = _measured(record, "outcome/endpoint_ready")
-    if used and ready:
-        return True, (f"download completed: line {used[0]} ({used[1]}) uses files from the download at line "
-                      f"{first}, and the endpoint built from them reached READY (run record)")
-    return False, ("no Xet workaround and no evidence the download completed "
-                   f"(later file use: {used and used[0]}; endpoint READY in run record: {ready})")
+    if used and _endpoint_serves_registration(record):
+        return True, (f"recorded evidence the download completed: line {used[0]} ({used[1]}) uses files from "
+                      f"the download at line {first}, and the run record shows the endpoint READY serving "
+                      f"the registered version")
+    settings = "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
+    return False, (f"{settings}; no recorded evidence the download completed (later file use: "
+                   f"{used and used[0]}; endpoint READY + registered version in run record: "
+                   f"{_endpoint_serves_registration(record)})")
 
 
 def _pip_specs(response: str) -> list:
@@ -442,13 +783,15 @@ def _pip_specs(response: str) -> list:
     return out
 
 
+def _mlflow_log_model_calls(nb: PracticalCode) -> list:
+    return [c for c in nb.calls if _call_name(c) == "log_model"
+            and any(re.match(r"^mlflow\.\w+\.log_model$", d) for d in nb.dotted(c.func))]
+
+
 def _serving_specs(nb: PracticalCode) -> list:
     """(line, spec) for every transformers requirement passed to an MLflow log_model call."""
     out = []
-    for call in nb.calls:
-        if _call_name(call) != "log_model" or not any(re.match(r"^mlflow\.\w+\.log_model$", d)
-                                                      for d in nb.dotted(call.func)):
-            continue
+    for call in _mlflow_log_model_calls(nb):
         for kwargs in nb.keyword_maps(call):
             for key in ("pip_requirements", "extra_pip_requirements"):
                 node = kwargs.get(key)
@@ -474,13 +817,18 @@ def _excludes_5(spec: str):
     return not any(allowed.contains(v, prereleases=True) for v in ("5.0.0", "5.1.0", "5.99.0"))
 
 
+def _references_upstream(nb: PracticalCode, packages: tuple) -> bool:
+    """The upstream package is imported in the parsed code or in a source string (a wrapper file)."""
+    return nb.imports_package(packages) or any(
+        re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value) for p in packages for s in nb.string_constants())
+
+
 def model_loads_with_pinned_deps(nb, response, record, task):
     ready = _measured(record, "outcome/endpoint_ready")
     packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
     pip, serving = _pip_specs(response), _serving_specs(nb)
     uses_transformers = (nb.imports_package(packages + ("transformers",)) or bool(serving)
-                         or any(re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value)
-                                for p in packages for s in nb.string_constants()))
+                         or _references_upstream(nb, packages))
     if not uses_transformers:
         deps_ok, deps = True, ("model path does not use transformers (no transformers or upstream-package "
                                "import, none in the serving requirements)")
@@ -503,31 +851,6 @@ def model_loads_with_pinned_deps(nb, response, record, task):
     return ok, f"{deps}; endpoint READY in run record: {ready}"
 
 
-_COMPARE_CALLS = ("allclose", "assert_allclose", "isclose", "assert_close", "cosine_similarity")
-
-
-def _contains(node, test) -> bool:
-    return any(test(n) for n in ast.walk(node))
-
-
-def _comparison_lines(tree) -> list:
-    """Lines of output comparisons in one cell: allclose-style calls, a cosine
-    (product / norm), or an absolute difference abs(a - b)."""
-    lines = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _call_name(node) in _COMPARE_CALLS:
-            lines.append(node.lineno)
-        elif (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
-              and _contains(node.right, lambda n: isinstance(n, ast.Call) and _call_name(n) == "norm")
-              and _contains(node.left, lambda n: (isinstance(n, ast.BinOp) and isinstance(n.op, (ast.MatMult, ast.Mult)))
-                            or (isinstance(n, ast.Call) and _call_name(n) == "dot"))):
-            lines.append(node.lineno)
-        elif (isinstance(node, ast.Call) and _call_name(node) == "abs" and node.args
-              and isinstance(node.args[0], ast.BinOp) and isinstance(node.args[0].op, ast.Sub)):
-            lines.append(node.lineno)
-    return sorted(set(lines))
-
-
 def _defines_own_module(nb: PracticalCode) -> bool:
     """A torch nn.Module subclass defined in the notebook: a re-implementation of the model."""
     return any(any(d.endswith(("nn.Module", "torch.nn.Module")) or d == "Module"
@@ -535,53 +858,43 @@ def _defines_own_module(nb: PracticalCode) -> bool:
                for cls in nb.nodes(ast.ClassDef))
 
 
-def _upstream_reference_lines(nb: PracticalCode, tree, packages: tuple, upstream_model: bool) -> list:
-    out = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        called = nb.dotted(node.func)
-        if any(d.split(".")[0] in packages and "." in d for d in called):
-            out.append((node.lineno, "upstream code"))
-        elif upstream_model and any(d.endswith(".model") for d in called):
-            out.append((node.lineno, "direct upstream-model forward"))
-    return out
-
-
 def fidelity_verified(nb, response, record, task):
     packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
-    loads_upstream = nb.imports_package(packages) or any(
-        re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value) for p in packages for s in nb.string_constants())
     own_module = _defines_own_module(nb)
-    upstream_model = loads_upstream and not own_module
-    compared = []
-    for tree in nb.trees:
-        lines = _comparison_lines(tree)
-        refs = _upstream_reference_lines(nb, tree, packages, upstream_model) if lines else []
-        if lines and refs:
-            return True, (f"line {lines[0]} compares outputs with a reference from {refs[0][1]} "
-                          f"(line {refs[0][0]})")
-        compared += lines
+    upstream_model = _references_upstream(nb, packages) and not own_module
+    seen = []
+    for line, sides in numeric_comparisons(nb):
+        a, b = (origins(nb, side, packages, upstream_model) for side in sides)
+        seen.append(f"line {line}: {sorted(a) or ['-']} vs {sorted(b) or ['-']}")
+        for ref, cand in ((a, b), (b, a)):
+            # the reference side must not itself be a candidate output
+            if UPSTREAM in ref and not ref & {PREDICT, ENDPOINT} and cand & {PREDICT, ENDPOINT}:
+                return True, (f"line {line} compares a candidate output ({', '.join(sorted(cand & {PREDICT, ENDPOINT}))}) "
+                              f"with a reference derived from upstream code")
     why = ("the notebook defines its own nn.Module (re-implementation) and never compares it with "
-           "upstream code" if own_module else "no comparison against upstream code")
-    return False, why + (f" (comparisons without an upstream reference at lines {compared})" if compared else "")
+           "upstream code" if own_module else "no comparison of a candidate output with upstream code")
+    return False, why + (f"; comparisons found: {'; '.join(seen)}" if seen else "")
+
+
+_SIGNATURE_BUILDERS = ("infer_signature", "ModelSignature")
 
 
 def signature_and_example(nb, response, record, task):
     seen = []
-    for call in nb.calls:
-        if _call_name(call) != "log_model" or not any(re.match(r"^mlflow\.\w+\.log_model$", d)
-                                                      for d in nb.dotted(call.func)):
-            continue
+    for call in _mlflow_log_model_calls(nb):
         for kwargs in nb.keyword_maps(call):
             signature, example = kwargs.get("signature"), kwargs.get("input_example")
             values = [v for v in nb.values(signature) if not (isinstance(v, ast.Constant) and v.value is None)] \
                 if signature is not None else []
-            built = sorted({_call_name(v) if isinstance(v, ast.Call) else type(v).__name__ for v in values})
-            seen.append(f"line {call.lineno}: signature {built or 'missing'}, input_example "
-                        f"{'given' if example is not None else 'missing'}")
-            if values and example is not None:
+            builders = sorted({_call_name(v) for v in values if isinstance(v, ast.Call)} & set(_SIGNATURE_BUILDERS))
+            seen.append(f"line {call.lineno}: signature {builders or ('other expression' if values else 'missing')}, "
+                        f"input_example {'given' if example is not None else 'missing'}")
+            if not values or example is None:
+                continue
+            if builders:
                 return True, seen[-1]
+            if _endpoint_serves_registration(record):
+                return True, seen[-1] + "; run record: endpoint READY serving the registered version"
     return False, "; ".join(seen) or "no MLflow log_model call"
 
 
@@ -589,21 +902,37 @@ def registered_in_uc(nb, response, record, task):
     return scorers.uc_provenance(response, task)["uc_registry"]
 
 
-def serves_real_cell_data(nb, response, record, task):
-    return _record_checks(record, ["outcome/accepts_expression_input", "outcome/returns_valid_embeddings"])
+def serves_valid_embeddings(nb, response, record, task):
+    return _record_checks(record, ["outcome/returns_valid_embeddings"])
 
 
-def gpu_serving(nb, response, record, task):
-    entities = ((record or {}).get("endpoint_config") or {}).get("served_entities")
-    if entities:
-        types = [str(e.get("workload_type")) for e in entities]
-        ok = all(t.upper().startswith("GPU") for t in types)
-        note = "" if ok else " (on CPU, baseline/teddy-002's endpoint took about 15 s per cell)"
-        return ok, f"run record endpoint_config workload_type: {types}{note}"
-    gpu = [n.lineno for n in nb.nodes(ast.Attribute) if n.attr.startswith("GPU_")
-           and any(d.endswith("ServingModelWorkloadType") for d in nb.dotted(n.value))]
-    return bool(gpu), (f"no endpoint_config in run record; code: ServingModelWorkloadType.GPU_* at lines {gpu}"
-                       if gpu else "no endpoint_config in run record and no GPU workload type in the code")
+def serves_expression_input(nb, response, record, task):
+    return _record_checks(record, ["outcome/accepts_expression_input"])
+
+
+def endpoint_smoke_tested(nb, response, record, task):
+    queries = sorted(c.lineno for c in nb.calls if _is_endpoint_query(nb, c))
+    if not queries:
+        return False, "the endpoint is never queried"
+    packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
+    checks = [(n.lineno, "assert") for n in nb.nodes(ast.Assert)
+              if ENDPOINT in origins(nb, n.test, packages, False)]
+    checks += [(n.lineno, "comparison") for n in nb.nodes(ast.Compare)
+               if ENDPOINT in origins(nb, n, packages, False)]
+    checks += [(line, "numeric comparison") for line, sides in numeric_comparisons(nb)
+               if any(ENDPOINT in origins(nb, s, packages, False) for s in sides)]
+    if not checks:
+        return False, f"endpoint queried (line {queries[0]}) but the result is never checked"
+    line, how = min(checks)
+    return True, f"endpoint queried (line {queries[0]}); result checked by an {how} at line {line}" \
+        if how == "assert" else f"endpoint queried (line {queries[0]}); result checked by a {how} at line {line}"
+
+
+def existing_resources_checked(nb, response, record, task):
+    wanted = task.get("new_checks", {}).get("existing_resources", [])
+    results = scorers.existing_resources(response, task)
+    failed = [r for r in wanted if not results[r][0]]
+    return not failed, "; ".join(f"{r}: {results[r][1]}" for r in wanted)
 
 
 def governance_logging(nb, response, record, task):
@@ -615,67 +944,26 @@ def governance_logging(nb, response, record, task):
     return inference and usage, f"inference table: {why_inf}; usage tracking: {why_use}{measured}"
 
 
-_LICENCE_KEY = re.compile(r"licen[cs]e", re.I)
-_LICENCE_TEXT = re.compile(r"licen[cs]e|apache-2\.0|\bmit\b|cc-by|bsd-\d", re.I)
-# Durable sinks: call name -> which arguments hold the record (None = all arguments).
-_KEYED_SINKS = {"set_tag": 0, "log_param": 0, "set_registered_model_tag": 1, "set_model_version_tag": 2}
-_DICT_SINKS = {"set_tags": None, "log_params": None, "set_logged_model_tags": None, "log_dict": None,
-               "dump": None, "log_model": ("tags", "metadata"), "start_run": ("tags",)}
-_DESCRIPTION_SINKS = ("update_registered_model", "create_registered_model", "update_model_version")
-
-
-def _keys(nb: PracticalCode, node, depth: int = 0) -> list:
-    """Keys of a dict / constructor value, nested dicts included."""
-    out = []
-    for fields in nb.members(node):
-        for key, value in fields.items():
-            out.append(key)
-            if depth < 4 and value is not None:
-                out += _keys(nb, value, depth + 1)
-    return out
-
-
-def licence_records(nb: PracticalCode) -> list:
-    """(line, where) for every durable record of the licence."""
-    out = []
-    for call in nb.calls:
-        name = _call_name(call)
-        if name in _KEYED_SINKS:
-            position = _KEYED_SINKS[name]
-            key = call.args[position] if len(call.args) > position else next(
-                (k.value for k in call.keywords if k.arg in ("key",)), None)
-            if key is not None and any(_LICENCE_KEY.search(s) for s in nb.strings(key)):
-                out.append((call.lineno, name))
-        elif name in _DICT_SINKS:
-            wanted = _DICT_SINKS[name]
-            nodes = list(call.args) + [k.value for k in call.keywords] if wanted is None else [
-                k.value for k in call.keywords if k.arg in wanted]
-            if any(_LICENCE_KEY.search(k) for n in nodes for k in _keys(nb, n)):
-                out.append((call.lineno, "json.dump manifest" if name == "dump" else name))
-        elif name in _DESCRIPTION_SINKS:
-            texts = [t for k in call.keywords if k.arg == "description" for t in nb.strings(k.value)]
-            if any(_LICENCE_TEXT.search(t) for t in texts):
-                out.append((call.lineno, f"{name}(description=...)"))
-    # for k, v in {...}.items(): <tag sink>(..., k, v)
-    for loop in nb.nodes(ast.For):
-        it = loop.iter
-        if not (isinstance(it, ast.Call) and _call_name(it) == "items" and isinstance(it.func, ast.Attribute)):
-            continue
-        body_sinks = [c for stmt in loop.body for c in ast.walk(stmt)
-                      if isinstance(c, ast.Call) and _call_name(c) in _KEYED_SINKS]
-        if body_sinks and any(_LICENCE_KEY.search(k) for k in _keys(nb, it.func.value)):
-            out.append((body_sinks[0].lineno, _call_name(body_sinks[0])))
-    return sorted(set(out))
-
-
 def provenance_recorded(nb, response, record, task):
-    pinned = [d for d in downloads(nb, response) if d.revision]
-    licence = licence_records(nb)
-    revision = (f"revision pinned at line {pinned[0].line} ({pinned[0].revision})" if pinned
-                else "no download pinned to a revision")
-    where = (f"licence recorded: {', '.join(f'line {line} {w}' for line, w in licence)}" if licence
-             else "licence not in any durable record")
-    return bool(pinned) and bool(licence), f"{revision}; {where}"
+    found = downloads(nb, response)
+    revisions = persisted_records(nb, _REVISION_KEY)
+    recorded_revision = [line for line, _, values in revisions if _filled(values)]
+    pinned = [d for d in found if d.revision[0] == "sha"
+              or (d.revision[0] == "resolved" and recorded_revision)]
+    licences = [(line, sink) for line, sink, values in persisted_records(nb, _LICENCE_KEY) if _filled(values)]
+    if pinned:
+        d = pinned[0]
+        revision = (f"revision pinned at line {d.line} ({d.revision[1]})" if d.revision[0] == "sha" else
+                    f"revision pinned at line {d.line} ({d.revision[1]}; recorded at line {recorded_revision[0]})")
+    elif found:
+        revision = "no download pinned to a commit: " + "; ".join(f"line {d.line} {d.revision[1]}" for d in found)
+        if any(d.revision[0] == "resolved" for d in found):
+            revision += " (resolved commit never recorded)"
+    else:
+        revision = "no Hugging Face download call found"
+    where = (f"licence recorded: {', '.join(f'line {line} {sink}' for line, sink in licences)}" if licences
+             else "no non-empty licence in a persisted record")
+    return bool(pinned) and bool(licences), f"{revision}; {where}"
 
 
 def similarity_search_works(nb, response, record, task):
@@ -689,12 +977,27 @@ CHECK_FUNCTIONS = {
     "fidelity_verified": fidelity_verified,
     "signature_and_example": signature_and_example,
     "registered_in_uc": registered_in_uc,
-    "serves_real_cell_data": serves_real_cell_data,
-    "gpu_serving": gpu_serving,
+    "serves_valid_embeddings": serves_valid_embeddings,
+    "serves_expression_input": serves_expression_input,
+    "endpoint_smoke_tested": endpoint_smoke_tested,
+    "existing_resources_checked": existing_resources_checked,
     "governance_logging": governance_logging,
     "provenance_recorded": provenance_recorded,
     "similarity_search_works": similarity_search_works,
 }
+
+
+def gpu_serving(record) -> tuple:
+    """(True / False / None, reason) from the recorded endpoint settings only."""
+    entities = ((record or {}).get("endpoint_config") or {}).get("served_entities")
+    if not entities:
+        return None, "no endpoint_config in the run record (not measured)"
+    types = [str(e.get("workload_type")) for e in entities]
+    ok = all(t.upper().startswith("GPU") for t in types)
+    return ok, f"run record workload_type: {types}" + ("" if ok else f" ({GUIDELINES['gpu_serving']['context']})")
+
+
+GUIDELINE_FUNCTIONS = {"gpu_serving": gpu_serving}
 
 
 def practical_details(task: dict, response: str, record: dict | None) -> dict:
@@ -712,11 +1015,16 @@ def practical_scores(task: dict, response: str, record: dict | None) -> dict:
     return {k: ok for k, (ok, _) in practical_details(task, response, record).items()}
 
 
+def guideline_details(record: dict | None) -> dict:
+    """{"guideline/<check>": (True / False / None, reason)} — reported on its own, never counted."""
+    return {f"{GUIDELINE_PREFIX}{name}": fn(record) for name, fn in GUIDELINE_FUNCTIONS.items()}
+
+
 def failed_by_severity(scores: dict) -> dict:
-    """{"critical"|"major"|"minor": [failed practical metric names]}."""
+    """{"critical"|"major"|"minor": [failed practical metric names]} (guideline metrics are skipped)."""
     out = {sev: [] for sev in SEVERITIES}
     for name, ok in scores.items():
-        if not ok:
+        if name.startswith(PRACTICAL_PREFIX) and not ok:
             out[CHECKS[name[len(PRACTICAL_PREFIX):]]["severity"]].append(name)
     return out
 
@@ -755,6 +1063,8 @@ def main(argv=None) -> int:
               f"{len(failed['critical'])}, major {len(failed['major'])}, minor {len(failed['minor'])}")
         for name, (ok, reason) in details.items():
             print(f"- {name}: {'pass' if ok else 'FAIL'} — {reason}")
+        for name, (ok, reason) in guideline_details(record).items():
+            print(f"- {name} (guideline, not counted): {'-' if ok is None else 'yes' if ok else 'no'} — {reason}")
     return 0
 
 
