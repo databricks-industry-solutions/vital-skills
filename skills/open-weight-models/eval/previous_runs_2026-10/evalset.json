@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "oss-001",
+    "model_family": "teddy",
+    "variant": "70M",
+    "vs": false,
+    "repos": [
+      "https://huggingface.co/Merck/TEDDY",
+      "https://arxiv.org/abs/2503.03485"
+    ],
+    "query": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills. Write the code and explain your decisions."
+  },
+  {
+    "task_id": "oss-002",
+    "model_family": "teddy",
+    "variant": "70M",
+    "vs": true,
+    "repos": [
+      "https://huggingface.co/Merck/TEDDY",
+      "https://arxiv.org/abs/2503.03485"
+    ],
+    "query": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills. Write the code."
+  },
+  {
+    "task_id": "oss-005",
+    "model_family": "geneformer",
+    "vs": false,
+    "repos": [
+      "https://huggingface.co/ctheodoris/Geneformer",
+      "https://github.com/jkobject/geneformer"
+    ],
+    "query": "Deploy Geneformer (Geneformer-V1-10M) as a Model Serving endpoint on Databricks for single-cell embedding. The model is at https://huggingface.co/ctheodoris/Geneformer. Use catalog <catalog>, schema skills. Write the code and explain your decisions."
+  }
+]

@@ -44,6 +44,10 @@ Names that existed before this tag, now canonical in 1.0:
 old `oss-models` and `payer-provider-measure-catalog` skills from your Unity Catalog
 schema by hand.
 
+Other changes:
+
+- `open-weight-models` eval: moved from `tests/` to the standard `eval/` layout, with a TEDDY retest harness (teddy-001, teddy-002) and the 2026-10 runs kept in `eval/previous_runs_2026-10/`
+
 ### Notes
 
 - Site publish is `mkdocs gh-deploy` to `gh-pages` (GitHub-hosted runners cannot deploy Pages on this org). PRs still run `mkdocs build --strict`.

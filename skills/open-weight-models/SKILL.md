@@ -22,8 +22,8 @@ Not all model references have been tested end-to-end through the eval harness.
 
 | Reference | Validated | Eval tasks | Notes |
 |-----------|-----------|------------|-------|
-| `teddy.md` | **Yes** | oss-001 (deploy), oss-002 (deploy + VS) | 70M variant. 160M/400M share ref but not yet tested. |
-| `geneformer.md` | No | oss-005, oss-006 (WIP) | Serving tested; eval (oss-005/006) WIP. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
+| `teddy.md` | **Yes** | teddy-001 (deploy; formerly oss-001), teddy-002 (deploy + VS; formerly oss-002) | 70M variant. 160M/400M share ref but not yet tested. |
+| `geneformer.md` | No | geneformer-001, geneformer-002 (formerly oss-005, oss-006; WIP) | Serving tested; eval (geneformer-001/002) WIP. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
 | `scgpt.md` | No | — | Reference provided; no eval task yet. |
 | `scimilarity.md` | No | — | Zenodo v1.1 and HF expanded. |
 | `alphafold-openfold.md` | No | — | Reference provided; no eval task yet. |
@@ -63,7 +63,7 @@ Complex inputs (AnnData, sparse matrices, FASTA, YAML, structures) need a delibe
 Technical validation (imports, signatures, deployment) is distinct from scientific, clinical, and regulatory validation. A successful deployment never implies clinical validity.
 
 ### Retrieval-augmented deployment (Databricks AI Search)
-Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (oss-002 covers TEDDY + VS end-to-end).
+Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (teddy-002, formerly oss-002, covers TEDDY + VS end-to-end).
 
 ### Serving engines and NVIDIA architecture components
 The default deployment path is MLflow custom PyFunc. Two important extensions:
@@ -285,16 +285,16 @@ artifacts:
     - *How to avoid*: Poll with a 1800 s timeout (30 min) and check `ServedModelStateDeployment.DEPLOYMENT_FAILED` on each iteration. Raise immediately with the deployment state message instead of waiting for the full timeout.
 25. **Model forward output keys differ from documentation or expected conventions.** Custom HLS models may return pre-pooled embeddings under non-standard dict keys (e.g. `cell_emb` instead of `all_embs` or `last_hidden_state`). The wrapper’s embedding extraction silently returns `None`, which surfaces later as `unsupported operand type(s) for *: 'NoneType' and 'Tensor'` in the pooling step.
     - *How to avoid*: **Always run a runtime diagnostic** before writing the extraction logic: call `model(**fwd_kwargs)` once and print `type(outputs)`, `outputs.keys()` (for dicts), and shape/dim of each value. Check the model reference (`references/models/<model>.md`) for the verified output key. If the output is already 2D (pre-pooled), skip external pooling with a `dim() == 2` guard. Also verify which parameters `forward()` actually accepts via `inspect.signature(model.forward).parameters.keys()` — unused kwargs are silently filtered but worth documenting.
-    - *Discovered*: oss-002 v2 (2026-10-01). TEDDY 70M returns `{"cell_emb": tensor(cells, d_model)}`. See `references/models/teddy.md` §Forward output key.
+    - *Discovered*: teddy-002 (formerly oss-002) v2 (2026-10-01). TEDDY 70M returns `{"cell_emb": tensor(cells, d_model)}`. See `references/models/teddy.md` §Forward output key.
 26. **`artifacts=` dict in `log_model` only accepts file/directory paths.** Passing a literal string value (e.g. `artifacts={"vocab_version": "v1"}`) causes `MlflowException: No such artifact: 'v1'` because MLflow treats every value in the `artifacts` dict as a local filesystem path to upload. Non-path metadata silently becomes a broken artifact reference.
     - *How to avoid*: Only put file or directory paths in the `artifacts=` dict. For scalar metadata (version strings, config flags), either hardcode them inside the wrapper class, write them to a JSON/text file and pass that file path, or log them as MLflow tags/params.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer `vocab_version="v1"` passed as artifact value.
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer `vocab_version="v1"` passed as artifact value.
 27. **`workload_size` required alongside `workload_type` for GPU served entities.** Some workspace/API combinations reject a `ServedEntityInput` that specifies only `workload_type` (e.g. `GPU_SMALL`) without also setting `workload_size`. The error is `InvalidParameterValue: workloadSizeId is undefined`.
     - *How to avoid*: Always pass both fields: `workload_type=ServingModelWorkloadType.GPU_SMALL, workload_size="Small"`. The `workload_size` string values are `"Small"`, `"Medium"`, `"Large"`.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer endpoint creation failed without `workload_size`.
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer endpoint creation failed without `workload_size`.
 28. **`serving_endpoints.query()` returns a typed `QueryEndpointResponse`, not a dict.** Calling `.get("predictions")` or other dict methods on the response raises `AttributeError: 'QueryEndpointResponse' object has no attribute 'get'`.
     - *How to avoid*: Use attribute access: `response.predictions`. If you need to handle both SDK objects and raw dicts (e.g. from `requests.post`), use `getattr(response, "predictions", None) or response["predictions"]`.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer endpoint smoke test.
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer endpoint smoke test.
 
 ## Workflow
 

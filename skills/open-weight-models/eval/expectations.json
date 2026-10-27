@@ -1,0 +1,146 @@
+[
+  {
+    "task_id": "teddy-001",
+    "dataset": "https://huggingface.co/Merck/TEDDY",
+    "difficulty": "hard",
+    "expectations": {
+      "expected_facts": [
+        "Sets HF_HUB_DISABLE_XET=1 before importing huggingface_hub",
+        "Downloads to /tmp, not /local_disk0",
+        "Pins transformers to exact version 4.41.0",
+        "PyFunc class imports all symbols inside the class cell",
+        "Builds test payload using real Ensembl gene IDs from vocab.txt",
+        "Uses extra_params with string values, not params",
+        "Wraps pd.read_json with io.StringIO",
+        "Purges teddy.* from sys.modules before load_context",
+        "Uses infer_signature with input_example",
+        "Deploys with AiGatewayInferenceTableConfig",
+        "Uses ServingModelWorkloadType enum",
+        "Includes registration smoke test",
+        "embedding_dimension=512 for 70M variant"
+      ],
+      "guidelines": [
+        "Single notebook with restartPython() boundaries is acceptable (CPU download + GPU register/deploy phases)",
+        "Must not download weights at request time",
+        "Must not invent gene IDs or tensor shapes",
+        "Must use GPU_SMALL (A10G) for 70M",
+        "Must include endpoint teardown cell",
+        "Must use AI Gateway for inference table logging",
+        "Must register model with signature + input_example",
+        "Must include post-registration smoke test"
+      ]
+    },
+    "deterministic_checks": {
+      "required_patterns": [
+        "HF_HUB_DISABLE_XET",
+        "transformers==4.41.0",
+        "/tmp",
+        "extra_params",
+        "io.StringIO",
+        "sys.modules",
+        "vocab.txt",
+        "GPU_SMALL",
+        "infer_signature",
+        "input_example",
+        "AiGatewayInferenceTableConfig",
+        "ServingModelWorkloadType",
+        "70M",
+        "serving_endpoints.delete"
+      ],
+      "forbidden_patterns": [
+        "/local_disk0",
+        "transformers>=",
+        "ENSG00000FAKE",
+        "AutoCaptureConfigInput",
+        "workload_type=\"GPU"
+      ]
+    },
+    "new_checks": {
+      "ai_gateway": [
+        "inference_table",
+        "usage_tracking"
+      ],
+      "uc_provenance": [
+        "uc_registration",
+        "license_tag",
+        "hf_revision_tag"
+      ],
+      "existing_resources": [
+        "endpoint"
+      ]
+    }
+  },
+  {
+    "task_id": "teddy-002",
+    "dataset": "https://huggingface.co/Merck/TEDDY",
+    "difficulty": "hard",
+    "expectations": {
+      "expected_facts": [
+        "Sets HF_HUB_DISABLE_XET=1 before importing huggingface_hub",
+        "Downloads to /tmp, not /local_disk0",
+        "Pins transformers to exact version 4.41.0",
+        "PyFunc class imports all symbols inside the class cell",
+        "Uses infer_signature with input_example",
+        "Deploys with AiGatewayInferenceTableConfig",
+        "Uses ServingModelWorkloadType enum",
+        "embedding_dimension=512 for 70M variant",
+        "AI Search index: DeltaSyncVectorIndexSpecRequest with TRIGGERED pipeline",
+        "teddy_cell_index with embedding_dimension=512",
+        "Handles missing teddy_cells table gracefully"
+      ],
+      "guidelines": [
+        "Single notebook with restartPython() boundaries is acceptable (CPU download + GPU register/deploy phases)",
+        "Must use GPU_SMALL (A10G) for 70M",
+        "Must create Delta Sync AI Search index over teddy_cells",
+        "Must handle missing source table gracefully (skip, not crash)",
+        "Must set embedding_dimension=512 for 70M"
+      ]
+    },
+    "deterministic_checks": {
+      "required_patterns": [
+        "HF_HUB_DISABLE_XET",
+        "transformers==4.41.0",
+        "/tmp",
+        "extra_params",
+        "io.StringIO",
+        "sys.modules",
+        "vocab.txt",
+        "GPU_SMALL",
+        "infer_signature",
+        "input_example",
+        "AiGatewayInferenceTableConfig",
+        "ServingModelWorkloadType",
+        "512",
+        "70M",
+        "serving_endpoints.delete",
+        "vector_search",
+        "teddy_cell_index",
+        "DeltaSyncVectorIndexSpecRequest",
+        "embedding_dimension"
+      ],
+      "forbidden_patterns": [
+        "/local_disk0",
+        "transformers>=",
+        "ENSG00000FAKE",
+        "AutoCaptureConfigInput",
+        "workload_type=\"GPU"
+      ]
+    },
+    "new_checks": {
+      "ai_gateway": [
+        "inference_table",
+        "usage_tracking"
+      ],
+      "uc_provenance": [
+        "uc_registration",
+        "license_tag",
+        "hf_revision_tag"
+      ],
+      "existing_resources": [
+        "endpoint",
+        "table",
+        "index"
+      ]
+    }
+  }
+]

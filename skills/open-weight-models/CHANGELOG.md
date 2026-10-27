@@ -9,14 +9,32 @@ frontmatter `version` is the source of truth for releases.
 ### Added
 - `references/models/midnight.md` for the `kaiko-ai/midnight` pathology tile
   encoder.
-- Evaluation prompt-template library (`tests/02_eval_prompt_templates.py`) and
-  runtime-environment reference (`tests/README_environments.md`).
+- Evaluation prompt-template library (now
+  `eval/previous_runs_2026-10/02_eval_prompt_templates.py`) and
+  runtime-environment reference (now `eval/README_environments.md`).
+- TEDDY retest harness in the standard skill-eval `eval/` layout: `evalset.json` and
+  `expectations.json` (teddy-001, teddy-002, queries identical to 2026-10), new
+  `scorers.py` (the 2026-10 checks unchanged, plus separately reported new checks for
+  AI Gateway inference table + usage tracking, Unity Catalog provenance tags, and
+  checking for existing resources), `score_open_weight_models.py`, run protocol
+  (`README.md`), `answer_sheet.md`, `old_prompt_with_skill.md`, and
+  `install_skill_for_run.py` (switches the skill off/on, hides codes that show which
+  skill files were read, records each run). Unit tests in
+  `tests/test_install_skill_for_run.py` and `tests/test_eval_scorers.py`.
+- `eval/previous_runs_2026-10/`: the 2026-10 TEDDY evaluation kept as a frozen record
+  in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005
+  with-skill output from a workspace backup (user name, project folder and catalog
+  replaced by placeholders).
 
 ### Changed
 - Renamed the skill from `oss-models` to `open-weight-models`.
 - Corrected Geneformer status to serving tested, with evaluation still in
   progress.
 - Scrubbed concrete catalog identifiers from examples.
+- Eval material moved out of `tests/` (which now holds only CI unit tests) into
+  `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
+  geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
+  2026-10 files keep the old IDs).
 
 ## [0.0.1] — 2026-10-01
 
