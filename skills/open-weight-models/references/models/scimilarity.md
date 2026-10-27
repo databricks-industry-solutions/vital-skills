@@ -209,7 +209,7 @@ Use **two separate notebooks**:
 1. **Download notebook (CPU)** — `curl` from Zenodo OR `snapshot_download` from HF. Widget selects source. Parallel download (model + sample data via `ThreadPoolExecutor`). No GPU, no `scimilarity` import needed. Provenance manifest.
 2. **Register and deploy notebook (CPU)** — installs `scimilarity`, loads model from Volume, registers **three separate PyFunc models** to UC, optionally creates VS index, deploys CPU Model Serving endpoints.
 
-Separating these avoids re-downloading on failed registration attempts. Use a `run_go` widget gate for expensive operations, defaulting to off (`"false"`) so nothing costly runs until the user sets it to `true` (SKILL.md Troubleshooting #14).
+Separating these avoids re-downloading on failed registration attempts. Use a `run_go` widget gate for expensive operations, with saved default `"false"`; when it is switched on is in SKILL.md Troubleshooting #14.
 
 ### Three PyFunc models (from GWB module)
 

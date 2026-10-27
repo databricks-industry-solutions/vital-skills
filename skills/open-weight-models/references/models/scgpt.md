@@ -198,7 +198,7 @@ Use **two separate notebooks**:
 1. **Download notebook (CPU)** — `gdown` from Google Drive + `wget` from Figshare. No GPU. Installs `gdown` + `wget` only. Sentinel files for idempotency. Provenance manifest.
 2. **Register and deploy notebook (GPU)** — loads model on GPU (flash-attn requires it), wraps in `TransformerModelWrapper` PyFunc, builds input_example from sample data, infers signature, registers to UC, deploys to GPU Model Serving endpoint.
 
-Use a `run_go` widget gate for expensive operations, defaulting to off (`"false"`) so nothing costly runs until the user sets it to `true` (SKILL.md Troubleshooting #14).
+Use a `run_go` widget gate for expensive operations, with saved default `"false"`; when it is switched on is in SKILL.md Troubleshooting #14.
 
 ### GWB lineage
 

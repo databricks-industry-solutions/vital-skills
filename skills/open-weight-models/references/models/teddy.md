@@ -212,7 +212,11 @@ Alternatively, **two separate notebooks** (download CPU + register/deploy GPU) c
 | **3. Score / Eval** | 3a: Endpoint smoke test. 3b: AI Search eval scorer (self-retrieval, monotonic distances) | 28–29 |
 | **4. Teardown** | Delete this run's endpoint + optionally its AI Search resources. Inference table + UC model preserved | 31 |
 
-Gate expensive operations behind a `run_go` widget that **defaults to off** — `dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")` — print how to turn it on when it is off, and run nothing costly (endpoint, deployment, AI Search index) until the user sets it to `true` (SKILL.md Troubleshooting #14).
+Gate costly steps (endpoint, deployment, AI Search endpoint and index) behind a `run_go` widget whose saved default is always `"false"` — `dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")`; never save it as `"true"` (SKILL.md Troubleshooting #14):
+
+- **Request asks to deploy**: say in one short line that the gate is off by default and that, because they asked, you will switch `run_go` on for this run and create the endpoint (name, GPU tier) and any AI Search endpoint/index unless they stop you — then proceed. If you cannot set the widget, tell the user to set `run_go` to `true` and re-run from the gated cell.
+- **Request asks only for code**: leave the gate off and say how to turn it on.
+- **Anything beyond the request** (larger GPU tier, extra endpoints, deleting or replacing existing resources): stop and ask first.
 
 ### GWB lineage
 

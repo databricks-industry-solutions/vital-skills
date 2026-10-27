@@ -121,18 +121,18 @@ frontmatter `version` is the source of truth for releases.
   `SKILL.md` Troubleshooting #27 notes it. The TEDDY signature example is now
   explicit (`infer_signature(..., params=default_params)` with string defaults) and
   the checklist validates the params schema.
-- `run_go` gate defaults to OFF, stated explicitly: `SKILL.md` Troubleshooting #14 now
-  says to create the widget with default `"false"`
-  (`dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")`),
-  print how to turn it on, and run nothing costly until the user sets it to `true`; the
-  `run_go` mentions in `teddy.md`, `scgpt.md`, `scimilarity.md`, `geneformer.md` and
-  `model-template.md` say the same. Motivating case: in the 2026-10-27 eval, with-skill
-  teddy-001 created the gate with default `"true"`
-  (`eval/models/teddy/runs_20261026/with_skill/teddy-001.py:12`), so its costly steps ran
-  without the user switching them on. By contrast, with-skill teddy-002 created the gate
-  defaulting to `"false"` (`with_skill/teddy-002.py:30`) and the user switched it on
-  during the run — the intended use. #14 also says the agent does not switch the gate on
-  for the user.
+- `run_go` gate: `SKILL.md` Troubleshooting #14 (and `teddy.md`, `model-template.md`;
+  short pointers in `scgpt.md`, `scimilarity.md`, `geneformer.md`) — the gate is always
+  saved with default `"false"`, so re-running the saved notebook (or a copy) never spends
+  money without someone choosing to. A request to deploy is the user's intent: the agent
+  says in one line that the gate is off by default and that it will switch it on for this
+  run and create the named endpoint / GPU tier / index unless the user stops it, then
+  proceeds (or says how to switch it on). A code-only request leaves it off. Anything
+  beyond the request (larger GPU tier, extra endpoints, deleting or replacing resources)
+  needs the user first. 2026-10-27 eval: with-skill teddy-001 saved the gate default as
+  `"true"` (`eval/models/teddy/runs_20261026/with_skill/teddy-001.py:12`), so any re-run
+  redeploys; with-skill teddy-002 saved `"false"` (`with_skill/teddy-002.py:30`) and the
+  user switched it on.
 - Validation now requires an **upstream-parity test** (`SKILL.md` Workflow step 7 and
   Protocol Guidelines item 9, `model-template.md`, `teddy.md` checklist item 13 and a new
   "Upstream-parity test" section): run a few real samples through the model's own
