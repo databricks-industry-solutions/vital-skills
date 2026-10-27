@@ -19,7 +19,13 @@ Filled in during the runs (see `../../../README.md`, run protocol). Run IDs: `ba
 - `scores/` — written by `eval/score_open_weight_models.py` (this round: by a local copy
   of the same steps, see `RESULTS.md`); an extra attempt as `<run_id>_attempt_<n>_…`:
   - `<run_id>_scores.json` — every metric of every task for that run;
-  - `<run_id>_replicated.json` — the Sep–Oct 2026 checks;
+  - `<run_id>_corrected.json` — the Sep–Oct 2026 checks judged by intent (`corrected/…`,
+    `eval/corrected_checks.py`): the result counted in `RESULTS.md`. This round's files were
+    written afterwards by `corrected_checks.py --write` (same exports and run records), so
+    `<run_id>_scores.json` does not include them;
+  - `<run_id>_replicated.json` — the Sep–Oct 2026 checks with their original ("verbatim")
+    logic, kept as a historical record only: that logic is flawed (literal-text matches; see
+    `RESULTS.md`, "How scored"), so it is shown as ⚑ flags, never counted;
   - `<run_id>_new_checks.json` — the new checks (`new_checks/…`);
   - `<run_id>_outcome.json` — the outcome group (`outcome/…`, measured before teardown);
   - `<run_id>_convention.json` — the shared-input-format convention check (`convention/…`);

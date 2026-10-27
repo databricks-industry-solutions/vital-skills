@@ -8,6 +8,11 @@ replicated checks, the new checks, the outcome checks, the score files in `score
 This is the third version of the trial; "What changed since the first version" (below)
 lists the review fixes of both later versions.
 
+**Later (2026-10-27):** the replicated checks in `RESULTS.md` are now the corrected checks
+(`eval/corrected_checks.py`, which reuses this trial's download, Xet, `transformers`-pin and
+signature logic). The "Current" columns below are the verbatim Sep–Oct 2026 logic, as when
+this trial was written; the trial itself is still not adopted.
+
 **Words used here.** CPU = central processing unit and GPU = graphics processing unit (the
 two kinds of serving hardware; `GPU_SMALL` is Model Serving's smallest GPU size). UC =
 Unity Catalog (where models are registered). HF = Hugging Face (where TEDDY's files live);

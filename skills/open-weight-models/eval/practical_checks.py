@@ -636,7 +636,7 @@ def _subprocess_xet(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode,
         if in_dict or on_name:
             return True, f"set in the subprocess env (line {on_name[0] if on_name else call.lineno})"
     ok, why = _set_before_import(script_nb, script, 10 ** 9)
-    return (True, f"set in the subprocess script before its huggingface_hub import") if ok else (
+    return (True, "set in the subprocess script before its huggingface_hub import") if ok else (
         False, f"subprocess without it (script: {why}; env: {'not given' if env is None else 'no disabling ' + XET_VAR})")
 
 
@@ -959,30 +959,35 @@ def _references_upstream(nb: PracticalCode, packages: tuple) -> bool:
         re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value) for p in packages for s in nb.string_constants())
 
 
-def model_loads_with_pinned_deps(nb, response, record, task):
-    ready = _measured(record, "outcome/endpoint_ready")
+def transformers_pin(nb: PracticalCode, response: str, task: dict) -> tuple:
+    """(ok, reason): transformers 5.x is excluded from the serving requirements (or %pip when
+    there is no serving pin), or the model path does not use transformers at all. Shared by
+    model_loads_with_pinned_deps and the corrected download_staging/deps_pinned check."""
     packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
     pip, serving = _pip_specs(response), _serving_specs(nb)
     uses_transformers = (nb.imports_package(packages + ("transformers",)) or bool(serving)
                          or _references_upstream(nb, packages))
     if not uses_transformers:
-        deps_ok, deps = True, ("model path does not use transformers (no transformers or upstream-package "
-                               "import, none in the serving requirements)")
-    else:
-        specs = serving or pip
-        source = "serving requirements" if serving else "%pip (no serving pin)"
-        if not specs:
-            deps_ok, deps = False, "transformers is used but never pinned"
-        else:
-            verdicts = [(line, spec, _excludes_5(spec)) for line, spec in specs]
-            pip_excludes = any(_excludes_5(spec) is True for _, spec in pip)
-            deps_ok = all(v is True or (v == "installed" and pip_excludes) for _, _, v in verdicts)
-            deps = f"{source}: " + "; ".join(
-                f"line {line} {spec!r} " + ("excludes 5.x" if v is True else
-                                            "pins the installed version" + (", which %pip limits to <5"
-                                                                            if pip_excludes else ", not limited by %pip")
-                                            if v == "installed" else "allows 5.x")
-                for line, spec, v in verdicts)
+        return True, ("model path does not use transformers (no transformers or upstream-package "
+                      "import, none in the serving requirements)")
+    specs = serving or pip
+    source = "serving requirements" if serving else "%pip (no serving pin)"
+    if not specs:
+        return False, "transformers is used but never pinned"
+    verdicts = [(line, spec, _excludes_5(spec)) for line, spec in specs]
+    pip_excludes = any(_excludes_5(spec) is True for _, spec in pip)
+    ok = all(v is True or (v == "installed" and pip_excludes) for _, _, v in verdicts)
+    return ok, f"{source}: " + "; ".join(
+        f"line {line} {spec!r} " + ("excludes 5.x" if v is True else
+                                    "pins the installed version" + (", which %pip limits to <5"
+                                                                    if pip_excludes else ", not limited by %pip")
+                                    if v == "installed" else "allows 5.x")
+        for line, spec, v in verdicts)
+
+
+def model_loads_with_pinned_deps(nb, response, record, task):
+    ready = _measured(record, "outcome/endpoint_ready")
+    deps_ok, deps = transformers_pin(nb, response, task)
     ok = deps_ok and bool(ready)
     return ok, f"{deps}; endpoint READY in run record: {ready}"
 
@@ -1015,23 +1020,34 @@ def fidelity_verified(nb, response, record, task):
 _SIGNATURE_BUILDERS = ("infer_signature", "ModelSignature")
 
 
-def signature_and_example(nb, response, record, task):
-    seen = []
+def logged_signatures(nb: PracticalCode) -> list:
+    """One entry per MLflow log_model call (and **kwargs option): {"line", "builders" (the
+    signature builders used: infer_signature / ModelSignature), "has_signature" (a signature
+    that is not None), "has_example" (input_example given), "text" (for reasons)}."""
+    out = []
     for call in _mlflow_log_model_calls(nb):
         for kwargs in nb.keyword_maps(call):
             signature, example = kwargs.get("signature"), kwargs.get("input_example")
             values = [v for v in nb.values(signature) if not (isinstance(v, ast.Constant) and v.value is None)] \
                 if signature is not None else []
             builders = sorted({_call_name(v) for v in values if isinstance(v, ast.Call)} & set(_SIGNATURE_BUILDERS))
-            seen.append(f"line {call.lineno}: signature {builders or ('other expression' if values else 'missing')}, "
-                        f"input_example {'given' if example is not None else 'missing'}")
-            if not values or example is None:
-                continue
-            if builders:
-                return True, seen[-1]
-            if _endpoint_serves_registration(record):
-                return True, seen[-1] + "; run record: endpoint READY serving the registered version"
-    return False, "; ".join(seen) or "no MLflow log_model call"
+            out.append({"line": call.lineno, "builders": builders, "has_signature": bool(values),
+                        "has_example": example is not None,
+                        "text": f"line {call.lineno}: signature {builders or ('other expression' if values else 'missing')}, "
+                                f"input_example {'given' if example is not None else 'missing'}"})
+    return out
+
+
+def signature_and_example(nb, response, record, task):
+    seen = logged_signatures(nb)
+    for entry in seen:
+        if not entry["has_signature"] or not entry["has_example"]:
+            continue
+        if entry["builders"]:
+            return True, entry["text"]
+        if _endpoint_serves_registration(record):
+            return True, entry["text"] + "; run record: endpoint READY serving the registered version"
+    return False, "; ".join(e["text"] for e in seen) or "no MLflow log_model call"
 
 
 def registered_in_uc(nb, response, record, task):

@@ -313,8 +313,8 @@ sub-check is its own pass/fail metric. The replicated set and `provenance_tags` 
 `ast` module (`# MAGIC` cells and `%`/`!` lines removed); a cell that does not parse is
 checked with the older text patterns instead, and the result's rationale says so.
 
-**Replicated set** — the Sep–Oct 2026 checks, logic unchanged, so the counts can be put next
-to the Sep–Oct 2026 counts. 8 groups: `download_staging` (temp path, XET off, pinned
+**Replicated set ("verbatim")** — the Sep–Oct 2026 checks, logic unchanged, so they reproduce the
+Sep–Oct 2026 counts as originally reported. 8 groups: `download_staging` (temp path, XET off, pinned
 `transformers`), `pyfunc_quality` (PyFunc class, imports, `load_context`, `sys.modules`
 purge, `io.StringIO`, `artifacts=`, real gene IDs from `vocab.txt`),
 `model_registration` (signature, input example, pip requirements, 70M variant),
@@ -328,6 +328,44 @@ workload type). teddy-001 has 27 sub-checks (+2 not-applicable groups), teddy-00
 Sep–Oct 2026 scores from the recorded Sep–Oct 2026 notebooks. Metric names match the Sep–Oct 2026
 files except forbidden-pattern names, which MLflow does not allow as written: use
 `scorers.mlflow_metric_name()` on an old key to get the new name.
+
+**The Sep–Oct 2026 logic is flawed, so it is kept only as a historical record** ("verbatim"
+below): it reproduces the numbers as originally reported, and nothing is counted from it.
+Twelve of its sub-checks match literal text from `teddy.md` instead of judging their goal:
+a notebook that reaches the goal another valid way fails (e.g. `tempfile.mkdtemp()` fails
+`uses_tmp`), and a mention in markdown, a comment, a download filter or the task prompt
+quoted in the first cell passes (e.g. "HF_HUB_DISABLE_XET … Not set" passes
+`hf_xet_disabled`).
+
+**Corrected set — the scorer of record** (`corrected_checks.py`, metric names
+`corrected/<phase>/<check>`): the same sub-checks, with each of the twelve flawed ones
+judged by its intent; the others keep the Sep–Oct logic. It reads the notebook's Python
+cells with `ast`, reusing the reviewed goal logic of `practical_checks.py` (download
+location, Xet, the `transformers` pin, the signature), and for two checks the measured
+outcome (endpoint READY serving the registered version). Severities are those of the
+sub-check it corrects (`corrected_checks.SEVERITY_NOTE`). Headline counts, the severity
+table and the ship gate use it. Wherever the verbatim result differs, reports show it as
+a ⚑ flag with the reason. `corrected_checks.py --sep-oct --write` re-scored the Sep–Oct
+2026 exports into `runs_20260924/scores_corrected/` (new files; the recorded files are
+untouched), so rounds are compared corrected against corrected.
+
+| Sub-check | Verbatim flaw | Corrected: passes when |
+|---|---|---|
+| `download_staging/uses_tmp` | any `/tmp` text passes; `tempfile` / a Volume fails | the download (and any staging copy) goes to `/tmp`, a `tempfile` folder or a Volume, never `/local_disk0` |
+| `download_staging/hf_xet_disabled` | the name anywhere passes (even "not set"); a completed download without it fails | Xet disabled with a disabling value before the download, or recorded evidence the download completed |
+| `download_staging/deps_pinned` | needs `transformers==<digit>`, fails any `>=` | `transformers` 5.x excluded from the serving requirements, or no `transformers` on the model path |
+| `forbidden_patterns/transformers>=` | fails `>=4.41,<5` | no `transformers` requirement allows 5.x |
+| `model_registration/infer_signature` | the word only: `ModelSignature(...)` fails, a comment passes | `log_model` gets a signature built by `infer_signature` or `ModelSignature` (or another, with recorded serving evidence) |
+| `pyfunc_quality/real_gene_ids` | the text `vocab.txt` (a download list passes) | the input example / endpoint payload comes from real gene data (vocab, `.h5ad`, the upstream tokenizer, Ensembl IDs), not random IDs |
+| `model_registration/pip_reqs_from_source` | the text `pyproject.toml` (a download filter passes) | the notebook reads the dependency file, or the serving pins agree with it (`models/teddy/family.json` `upstream_dependencies`, TEDDY `pyproject.toml` at commit `8c880aa`) |
+| `forbidden_patterns//local_disk0` | any `/local_disk0` text in code, even a message or a fallback | no download, copy or write to `/local_disk0` without a fallback |
+| `endpoint_deployment/sdk_enums` | needs the enum name; a REST body fails | no plain-string `workload_type` passed to the SDK |
+| `endpoint_deployment/ai_gateway_config` | the class name (even an import); a REST body fails | an inference table enabled on an attached AI Gateway config, no `AutoCaptureConfigInput` |
+| `ai_search/graceful_skip` | words such as "table … not … exist" anywhere (the quoted prompt, `CREATE TABLE IF NOT EXISTS`) | a table existence check, or the table read inside try/except |
+| `endpoint_deployment/run_go_gate` | the names `run_go` / `SKIP_DEPLOY` anywhere | the deploy call is behind a widget or a user-set True/False flag (a flag set from endpoint state is idempotency, not a gate) |
+
+The Sep–Oct 2026 runs have no run records, so the record-based alternatives (Xet, signature)
+cannot be credited for them.
 
 **New checks** (metric names start with `new_checks/`, scored and compared separately;
 each result's rationale says why it passed or failed):
@@ -390,11 +428,12 @@ of failed checks per severity**, whether the **outcome group passed**, and the c
 check on its own — no percentages and no single score — so every failure can be read
 against whether the run actually worked.
 
-### Known false negatives in the replicated set
+### Known false negatives in the verbatim replicated set
 
-The replicated checks are kept unchanged so they stay comparable with Sep–Oct 2026. These
-valid alternatives fail them anyway; read such failures by hand.
-`tests/test_eval_scorers.py::test_known_false_negatives` keeps this list true.
+The verbatim checks are kept unchanged so they keep reproducing the Sep–Oct 2026 numbers.
+These valid alternatives fail them; the corrected set (above) accepts them.
+`tests/test_eval_scorers.py::test_known_false_negatives` keeps this list true for the
+verbatim logic, `tests/test_corrected_checks.py` tests the corrected one.
 
 | Check | Valid alternative that fails | Where it is documented |
 |---|---|---|
@@ -413,11 +452,12 @@ Checked and **not** false negatives:
 
 - the subprocess download in `teddy.md:137-154` contains `HF_HUB_DISABLE_XET` and passes
   `download_staging/hf_xet_disabled`;
-- a range pin such as `transformers>=4.30.0,<4.52.0` correctly fails
-  `download_staging/deps_pinned` and `forbidden_patterns/transformers` for TEDDY. That
-  range in `SKILL.md:242` is the BioNeMo Geneformer `get_head_mask` workaround
-  (`SKILL.md:241-242`), not a TEDDY option; TEDDY needs exactly `transformers==4.41.0`
-  (`teddy.md:170`, `teddy.md:177`).
+- a range pin such as `transformers>=4.30.0,<4.52.0` fails the verbatim
+  `download_staging/deps_pinned` and `forbidden_patterns/transformers`. That range in
+  `SKILL.md:242` is the BioNeMo Geneformer `get_head_mask` workaround
+  (`SKILL.md:241-242`); `teddy.md:170` asks for exactly `transformers==4.41.0`. The
+  corrected checks pass any range that excludes 5.x (the failure `teddy.md:177`
+  describes): baseline/teddy-001 attempt 2 served TEDDY with `transformers` 4.57.6.
 
 ## Scoring and ship gate
 
@@ -431,12 +471,12 @@ records are left out. It extracts scores with `compare_runs.extract_scores()`, w
 `<run_id>_attempt_<n>_scores.json`) and `<run_id>_<group>.json`, runs
 `compare_runs.main()` within each pair only — `baseline` vs `with_skill`,
 `old_prompt_baseline` vs `old_prompt_with_skill`, primary samples — once per group
-(replicated, new checks, outcome, convention, and the judge if enabled), and prints the
-severity table.
+(corrected, verbatim replicated, new checks, outcome, convention, and the judge if
+enabled), and prints the severity table (corrected, new checks and outcome counted).
 
 A task passes a group only if every check in that group passes. Ship gate (skill-eval
 default): at least one task-level win and zero regressions, judged on the standard pair,
-for the replicated set, the new checks and the outcome group each. The replication pair
+for the corrected set, the new checks and the outcome group each. The replication pair
 is reported next to the Sep–Oct 2026 results, not used for the gate. Two tasks show
 direction, not statistical significance; report raw counts, never percentages.
 

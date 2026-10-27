@@ -161,5 +161,20 @@
         ]
       ]
     }
+  },
+  "upstream_dependencies": {
+    "source": "pyproject.toml of Merck/TEDDY on Hugging Face, [tool.poetry.dependencies]",
+    "revision": "8c880aa67674042ccdc254bccb5de081092a48bf",
+    "sha256": "05ece60ca7de631242c5cf0e18b88d7cde584ff9083a8e067eec6bbdd48533f1",
+    "checked": "2026-10-27, read-only download to a temporary folder, deleted after",
+    "note": "Exact pins of the packages on the model's serving path (torch is '^2.3.0 || >=2.0.1', not an exact pin, so it is not compared). Used by the corrected model_registration/pip_reqs_from_source check.",
+    "pins": {
+      "transformers": "4.41.0",
+      "tokenizers": "0.19.1",
+      "safetensors": "0.4.3",
+      "numpy": "1.26.4",
+      "pandas": "2.2.2",
+      "huggingface-hub": "0.23.1"
+    }
   }
 }

@@ -38,20 +38,39 @@ replication pair (the Sep–Oct 2026 prompts) was not run.
 3.17.2). Score files: `scores/`. The outcome checks were not re-measured: every endpoint
 was deleted after the runs; they come from the run records (see "Outcome").
 
+**The Sep–Oct 2026 checks are flawed, so their corrected version is the result.** Twelve of
+the replicated Sep–Oct 2026 sub-checks match literal text from `teddy.md` instead of
+judging their goal: a valid alternative fails (`tempfile.mkdtemp()` fails "uses /tmp", an
+explicit `ModelSignature(...)` fails "infer_signature"), and a mention in markdown, a
+download filter or the quoted task prompt passes. `eval/corrected_checks.py` judges each
+of them by its intent (list and rules: `eval/README.md`, "Corrected set"); every count
+below uses the corrected results (`scores/<run>_corrected.json`). The unchanged
+("verbatim") results stay in `scores/<run>_replicated.json` as a historical record; where
+they differ, a cell shows the verbatim result as a ⚑ flag with the reason. The Sep–Oct 2026
+runs were re-scored the same way (`../../../runs_20260924/scores_corrected/`, new files; the
+recorded scores are kept as reported), so each table gives one line comparing them.
+
 ## Severity table — failed checks per run
 
 | Task | Run | Critical failed | Major failed | Minor failed | Outcome passed | Shared input format |
 |---|---|---|---|---|---|---|
-| teddy-001 | baseline (attempt 2) | 5 | 6 | 2 | no | no |
-| teddy-001 | baseline (attempt 1) | 3 | 8 | 2 | no | no |
+| teddy-001 | baseline (attempt 2) | 0 | 5 | 3 | no | no |
+| teddy-001 | baseline (attempt 1) | 1 | 8 | 2 | no | no |
 | teddy-001 | with_skill | 0 | 0 | 0 | yes | yes |
-| teddy-002 | baseline | 4 | 5 | 2 | yes | no |
-| teddy-002 | with_skill | 0 | 0 | 1 | yes | yes |
+| teddy-002 | baseline | 0 | 5 | 4 | yes | no |
+| teddy-002 | with_skill | 0 | 0 | 0 | yes | yes |
 
-Counts cover the replicated, new and outcome checks. The shared-input-format check is a
-convention, shown in its own column and not counted as a failure. Several baseline
-failures are false negatives of the checks — read the list under "Caveats" before reading
-the counts as "baseline broke".
+Counts cover the corrected replicated checks, the new checks and the outcome checks. The
+shared-input-format check is a convention, shown in its own column and not counted as a
+failure. Before the correction (verbatim logic) the same table read 5 / 6 / 2, 3 / 8 / 2,
+0 / 0 / 0, 4 / 5 / 2 and 0 / 0 / 1: every baseline critical failure but one came from a
+flawed check. The one left, baseline attempt 1, is real: its endpoint failed on
+mixed-length batches (see "Outcome").
+
+Sep–Oct as originally reported (flawed logic), replicated checks only, critical / major /
+minor failed: teddy-001 baseline 4 / 2 / 2, with skill 0 / 0 / 0; teddy-002 baseline
+1 / 2 / 1, with skill 0 / 0 / 0. Sep–Oct re-scored with corrected logic: teddy-001 baseline
+5 / 3 / 3, with skill 0 / 0 / 0; teddy-002 baseline 3 / 2 / 3, with skill 0 / 0 / 2.
 
 ## teddy-001 — deploy
 
@@ -59,21 +78,26 @@ Passed / total sub-checks per group:
 
 | Group | baseline attempt 1 | baseline attempt 2 | with_skill |
 |---|---|---|---|
-| Replicated Sep–Oct 2026 checks | 21 / 29 | 20 / 29 | 29 / 29 |
+| Replicated Sep–Oct 2026 checks (corrected) | 23 / 29 | 25 / 29 | 29 / 29 |
 | New checks | 2 / 5 | 2 / 5 | 5 / 5 |
 | Outcome | 2 / 4 | 3 / 4 | 4 / 4 |
 | Convention: shared input format | 0 / 1 | 0 / 1 | 1 / 1 |
 
-Every sub-check that failed in at least one run:
+Sep–Oct as originally reported (flawed logic), replicated checks: baseline 21 / 29, with
+skill 29 / 29. Sep–Oct re-scored with corrected logic: baseline 18 / 29, with skill 29 / 29.
+(The verbatim logic gave this round 21 / 29, 20 / 29 and 29 / 29.)
+
+Every sub-check that failed in at least one run, or where the verbatim result differs:
 
 | Sub-check | Severity | attempt 1 | attempt 2 | with_skill |
 |---|---|---|---|---|
-| `download_staging/uses_tmp` | critical | fail ⚑ | fail ⚑ | pass |
-| `download_staging/hf_xet_disabled` | critical | fail ⚑ | fail ⚑ | pass |
-| `download_staging/deps_pinned` | critical | pass | fail ⚑ | pass |
-| `model_registration/infer_signature` | critical | pass | fail ⚑ | pass |
-| `forbidden_patterns/transformers` | critical | pass | fail ⚑ | pass |
-| `pyfunc_quality/real_gene_ids` | major | fail | fail ⚑ | pass |
+| `download_staging/uses_tmp` | critical | pass (⚑ verbatim: fail — no literal '/tmp'; downloaded to a Unity Catalog Volume, which works on serverless) | pass (⚑ verbatim: fail — same: a Volume) | pass |
+| `download_staging/hf_xet_disabled` | critical | pass (⚑ verbatim: fail — workaround not used, but the download completed: files loaded at line 102, endpoint READY serving the registered version) | pass (⚑ verbatim: fail — same: files loaded at line 155, endpoint READY) | pass |
+| `download_staging/deps_pinned` | critical | pass | pass (⚑ verbatim: fail — `transformers>=4.41,<5` excludes 5.x; serving pins the installed 4.57.6) | pass |
+| `model_registration/infer_signature` | critical | pass | pass (⚑ verbatim: fail — explicit `ModelSignature(...)`, not the word `infer_signature`) | pass |
+| `forbidden_patterns/transformers` | critical | pass | pass (⚑ verbatim: fail — the text `transformers>=` is in `>=4.41,<5`, which excludes 5.x) | pass |
+| `pyfunc_quality/real_gene_ids` | major | fail | pass (⚑ verbatim: fail — input built with TEDDY's own `tokenize()` on its sample data; no literal `vocab.txt`) | pass |
+| `model_registration/pip_reqs_from_source` | minor | pass | fail (⚑ verbatim: pass — matched `pyproject.toml` in a download filter; the serving pins are the installed versions, e.g. transformers 4.57.6 against 4.41.0 in TEDDY's `pyproject.toml`) | pass |
 | `endpoint_deployment/ai_gateway_config` | major | fail | fail | pass |
 | `smoke_tests/registration_smoke` | major | fail | pass | pass |
 | `smoke_tests/endpoint_query` | major | fail | pass | pass |
@@ -86,32 +110,60 @@ Every sub-check that failed in at least one run:
 | `outcome/accepts_expression_input` | major | fail | fail | pass |
 | `convention/shared_single_cell_format` | (convention) | no | no | yes |
 
-⚑ = a known or likely false negative of the check (see "Caveats").
+Sep–Oct as originally reported (flawed logic), these sub-checks: baseline failed
+`uses_tmp`, `hf_xet_disabled`, `deps_pinned`, `sys_modules_purge`, `artifacts_declared`,
+`pip_reqs_from_source`, `ai_gateway_config`, `registration_smoke`; with skill none. Sep–Oct
+re-scored with corrected logic: baseline also fails `real_gene_ids`, `run_go_gate` and
+`forbidden_patterns/transformers` (11 in all); with skill none.
+
+⚑ = the verbatim (Sep–Oct 2026) logic gave the other result; the reason says why it was wrong.
 
 ## teddy-002 — deploy + nearest-neighbour cell search
 
 | Group | baseline | with_skill |
 |---|---|---|
-| Replicated Sep–Oct 2026 checks | 24 / 31 | 30 / 31 |
+| Replicated Sep–Oct 2026 checks (corrected) | 26 / 31 | 31 / 31 |
 | New checks | 3 / 7 | 7 / 7 |
 | Outcome | 7 / 7 | 7 / 7 |
 | Convention: shared input format | 0 / 1 | 1 / 1 |
 
+Sep–Oct as originally reported (flawed logic), replicated checks: baseline 27 / 31, with
+skill 31 / 31 (the second with-skill run, "v2"). Sep–Oct re-scored with corrected logic:
+baseline 23 / 31, with skill 29 / 31. (The verbatim logic gave this round 24 / 31 and
+30 / 31.)
+
 | Sub-check | Severity | baseline | with_skill |
 |---|---|---|---|
-| `download_staging/uses_tmp` | critical | fail ⚑ | pass |
-| `download_staging/hf_xet_disabled` | critical | fail ⚑ | pass |
-| `download_staging/deps_pinned` | critical | fail ⚑ | pass |
-| `model_registration/infer_signature` | critical | fail ⚑ | pass |
+| `download_staging/uses_tmp` | critical | pass (⚑ verbatim: fail — `tempfile.mkdtemp()`, under /tmp with no literal path) | pass |
+| `download_staging/hf_xet_disabled` | critical | pass (⚑ verbatim: fail — workaround not used, but the download completed: files loaded at line 98, endpoint READY serving the registered version) | pass |
+| `download_staging/deps_pinned` | critical | pass (⚑ verbatim: fail — no `transformers` on the model path: the encoder is re-implemented in plain PyTorch) | pass |
+| `model_registration/infer_signature` | critical | pass (⚑ verbatim: fail — explicit `ModelSignature(...)`, not the word `infer_signature`) | pass |
 | `endpoint_deployment/ai_gateway_config` | major | fail | pass |
 | `pyfunc_quality/sys_modules_purge` | minor | fail | pass |
 | `endpoint_deployment/run_go_gate` | minor | fail | pass |
-| `model_registration/pip_reqs_from_source` | minor | pass | fail ⚑ |
+| `model_registration/pip_reqs_from_source` | minor | fail (⚑ verbatim: pass — matched `pyproject.toml` in a download filter; the serving pins are the installed versions, not TEDDY's) | pass (⚑ verbatim: fail — literal `pyproject.toml` required; run wrote "pyproject"; its pins agree with TEDDY's `pyproject.toml`) |
+| `ai_search/graceful_skip` | minor | fail (⚑ verbatim: pass — matched "TABLE IF NOT EXISTS" in the table's CREATE statement; nothing guards a missing table) | pass |
 | `new_checks/ai_gateway/inference_table` | major | fail | pass |
 | `new_checks/ai_gateway/usage_tracking` | major | fail | pass |
 | `new_checks/uc_provenance/provenance_tags` | major | fail | pass |
 | `new_checks/existing_resources/table` | major | fail | pass |
 | `convention/shared_single_cell_format` | (convention) | no | yes |
+
+Sep–Oct as originally reported (flawed logic), these sub-checks: baseline failed
+`pip_reqs_from_source`, `sdk_enums`, `ai_gateway_config`, `registration_smoke`; with skill
+none. Sep–Oct re-scored with corrected logic: baseline fails `hf_xet_disabled`,
+`deps_pinned`, `forbidden_patterns/transformers`, `ai_gateway_config`, `registration_smoke`,
+`pip_reqs_from_source`, `run_go_gate`, `graceful_skip` (8; `sdk_enums` now passes: no
+workload type was passed as a string); with skill fails `run_go_gate` and `graceful_skip`.
+
+⚑ = the verbatim (Sep–Oct 2026) logic gave the other result; the reason says why it was wrong.
+
+**Severity labels after the correction:** unchanged for every corrected sub-check. Each
+corrected check fails for the same consequence its label describes: a download that does
+not complete or lands where serverless cannot write, a model that loads `transformers`
+5.x, a model without a signature (Unity Catalog refuses it) or a workload type the SDK
+rejects is critical; a made-up input example or an endpoint without an inference table is
+major; dependency provenance, the run gate and the missing-table guard are minor.
 
 ## Outcome — did what each run built work?
 
@@ -215,24 +267,20 @@ licence mismatch upstream (model card Apache-2.0, `pyproject` MIT).
    prompt-injection pattern. Markers are now off by default (`--hidden-codes` to opt in,
    with that caveat); skill use is read from the self-report, visible steps and notebook
    choices.
-6. **The checks were written from the skill's own content, so they may favour it.** Known
-   false negatives in these runs (marked ⚑ above):
-   - `download_staging/uses_tmp`: the baselines used `tempfile.mkdtemp()` (writes under
-     `/tmp`, no literal path).
-   - `download_staging/hf_xet_disabled`: a TEDDY-specific download workaround from
-     `teddy.md`; the baselines downloaded without it.
-   - `download_staging/deps_pinned` and `forbidden_patterns/transformers`: attempt 2
-     installed `transformers>=4.41,<5` and logged the exact running version
-     with the model (`transformers=={transformers.__version__}`; 4.57.6 per the run notes); baseline/teddy-002 re-implemented the
-     encoder in plain PyTorch and needs no `transformers` at all.
-   - `model_registration/infer_signature`: both remaining baselines wrote an explicit
-     `ModelSignature(...)` instead of calling `infer_signature`.
-   - `pyfunc_quality/real_gene_ids`: attempt 2 used TEDDY's own tokenization pipeline
-     without naming `vocab.txt` (attempt 1's test input really was random token IDs, `torch.randint`).
-   - `model_registration/pip_reqs_from_source`: with_skill/teddy-002 cites "TEDDY's
-     pyproject" but not the literal `pyproject.toml`.
-   - `pyfunc_quality/sys_modules_purge` and `endpoint_deployment/run_go_gate` are
-     `teddy.md` / `SKILL.md` conventions (minor); a notebook can work without them.
+6. **The checks were written from the skill's own content, so they may favour it.** The
+   Sep–Oct 2026 sub-checks were literal-text matches; the corrected checks (now the result,
+   see "How scored") judge their goal instead, and every ⚑ cell above names what the
+   verbatim logic got wrong in that run. Limits of the correction:
+   - `hf_xet_disabled` and `infer_signature` may credit a run with recorded evidence
+     (download used, endpoint READY serving the registered version). The Sep–Oct 2026 runs
+     have no run records, so only their code could be judged: a Sep–Oct baseline whose
+     download worked without the workaround still fails.
+   - `pip_reqs_from_source` compares serving pins with TEDDY's `pyproject.toml` at commit
+     `8c880aa` (read once, read-only; pins in `../family.json` `upstream_dependencies`). A pin
+     to the version installed at run time (`transformers=={transformers.__version__}`)
+     records the environment, not the source, so it fails this minor check.
+   - `pyfunc_quality/sys_modules_purge` is a `teddy.md` / `SKILL.md` convention (minor),
+     kept with its Sep–Oct logic; a notebook can work without it.
    Not false negatives: the AI Gateway (inference table + usage tracking) and provenance
    (license + Hugging Face revision tags) checks are valid, recorded criteria. They come
    from the skill (`SKILL.md:325`, `teddy.md:533`) and the answer key, not from the

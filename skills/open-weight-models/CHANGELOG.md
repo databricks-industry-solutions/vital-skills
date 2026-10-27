@@ -7,6 +7,22 @@ frontmatter `version` is the source of truth for releases.
 ## [Unreleased]
 
 ### Added
+- `eval/corrected_checks.py` — the scorer of record for the replicated Sep–Oct 2026
+  sub-checks: twelve of them matched literal text and were wrong both ways (valid
+  alternatives failed; mentions in markdown, download filters or the quoted prompt passed),
+  so each is judged by its intent (download location, Xet or a completed download, a
+  `transformers` pin excluding 5.x, a real signature, real gene data in the example,
+  serving pins that agree with the model's `pyproject.toml` — recorded in
+  `models/teddy/family.json` `upstream_dependencies` —, no unguarded `/local_disk0` write,
+  no string workload type for the SDK, an attached inference table, a missing-table guard,
+  a user-set deploy gate). Metric names `corrected/<phase>/<check>`; severities unchanged.
+  `score_open_weight_models.py` logs it as the primary group; the severity table and ship
+  gate count it, not the verbatim logic, which is kept as a historical record shown as ⚑
+  flags. Corrected score files for the 2026-10-27 round (`scores/<run>_corrected.json`)
+  and a corrected re-score of the Sep–Oct 2026 exports
+  (`runs_20260924/scores_corrected/`, new files; recorded files untouched). `RESULTS.md`,
+  the round README, `eval/README.md` and a note in `runs_20260924/README.md` explain the
+  flaws. Tests in `tests/test_corrected_checks.py`.
 - TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
   accept any valid way of reaching each goal (parsed code + recorded outcome), with
   tests in `tests/test_practical_checks.py`, and
