@@ -345,7 +345,10 @@ def test_every_check_has_severity_and_cited_source(scorers, task_id):
             path, line = m["source"].rsplit(":", 1)
             target = SKILL_DIR / path
             assert target.is_file(), m["source"]
-            assert 1 <= int(line) <= len(target.read_text().splitlines()), m["source"]
+            lines = target.read_text().splitlines()
+            assert 1 <= int(line) <= len(lines), m["source"]
+            # the cited line must say what the check relies on, not just exist
+            assert m.get("quote") and m["quote"] in lines[int(line) - 1], (name, m["source"], m.get("quote"))
             assert m.get("why"), name
 
 
@@ -398,8 +401,6 @@ def test_guideline_judge_is_optional_and_binary(scorers):
 
 
 @pytest.mark.parametrize("key, source", [
-    ("download_staging/deps_pinned", 'pip_requirements=["transformers>=4.30.0,<4.52.0"]\n'),
-    ("forbidden_patterns/transformers>=", 'pip_requirements=["transformers>=4.30.0,<4.52.0"]\n'),
     ("model_registration/pip_reqs_from_source", 'pip_requirements=["torch>=2.3.0", "transformers==4.41.0"]\n'),
     ("pyfunc_quality/real_gene_ids", "tok = GeneTokenizer.from_pretrained(model_dir)\n"),
     ("download_staging/uses_tmp", "d = tempfile.mkdtemp()\n"),
@@ -420,3 +421,81 @@ def test_teddy_md_subprocess_download_is_not_a_false_negative(scorers):
     block = "\n".join(teddy[136:154])
     assert "snapshot_download" in block
     assert scorers.sub_check_scores(scorers.TASKS["teddy-001"], block)["download_staging/hf_xet_disabled"] is True
+
+
+
+# ---- receivers and per-config flags (re-review of 2776cf9) -------------------------
+
+def test_ai_gateway_flags_are_not_combined_across_endpoints(scorers):
+    two_endpoints = _nb(
+        "a = AiGatewayConfig(inference_table_config=AiGatewayInferenceTableConfig(enabled=True))",
+        "b = AiGatewayConfig(usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))",
+        "w.serving_endpoints.create(name='A', ai_gateway=a)\nw.serving_endpoints.create(name='B', ai_gateway=b)",
+    )
+    result = scorers.ai_gateway_logging(two_endpoints, {})
+    assert (result["inference_table"][0], result["usage_tracking"][0]) == (True, False)
+    assert "no single attached config enables both" in result["usage_tracking"][1]
+
+
+@pytest.mark.parametrize("source", [
+    # a helper that is not the SDK's serving_endpoints
+    "helper.put_ai_gateway(name=N, inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n",
+    "gw = AiGatewayConfig(inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\nhelper.create(name=N, ai_gateway=gw)\n",
+    # a client visibly built from something other than WorkspaceClient
+    "w = MyFakeClient()\n"
+    "w.serving_endpoints.put_ai_gateway(name=N, inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n",
+])
+def test_ai_gateway_receiver_must_be_serving_endpoints(scorers, source):
+    assert _gateway(scorers, source) == (False, False)
+
+
+@pytest.mark.parametrize("source", [
+    "from databricks.sdk import WorkspaceClient\nw = WorkspaceClient()\nse = w.serving_endpoints\n"
+    "se.put_ai_gateway(name=N, inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n",
+    "WorkspaceClient(profile='p').serving_endpoints.put_ai_gateway(name=N,\n"
+    "    inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n",
+    # ai_gateway passed through **kwargs
+    "gw = AiGatewayConfig(inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+    "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n"
+    "kw = {'name': N, 'ai_gateway': gw}\nw.serving_endpoints.create(**kw)\n",
+])
+def test_ai_gateway_sdk_receivers_pass(scorers, source):
+    assert _gateway(scorers, source) == (True, True)
+
+
+@pytest.mark.parametrize("source", [
+    'custom.log_model(name="m", registered_model_name="cat.skills.teddy_70m")\n',
+    'factory.create_registered_model("cat.skills.teddy_70m")\n',
+    'client = SomethingElse()\nclient.create_model_version("cat.skills.teddy_70m", source=uri)\n',
+    'mlflow.set_registry_uri("databricks-uc")\nhelper.register_model(uri, name)\n',
+])
+def test_uc_registry_needs_an_mlflow_receiver(scorers, source):
+    assert _uc(scorers, source)[0] is False
+
+
+@pytest.mark.parametrize("source", [
+    'import mlflow\nmlflow.transformers.log_model(model, name="m", registered_model_name="cat.skills.teddy_70m")\n',
+    'from mlflow import pyfunc\npyfunc.log_model(name="m", python_model=p, registered_model_name="cat.skills.t")\n',
+    'from mlflow.tracking import MlflowClient\nc = MlflowClient()\nc.create_registered_model("cat.skills.teddy_70m")\n',
+    'import mlflow\nmlflow.MlflowClient().create_model_version(name="cat.skills.teddy_70m", source=uri)\n',
+])
+def test_uc_registry_mlflow_receivers_pass(scorers, source):
+    assert _uc(scorers, source)[0] is True
+
+
+def test_uc_registry_kwargs(scorers):
+    resolved = 'kw = {"python_model": p, "registered_model_name": f"{CATALOG}.skills.teddy_70m"}\n' \
+               'mlflow.pyfunc.log_model(name="m", **kw)\n'
+    assert _uc(scorers, resolved)[0] is True
+    two_part = resolved.replace('f"{CATALOG}.skills.teddy_70m"', '"skills.teddy_70m"')
+    assert _uc(scorers, two_part)[0] is False
+    # **kwargs built elsewhere: the name is only known at run time -> needs the UC URI
+    opaque = 'mlflow.pyfunc.log_model(name="m", **build_kwargs())\n'
+    assert _uc(scorers, opaque)[0] is False
+    ok, reason = _uc(scorers, 'mlflow.set_registry_uri("databricks-uc")\n' + opaque)
+    assert ok is True and "run time" in reason

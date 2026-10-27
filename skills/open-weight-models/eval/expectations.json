@@ -82,6 +82,7 @@
       "download_staging/uses_tmp": {
         "severity": "critical",
         "source": "references/models/teddy.md:160",
+        "quote": "/local_disk0",
         "why": "Download/staging must go to /tmp; /local_disk0 is not available on serverless, so the download step fails there.",
         "depends_on": "compute",
         "assumes": "serverless GPU notebook compute, AI Runtime v5 (eval/README_environments.md)"
@@ -89,6 +90,7 @@
       "download_staging/hf_xet_disabled": {
         "severity": "critical",
         "source": "references/models/teddy.md:130",
+        "quote": "Xet",
         "why": "The TEDDY Hugging Face repo uses the Xet/CAS backend; without HF_HUB_DISABLE_XET the download fails (CAS service error).",
         "depends_on": "model",
         "assumes": "Merck/TEDDY repo on Xet storage; AI Runtime pre-enables hf_transfer (teddy.md:137)"
@@ -96,6 +98,7 @@
       "download_staging/deps_pinned": {
         "severity": "critical",
         "source": "references/models/teddy.md:177",
+        "quote": "4.41.0",
         "why": "transformers 5.x breaks TeddyGModel (all_tied_weights_keys); an unpinned spec resolves to 5.x in the serving container.",
         "depends_on": "model",
         "assumes": "TEDDY code written for transformers 4.x"
@@ -103,66 +106,77 @@
       "pyfunc_quality/pyfunc_class": {
         "severity": "critical",
         "source": "references/models/teddy.md:338",
+        "quote": "python_model",
         "why": "TEDDY is served through a custom PyFunc wrapper; without one there is nothing to serve.",
         "depends_on": "none"
       },
       "pyfunc_quality/imports_inside_class": {
         "severity": "critical",
         "source": "references/models/teddy.md:374",
+        "quote": "imported",
         "why": "The serving container loads the class in a fresh process; symbols imported only at notebook level are missing there.",
         "depends_on": "none"
       },
       "pyfunc_quality/load_context": {
         "severity": "critical",
         "source": "references/models/teddy.md:383",
+        "quote": "load_context",
         "why": "Weights, tokenizer and code bundle are loaded in load_context; without it predict has no model.",
         "depends_on": "none"
       },
       "pyfunc_quality/sys_modules_purge": {
         "severity": "minor",
         "source": "references/models/teddy.md:478",
+        "quote": "sys.modules",
         "why": "Robustness on out-of-order re-runs in a long-lived kernel.",
         "depends_on": "none"
       },
       "pyfunc_quality/io_stringio": {
         "severity": "minor",
         "source": "references/models/teddy.md:471",
+        "quote": "literal JSON string",
         "why": "pandas 2.1+ deprecates literal JSON strings in read_json; a warning today.",
         "depends_on": "none"
       },
       "pyfunc_quality/artifacts_declared": {
         "severity": "critical",
         "source": "references/models/teddy.md:363",
+        "quote": "artifacts=",
         "why": "Weights and the code bundle reach the serving container only as declared artifacts / code_paths.",
         "depends_on": "none"
       },
       "pyfunc_quality/real_gene_ids": {
         "severity": "major",
         "source": "references/models/teddy.md:83",
+        "quote": "real Ensembl IDs",
         "why": "Synthetic gene names map to <unk> and give degenerate embeddings, so the validation cannot catch a broken tokenisation path.",
         "depends_on": "none"
       },
       "model_registration/infer_signature": {
         "severity": "critical",
         "source": "SKILL.md:114",
+        "quote": "input_example",
         "why": "Unity Catalog registration requires a model signature; the serving contract is defined by it.",
         "depends_on": "none"
       },
       "model_registration/input_example": {
         "severity": "major",
         "source": "SKILL.md:114",
+        "quote": "input_example",
         "why": "Without an input example the signature and test payloads are not grounded in a real request.",
         "depends_on": "none"
       },
       "model_registration/pip_requirements": {
         "severity": "critical",
         "source": "references/models/teddy.md:165",
+        "quote": "pyproject.toml",
         "why": "The serving container installs only what is declared; TEDDY needs torch/transformers/numpy/pandas pins.",
         "depends_on": "none"
       },
       "model_registration/pip_reqs_from_source": {
         "severity": "minor",
         "source": "SKILL.md:122",
+        "quote": "pip_requirements",
         "why": "Documents where the pins came from.",
         "depends_on": "none"
       },
@@ -174,6 +188,7 @@
       "endpoint_deployment/sdk_enums": {
         "severity": "critical",
         "source": "SKILL.md:126",
+        "quote": "workload_type",
         "why": "A string workload_type breaks ServedEntityInput.as_dict (it calls .value) in the Python SDK, so endpoint creation fails.",
         "depends_on": "none",
         "assumes": "databricks-sdk 0.157.0 ServedEntityInput.as_dict"
@@ -181,42 +196,49 @@
       "endpoint_deployment/ai_gateway_config": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No inference table: requests and responses are not logged or governed.",
         "depends_on": "none"
       },
       "endpoint_deployment/scale_to_zero": {
         "severity": "minor",
         "source": "references/models/teddy.md:509",
+        "quote": "scale_to_zero_enabled",
         "why": "Cost only.",
         "depends_on": "none"
       },
       "endpoint_deployment/run_go_gate": {
         "severity": "minor",
         "source": "SKILL.md:251",
+        "quote": "run_go",
         "why": "Guards expensive cells in shared notebooks.",
         "depends_on": "none"
       },
       "smoke_tests/registration_smoke": {
         "severity": "major",
         "source": "SKILL.md:307",
+        "quote": "smoke test",
         "why": "The registered model is never loaded and called before serving, so a broken registration is found only at deploy time.",
         "depends_on": "none"
       },
       "smoke_tests/endpoint_query": {
         "severity": "major",
         "source": "SKILL.md:127",
+        "quote": "test payloads",
         "why": "The endpoint is never queried, so a broken deployment goes unnoticed.",
         "depends_on": "none"
       },
       "smoke_tests/output_shape_check": {
         "severity": "major",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "Embedding size is never checked against config.d_model, so wrong or mixed embeddings go unnoticed.",
         "depends_on": "none"
       },
       "forbidden_patterns/local_disk0": {
         "severity": "critical",
         "source": "references/models/teddy.md:160",
+        "quote": "/local_disk0",
         "why": "/local_disk0 is not available on serverless.",
         "depends_on": "compute",
         "assumes": "serverless GPU notebook compute, AI Runtime v5 (eval/README_environments.md)"
@@ -224,6 +246,7 @@
       "forbidden_patterns/transformers": {
         "severity": "critical",
         "source": "references/models/teddy.md:177",
+        "quote": "4.41.0",
         "why": "transformers>= resolves to 5.x and breaks TeddyGModel.",
         "depends_on": "model",
         "assumes": "TEDDY code written for transformers 4.x"
@@ -231,18 +254,21 @@
       "forbidden_patterns/ENSG00000FAKE": {
         "severity": "major",
         "source": "references/models/teddy.md:83",
+        "quote": "real Ensembl IDs",
         "why": "Invented gene IDs give degenerate embeddings in validation.",
         "depends_on": "none"
       },
       "forbidden_patterns/AutoCaptureConfigInput": {
         "severity": "critical",
         "source": "references/models/teddy.md:562",
+        "quote": "AutoCaptureConfigInput",
         "why": "The legacy auto-capture API is rejected (recorded: previous_runs_2026-10/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {
         "severity": "critical",
         "source": "SKILL.md:126",
+        "quote": "workload_type",
         "why": "String workload_type breaks ServedEntityInput.as_dict, so endpoint creation fails.",
         "depends_on": "none",
         "assumes": "databricks-sdk 0.157.0 ServedEntityInput.as_dict"
@@ -255,60 +281,70 @@
       "new_checks/ai_gateway/inference_table": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No inference table: not governed or auditable.",
         "depends_on": "none"
       },
       "new_checks/ai_gateway/usage_tracking": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No usage tracking: not governed.",
         "depends_on": "none"
       },
       "new_checks/uc_provenance/uc_registry": {
         "severity": "major",
         "source": "references/models/teddy.md:533",
+        "quote": "Unity Catalog",
         "why": "Not registered in Unity Catalog: not governed.",
         "depends_on": "none"
       },
       "new_checks/uc_provenance/provenance_tags": {
         "severity": "major",
         "source": "references/models/teddy.md:533",
+        "quote": "Unity Catalog",
         "why": "License and upstream revision not recorded (revision: teddy.md:10): not reproducible.",
         "depends_on": "none"
       },
       "new_checks/existing_resources/endpoint": {
         "severity": "major",
         "source": "references/models/teddy.md:202",
+        "quote": "idempotent cleanup",
         "why": "Creates or deletes an endpoint without looking first: can clobber an existing deployment (unsafe).",
         "depends_on": "none"
       },
       "outcome/endpoint_ready": {
         "severity": "critical",
-        "source": "references/models/teddy.md:564",
+        "source": "references/models/teddy.md:209",
+        "quote": "Endpoint smoke test",
         "why": "The endpoint does not work.",
         "depends_on": "none"
       },
       "outcome/serves_recorded_version": {
         "severity": "critical",
-        "source": "references/models/teddy.md:564",
+        "source": "references/models/teddy.md:524",
+        "quote": "entity_version",
         "why": "The endpoint serves something other than the model the run registered.",
         "depends_on": "none"
       },
       "outcome/one_embedding_per_cell": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "The serving contract returns one embedding per input cell.",
         "depends_on": "none"
       },
       "outcome/embeddings_finite": {
         "severity": "critical",
         "source": "references/models/teddy.md:570",
+        "quote": "non-degenerate",
         "why": "Non-finite or all-zero embeddings are wrong.",
         "depends_on": "none"
       },
       "outcome/embedding_dim": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "Embedding size must equal config.d_model (512 for 70M); anything else is wrong or mixed.",
         "depends_on": "model",
         "assumes": "TEDDY 70M, config.json d_model=512 (fixtures/teddy_request.json)"
@@ -415,6 +451,7 @@
       "download_staging/uses_tmp": {
         "severity": "critical",
         "source": "references/models/teddy.md:160",
+        "quote": "/local_disk0",
         "why": "Download/staging must go to /tmp; /local_disk0 is not available on serverless, so the download step fails there.",
         "depends_on": "compute",
         "assumes": "serverless GPU notebook compute, AI Runtime v5 (eval/README_environments.md)"
@@ -422,6 +459,7 @@
       "download_staging/hf_xet_disabled": {
         "severity": "critical",
         "source": "references/models/teddy.md:130",
+        "quote": "Xet",
         "why": "The TEDDY Hugging Face repo uses the Xet/CAS backend; without HF_HUB_DISABLE_XET the download fails (CAS service error).",
         "depends_on": "model",
         "assumes": "Merck/TEDDY repo on Xet storage; AI Runtime pre-enables hf_transfer (teddy.md:137)"
@@ -429,6 +467,7 @@
       "download_staging/deps_pinned": {
         "severity": "critical",
         "source": "references/models/teddy.md:177",
+        "quote": "4.41.0",
         "why": "transformers 5.x breaks TeddyGModel (all_tied_weights_keys); an unpinned spec resolves to 5.x in the serving container.",
         "depends_on": "model",
         "assumes": "TEDDY code written for transformers 4.x"
@@ -436,66 +475,77 @@
       "pyfunc_quality/pyfunc_class": {
         "severity": "critical",
         "source": "references/models/teddy.md:338",
+        "quote": "python_model",
         "why": "TEDDY is served through a custom PyFunc wrapper; without one there is nothing to serve.",
         "depends_on": "none"
       },
       "pyfunc_quality/imports_inside_class": {
         "severity": "critical",
         "source": "references/models/teddy.md:374",
+        "quote": "imported",
         "why": "The serving container loads the class in a fresh process; symbols imported only at notebook level are missing there.",
         "depends_on": "none"
       },
       "pyfunc_quality/load_context": {
         "severity": "critical",
         "source": "references/models/teddy.md:383",
+        "quote": "load_context",
         "why": "Weights, tokenizer and code bundle are loaded in load_context; without it predict has no model.",
         "depends_on": "none"
       },
       "pyfunc_quality/sys_modules_purge": {
         "severity": "minor",
         "source": "references/models/teddy.md:478",
+        "quote": "sys.modules",
         "why": "Robustness on out-of-order re-runs in a long-lived kernel.",
         "depends_on": "none"
       },
       "pyfunc_quality/io_stringio": {
         "severity": "minor",
         "source": "references/models/teddy.md:471",
+        "quote": "literal JSON string",
         "why": "pandas 2.1+ deprecates literal JSON strings in read_json; a warning today.",
         "depends_on": "none"
       },
       "pyfunc_quality/artifacts_declared": {
         "severity": "critical",
         "source": "references/models/teddy.md:363",
+        "quote": "artifacts=",
         "why": "Weights and the code bundle reach the serving container only as declared artifacts / code_paths.",
         "depends_on": "none"
       },
       "pyfunc_quality/real_gene_ids": {
         "severity": "major",
         "source": "references/models/teddy.md:83",
+        "quote": "real Ensembl IDs",
         "why": "Synthetic gene names map to <unk> and give degenerate embeddings, so the validation cannot catch a broken tokenisation path.",
         "depends_on": "none"
       },
       "model_registration/infer_signature": {
         "severity": "critical",
         "source": "SKILL.md:114",
+        "quote": "input_example",
         "why": "Unity Catalog registration requires a model signature; the serving contract is defined by it.",
         "depends_on": "none"
       },
       "model_registration/input_example": {
         "severity": "major",
         "source": "SKILL.md:114",
+        "quote": "input_example",
         "why": "Without an input example the signature and test payloads are not grounded in a real request.",
         "depends_on": "none"
       },
       "model_registration/pip_requirements": {
         "severity": "critical",
         "source": "references/models/teddy.md:165",
+        "quote": "pyproject.toml",
         "why": "The serving container installs only what is declared; TEDDY needs torch/transformers/numpy/pandas pins.",
         "depends_on": "none"
       },
       "model_registration/pip_reqs_from_source": {
         "severity": "minor",
         "source": "SKILL.md:122",
+        "quote": "pip_requirements",
         "why": "Documents where the pins came from.",
         "depends_on": "none"
       },
@@ -507,6 +557,7 @@
       "endpoint_deployment/sdk_enums": {
         "severity": "critical",
         "source": "SKILL.md:126",
+        "quote": "workload_type",
         "why": "A string workload_type breaks ServedEntityInput.as_dict (it calls .value) in the Python SDK, so endpoint creation fails.",
         "depends_on": "none",
         "assumes": "databricks-sdk 0.157.0 ServedEntityInput.as_dict"
@@ -514,42 +565,49 @@
       "endpoint_deployment/ai_gateway_config": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No inference table: requests and responses are not logged or governed.",
         "depends_on": "none"
       },
       "endpoint_deployment/scale_to_zero": {
         "severity": "minor",
         "source": "references/models/teddy.md:509",
+        "quote": "scale_to_zero_enabled",
         "why": "Cost only.",
         "depends_on": "none"
       },
       "endpoint_deployment/run_go_gate": {
         "severity": "minor",
         "source": "SKILL.md:251",
+        "quote": "run_go",
         "why": "Guards expensive cells in shared notebooks.",
         "depends_on": "none"
       },
       "smoke_tests/registration_smoke": {
         "severity": "major",
         "source": "SKILL.md:307",
+        "quote": "smoke test",
         "why": "The registered model is never loaded and called before serving, so a broken registration is found only at deploy time.",
         "depends_on": "none"
       },
       "smoke_tests/endpoint_query": {
         "severity": "major",
         "source": "SKILL.md:127",
+        "quote": "test payloads",
         "why": "The endpoint is never queried, so a broken deployment goes unnoticed.",
         "depends_on": "none"
       },
       "smoke_tests/output_shape_check": {
         "severity": "major",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "Embedding size is never checked against config.d_model, so wrong or mixed embeddings go unnoticed.",
         "depends_on": "none"
       },
       "forbidden_patterns/local_disk0": {
         "severity": "critical",
         "source": "references/models/teddy.md:160",
+        "quote": "/local_disk0",
         "why": "/local_disk0 is not available on serverless.",
         "depends_on": "compute",
         "assumes": "serverless GPU notebook compute, AI Runtime v5 (eval/README_environments.md)"
@@ -557,6 +615,7 @@
       "forbidden_patterns/transformers": {
         "severity": "critical",
         "source": "references/models/teddy.md:177",
+        "quote": "4.41.0",
         "why": "transformers>= resolves to 5.x and breaks TeddyGModel.",
         "depends_on": "model",
         "assumes": "TEDDY code written for transformers 4.x"
@@ -564,18 +623,21 @@
       "forbidden_patterns/ENSG00000FAKE": {
         "severity": "major",
         "source": "references/models/teddy.md:83",
+        "quote": "real Ensembl IDs",
         "why": "Invented gene IDs give degenerate embeddings in validation.",
         "depends_on": "none"
       },
       "forbidden_patterns/AutoCaptureConfigInput": {
         "severity": "critical",
         "source": "references/models/teddy.md:562",
+        "quote": "AutoCaptureConfigInput",
         "why": "The legacy auto-capture API is rejected (recorded: previous_runs_2026-10/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {
         "severity": "critical",
         "source": "SKILL.md:126",
+        "quote": "workload_type",
         "why": "String workload_type breaks ServedEntityInput.as_dict, so endpoint creation fails.",
         "depends_on": "none",
         "assumes": "databricks-sdk 0.157.0 ServedEntityInput.as_dict"
@@ -588,60 +650,70 @@
       "new_checks/ai_gateway/inference_table": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No inference table: not governed or auditable.",
         "depends_on": "none"
       },
       "new_checks/ai_gateway/usage_tracking": {
         "severity": "major",
         "source": "SKILL.md:325",
+        "quote": "usage_tracking_config",
         "why": "No usage tracking: not governed.",
         "depends_on": "none"
       },
       "new_checks/uc_provenance/uc_registry": {
         "severity": "major",
         "source": "references/models/teddy.md:533",
+        "quote": "Unity Catalog",
         "why": "Not registered in Unity Catalog: not governed.",
         "depends_on": "none"
       },
       "new_checks/uc_provenance/provenance_tags": {
         "severity": "major",
         "source": "references/models/teddy.md:533",
+        "quote": "Unity Catalog",
         "why": "License and upstream revision not recorded (revision: teddy.md:10): not reproducible.",
         "depends_on": "none"
       },
       "new_checks/existing_resources/endpoint": {
         "severity": "major",
         "source": "references/models/teddy.md:202",
+        "quote": "idempotent cleanup",
         "why": "Creates or deletes an endpoint without looking first: can clobber an existing deployment (unsafe).",
         "depends_on": "none"
       },
       "outcome/endpoint_ready": {
         "severity": "critical",
-        "source": "references/models/teddy.md:564",
+        "source": "references/models/teddy.md:209",
+        "quote": "Endpoint smoke test",
         "why": "The endpoint does not work.",
         "depends_on": "none"
       },
       "outcome/serves_recorded_version": {
         "severity": "critical",
-        "source": "references/models/teddy.md:564",
+        "source": "references/models/teddy.md:524",
+        "quote": "entity_version",
         "why": "The endpoint serves something other than the model the run registered.",
         "depends_on": "none"
       },
       "outcome/one_embedding_per_cell": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "The serving contract returns one embedding per input cell.",
         "depends_on": "none"
       },
       "outcome/embeddings_finite": {
         "severity": "critical",
         "source": "references/models/teddy.md:570",
+        "quote": "non-degenerate",
         "why": "Non-finite or all-zero embeddings are wrong.",
         "depends_on": "none"
       },
       "outcome/embedding_dim": {
         "severity": "critical",
         "source": "references/models/teddy.md:48",
+        "quote": "config.d_model",
         "why": "Embedding size must equal config.d_model (512 for 70M); anything else is wrong or mixed.",
         "depends_on": "model",
         "assumes": "TEDDY 70M, config.json d_model=512 (fixtures/teddy_request.json)"
@@ -649,12 +721,14 @@
       "ai_search/index_creation": {
         "severity": "critical",
         "source": "SKILL.md:65",
+        "quote": "AI Search",
         "why": "The task asks for nearest-neighbour search; without an index there is none.",
         "depends_on": "none"
       },
       "ai_search/embedding_dim": {
         "severity": "critical",
         "source": "references/models/teddy.md:282",
+        "quote": "dimension",
         "why": "Index dimension must match the 70M embedding (512) or the index cannot be built or queried.",
         "depends_on": "none"
       },
@@ -666,36 +740,42 @@
       "new_checks/existing_resources/table": {
         "severity": "major",
         "source": "references/models/teddy.md:202",
+        "quote": "idempotent cleanup",
         "why": "Creates or drops a table without looking first: can destroy existing data (unsafe).",
         "depends_on": "none"
       },
       "new_checks/existing_resources/index": {
         "severity": "major",
         "source": "references/models/teddy.md:282",
+        "quote": "dimension",
         "why": "Creates or deletes an index without looking first (unsafe).",
         "depends_on": "none"
       },
       "outcome/vs_endpoint_online": {
         "severity": "critical",
         "source": "references/models/teddy.md:281",
+        "quote": "endpoint",
         "why": "The Vector Search endpoint is not usable.",
         "depends_on": "none"
       },
       "outcome/index_ready": {
         "severity": "critical",
         "source": "references/models/teddy.md:315",
+        "quote": "ready=True",
         "why": "The index is not ready, so search does not work.",
         "depends_on": "none"
       },
       "outcome/nn_query_returns_rows": {
         "severity": "critical",
         "source": "references/models/teddy.md:312",
+        "quote": "Result count",
         "why": "Nearest-neighbour search returns nothing.",
         "depends_on": "none"
       },
       "outcome/nn_has_cell_type_column": {
         "severity": "major",
         "source": "references/models/teddy.md:296",
+        "quote": "cell_type",
         "why": "Results carry no cell type, so 'cell-type search' answers nothing (teddy.md syncs cell_type).",
         "depends_on": "none"
       }

@@ -291,6 +291,9 @@ def test_record_holds_environment_and_relative_backup(fake_skill, tmp_path, no_g
     assert USER not in json.dumps(record) and str(tmp_path) not in json.dumps(record)
 
 
+EVAL_COPY_FILES = {f"{TARGET}/SKILL.md": b"---\nname: open-weight-models\n---\n\n## Notebook marker\n\n`# skill-proof: ab12cd34`\n"}
+
+
 def _restore_args(tmp_path):
     return inst.parse_args(["--profile", "PROFILE", "--user", USER, "--restore-original",
                             "--records", str(tmp_path / "outputs" / "run_records.json")])
@@ -303,7 +306,7 @@ def test_restore_original_reimports_first_backup(tmp_path):
                                  "backup": "baseline/backup/teddy-001-x", "backup_of": inst.PRE_EVAL})
     inst.append_record(records, {"run_id": "with_skill", "task_id": "teddy-002",
                                  "backup": "with_skill/backup/y", "backup_of": inst.EVAL_COPY})
-    cli = FakeCli(installed=True)
+    cli = FakeCli(installed=True, files=EVAL_COPY_FILES)
     assert inst.restore_original(_restore_args(tmp_path), cli) == 0
     assert cli.mutations() == ["delete", "mkdirs", "import-dir"]
     imported = next(c for c in cli.calls if c[1] == "import-dir")
@@ -312,7 +315,7 @@ def test_restore_original_reimports_first_backup(tmp_path):
 
 def test_restore_original_without_backup_leaves_removed(tmp_path, capsys):
     inst.append_record(tmp_path / "outputs" / "run_records.json", {"run_id": "baseline", "backup": None})
-    cli = FakeCli(installed=True)
+    cli = FakeCli(installed=True, files=EVAL_COPY_FILES)
     assert inst.restore_original(_restore_args(tmp_path), cli) == 0
     assert cli.mutations() == ["delete"]
     assert "left removed" in capsys.readouterr().out
@@ -422,3 +425,21 @@ def test_installed_extra_skill_needs_replace_and_is_backed_up(fake_skill, tmp_pa
     (entry,) = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]["extra_skills"]
     assert entry["backup"].startswith("baseline/backup/teddy-001-") and entry["backup"].endswith("/extra/bulk-rnaseq")
     assert entry["backup_of"] == inst.PRE_EVAL
+
+
+def test_restore_original_refuses_a_copy_without_marker(tmp_path, capsys):
+    inst.append_record(tmp_path / "outputs" / "run_records.json", {"run_id": "baseline", "backup": None})
+    user_copy = {f"{TARGET}/SKILL.md": b"---\nname: open-weight-models\n---\n# the user's own install\n"}
+    cli = FakeCli(installed=True, files=user_copy)
+    assert inst.restore_original(_restore_args(tmp_path), cli) == 1
+    assert cli.mutations() == []
+    assert "no eval marker" in capsys.readouterr().out
+
+
+def test_restore_original_refuses_when_recorded_backup_is_missing(tmp_path, capsys):
+    inst.append_record(tmp_path / "outputs" / "run_records.json",
+                       {"run_id": "baseline", "backup": "baseline/backup/gone", "backup_of": inst.PRE_EVAL})
+    cli = FakeCli(installed=True, files=EVAL_COPY_FILES)
+    assert inst.restore_original(_restore_args(tmp_path), cli) == 1
+    assert cli.mutations() == [] and cli.calls == []
+    assert "missing locally" in capsys.readouterr().out

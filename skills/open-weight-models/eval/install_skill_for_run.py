@@ -522,16 +522,22 @@ def restore_original(args, cli: Cli | None = None) -> int:
     target = target_dir(args.user)
     recorded = first_backup(load_records(Path(args.records)))
     backup = str(Path(args.records).parent / recorded) if recorded else None
+    # Check everything before deleting anything.
+    if backup and not Path(backup).is_dir() and not args.dry_run:
+        print(f"Refusing to continue: the recorded pre-eval backup {backup} is missing locally.")
+        print("Nothing was deleted. Restore that folder (or fix the record) first.")
+        return 1
     entries = cli.list_dir(user_skills_dir(args.user)) or []
     installed = args.dry_run or any(e["name"] == SKILL_NAME for e in entries)
+    if installed and not args.dry_run and not is_eval_copy(cli.export_bytes(f"{target}/SKILL.md")):
+        print(f"Refusing to continue: {target} has no eval marker, so it is not a copy this script "
+              "installed (perhaps the user reinstalled the skill). Nothing was deleted.")
+        return 1
     if installed:
         cli.run("workspace", "delete", target, "--recursive")    # the eval copy, with hidden codes
     if recorded is None:
         print("No install existed before the eval (no backup recorded): the skill is left removed.")
         return 0
-    if not Path(backup).is_dir() and not args.dry_run:
-        print(f"Recorded backup {backup} is missing locally; nothing restored.")
-        return 1
     cli.run("workspace", "mkdirs", user_skills_dir(args.user))
     cli.run("workspace", "import-dir", backup, target, "--overwrite")
     print(f"Restored the pre-eval install from {backup}.")

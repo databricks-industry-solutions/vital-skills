@@ -160,3 +160,15 @@ def test_fixture_split_json_equals_pandas():
     record = fixture["dataframe_records"][0]
     assert record["adata_obs"] == pd.DataFrame({"cell_id": fixture["cell_ids"]}).to_json(orient="split")
     assert record["adata_var"] == pd.DataFrame({"index": fixture["genes"]}).to_json(orient="split")
+
+
+def test_check_endpoint_reads_legacy_served_models():
+    legacy = NS(state=NS(ready=NS(value="READY")),
+                config=NS(served_entities=None, served_models=[NS(model_name="cat.skills.teddy_70m", model_version="2")]))
+    assert co.check_endpoint(legacy, "cat.skills.teddy_70m", 2)["outcome/serves_recorded_version"][0]
+    assert not co.check_endpoint(legacy, "cat.skills.teddy_70m", 3)["outcome/serves_recorded_version"][0]
+
+
+def test_docstring_notebook_example_passes_check_names():
+    doc = co.__doc__
+    assert 'run_outcome_checks(WorkspaceClient(), resources, checks)' in doc and '["outcome_checks"]' in doc

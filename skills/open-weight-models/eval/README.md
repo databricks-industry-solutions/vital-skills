@@ -207,7 +207,9 @@ After all eight (run, task) sessions:
     python3 skills/open-weight-models/eval/install_skill_for_run.py --profile <profile> \
         --user <workspace-user> --restore-original
     ```
-    This deletes the eval copy (it carries the hidden codes) and, if the user had the
+    It first checks that the installed copy carries an eval marker and that the recorded
+    pre-eval backup (if any) exists locally, and stops without deleting anything if not.
+    It then deletes the eval copy (it carries the hidden codes) and, if the user had the
     skill installed before the eval, re-imports that original install from its backup —
     the first backup whose record says `"backup_of": "pre-eval install"` (a copy without
     the hidden codes). If there is none, the user had no install before the eval and the
@@ -248,8 +250,8 @@ each result's rationale says why it passed or failed):
 
 | Check | Passes when the notebook code… | Tasks |
 |---|---|---|
-| `ai_gateway/inference_table`, `ai_gateway/usage_tracking` | attaches an AI Gateway config to a serving endpoint — `ai_gateway=` on `serving_endpoints.create` / `create_and_wait`, a `put_ai_gateway(...)` call, or an `"ai_gateway"` key in a REST body sent to a `serving-endpoints` URL (or the body of `PUT .../ai-gateway`) — in which the inference table config and the usage tracking config each have `enabled` set to `True`. The config may be built in variables (plain or annotated assignment, any cell), as SDK classes (keyword or positional), `from_dict`, dict literals or `dict(...)`; `enabled` may be a variable holding `True`. Imports alone, or a config never attached, do not count. | both |
-| `uc_provenance/uc_registry` | actually registers a model in Unity Catalog: a registration call — `log_model(..., registered_model_name=...)`, `mlflow.register_model(...)`, or `MlflowClient().create_registered_model` / `create_model_version` — whose model name is three-part (`catalog.schema.model`, resolved through variables and f-strings), **or** `mlflow.set_registry_uri("databricks-uc")` plus a registration whose name is only known at run time (for example from a widget). Fails: the registry URI with no registration; a registration under a resolvable two-part name, even with the UC URI (Unity Catalog only accepts three-part names). | both |
+| `ai_gateway/inference_table`, `ai_gateway/usage_tracking` | attaches an AI Gateway config to a serving endpoint — `ai_gateway=` on `serving_endpoints.create` / `create_and_wait`, a `put_ai_gateway(...)` call, or an `"ai_gateway"` key in a REST body sent to a `serving-endpoints` URL (or the body of `PUT .../ai-gateway`) — in which the inference table config and the usage tracking config each have `enabled` set to `True`. Both must be enabled in **one** attached config — an inference table on one endpoint and usage tracking on another does not pass both. The `create` / `create_and_wait` / `put_ai_gateway` receiver must be a WorkspaceClient's `serving_endpoints` (`w.serving_endpoints`, `WorkspaceClient(...).serving_endpoints`, or a name assigned from one); `helper.put_ai_gateway(...)` does not count. The config may be built in variables (plain or annotated assignment, any cell), as SDK classes (keyword or positional), `from_dict`, dict literals or `dict(...)`; `enabled` may be a variable holding `True`. Imports alone, or a config never attached, do not count. | both |
+| `uc_provenance/uc_registry` | actually registers a model in Unity Catalog: an MLflow registration call — `mlflow.<flavor>.log_model(..., registered_model_name=...)`, `mlflow.register_model(...)`, or `create_registered_model` / `create_model_version` on an object from `MlflowClient(...)` (`mlflow.MlflowClient`, `mlflow.tracking.MlflowClient`; imports and assigned names are followed) — whose model name is three-part (`catalog.schema.model`, resolved through variables and f-strings), **or** `mlflow.set_registry_uri("databricks-uc")` plus a registration whose name is only known at run time (for example from a widget). Fails: the registry URI with no registration; a registration under a resolvable two-part name, even with the UC URI (Unity Catalog only accepts three-part names); look-alike calls on other objects (`custom.log_model`, `factory.create_registered_model`). Names passed through `**kwargs` are read when the dict is a literal or `dict(...)` in the notebook; a `**kwargs` built elsewhere counts as a name known only at run time (passes only with the UC URI). | both |
 | `uc_provenance/provenance_tags` | records the license **and** the Hugging Face revision as tags — run tags, logged-model tags or UC model tags all count (`teddy.md` asks for MLflow tags); the rationale names which kind was found | both |
 | `existing_resources/endpoint` (`/table`, `/index` for teddy-002) | looks for an existing endpoint / table / index before the first create or delete call | both |
 
@@ -301,7 +303,6 @@ valid alternatives fail them anyway; read such failures by hand.
 
 | Check | Valid alternative that fails | Where it is documented |
 |---|---|---|
-| `download_staging/deps_pinned`, `forbidden_patterns/transformers` | a range pin `transformers>=4.30.0,<4.52.0` plus the runtime shim | `SKILL.md:242` (`teddy.md:170` asks for the exact pin — the skill is inconsistent) |
 | `model_registration/pip_reqs_from_source` | copying the pins without naming `pyproject.toml` / requirements | `teddy.md:165-173` |
 | `pyfunc_quality/real_gene_ids` | a payload built from `GeneTokenizer.from_pretrained(model_dir)` without naming `vocab.txt` | `teddy.md:126` |
 | `download_staging/uses_tmp` | `tempfile.mkdtemp()` (writes under /tmp, no literal) | — |
@@ -311,8 +312,15 @@ valid alternatives fail them anyway; read such failures by hand.
 | `ai_search/graceful_skip` | `try/except AnalysisException` around reading the table | — |
 | `endpoint_deployment/run_go_gate` | a widget guard with another name (e.g. `deploy`) | `SKILL.md:251` suggests `run_go` |
 
-Checked and **not** a false negative: the subprocess download in `teddy.md:137-154`
-contains `HF_HUB_DISABLE_XET` and passes `download_staging/hf_xet_disabled`.
+Checked and **not** false negatives:
+
+- the subprocess download in `teddy.md:137-154` contains `HF_HUB_DISABLE_XET` and passes
+  `download_staging/hf_xet_disabled`;
+- a range pin such as `transformers>=4.30.0,<4.52.0` correctly fails
+  `download_staging/deps_pinned` and `forbidden_patterns/transformers` for TEDDY. That
+  range in `SKILL.md:242` is the BioNeMo Geneformer `get_head_mask` workaround
+  (`SKILL.md:241-242`), not a TEDDY option; TEDDY needs exactly `transformers==4.41.0`
+  (`teddy.md:170`, `teddy.md:177`).
 
 ## Scoring and ship gate
 

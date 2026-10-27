@@ -10,7 +10,9 @@ BEFORE tearing anything down (see eval/README.md). From a laptop:
 or from a notebook (the repo's eval/ folder on sys.path):
 
   from check_outcome import run_outcome_checks
-  results = run_outcome_checks(WorkspaceClient(), resources, "teddy-002")
+  checks = next(t["outcome_checks"] for t in json.load(open("expectations.json"))
+                if t["task_id"] == "teddy-002")
+  results = run_outcome_checks(WorkspaceClient(), resources, checks)
 
 Checks (metric names start with "outcome/"; which apply comes from expectations.json):
   endpoint_ready              serving endpoint state is READY
@@ -92,10 +94,14 @@ def _value(enum_or_str):
 
 
 def check_endpoint(endpoint, uc_model: str, uc_model_version) -> dict:
-    """ServingEndpointDetailed -> endpoint_ready, serves_recorded_version."""
+    """ServingEndpointDetailed -> endpoint_ready, serves_recorded_version. Reads
+    config.served_entities (entity_name / entity_version) and, for endpoints created with the
+    legacy field, config.served_models (model_name / model_version)."""
     ready = _value(_get(endpoint, "state", "ready"))
-    entities = _get(endpoint, "config", "served_entities") or []
-    served = [(_get(e, "entity_name"), str(_get(e, "entity_version"))) for e in entities]
+    served = [(_get(e, "entity_name"), str(_get(e, "entity_version")))
+              for e in _get(endpoint, "config", "served_entities") or []]
+    served += [(_get(m, "model_name"), str(_get(m, "model_version")))
+               for m in _get(endpoint, "config", "served_models") or []]
     want = (uc_model, str(uc_model_version))
     return {
         f"{PREFIX}endpoint_ready": (ready == "READY", f"state.ready={ready}"),
