@@ -554,7 +554,7 @@ ai_gateway = AiGatewayConfig(
 
 w.serving_endpoints.create(
     name=ENDPOINT_NAME,
-    config=EndpointCoreConfigInput(name=ENDPOINT_NAME, served_entities=[served_entity]),  # name required since databricks-sdk 0.71.0
+    config=EndpointCoreConfigInput(name=ENDPOINT_NAME, served_entities=[served_entity]),  # name: Optional in databricks-sdk <=0.70.0, required from 0.71.0; passing it works on both
     ai_gateway=ai_gateway,
 )
 ```
@@ -566,11 +566,11 @@ w.serving_endpoints.create(
 1. **Vocabulary smoke test**: load `vocab.txt`, verify the line count (70M at HF revision `8c880aa`: 43,808 lines, of which 25,424 are Ensembl IDs), check that `ENSG00000000003` is present.
 2. **Import test**: in the serving container environment, `from teddy.models.model_directory import get_architecture, model_dict` and `from teddy.tokenizer.gene_tokenizer import GeneTokenizer` succeed.
 3. **Dry-load test**: `load_context` completes, prints `TEDDY-G 70M loaded on cuda, d_model=…`.
-4. **Signature test**: `infer_signature` on `input_example` produces schema with all three columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required fields.
+4. **Signature test**: build the signature with `infer_signature(input_example, output_example, params=default_params)` using string defaults (see [Sending inference controls](#sending-inference-controls)); check the input schema has all three columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required fields and that `{p.name: p.dtype for p in signature.params.params}` lists every control as `DataType.string`.
 5. **Real-gene payload test**: test payload uses Ensembl IDs from `vocab.txt`; embeddings are non-degenerate (not all the same value, norm > 0).
 6. **All-OOV payload test**: all gene names set to random strings → all map to `<unk>` → model still returns an embedding without raising an exception.
 7. **Missing-field test**: omit `adata_obs` from the request → endpoint returns a schema-validation error (confirming the signature enforces all three fields).
-8. **Inference-control test**: call the endpoint twice through `invoke()` ([Sending inference controls](#sending-inference-controls)) on the same real-gene payload — once with defaults, once with a non-default `{"max_seq_len": "32"}` (values as strings; each cell must have more than 32 expressed genes, or truncation changes nothing) — and assert the embeddings differ (cosine clearly below 1.0). Identical output means the control never reached `predict()`; a successful call alone proves nothing. Use `max_seq_len`, not `pooling`, for 70M: its pre-pooled output makes `pooling` a no-op in this wrapper.
+8. **Inference-control test**: call the endpoint twice through `invoke()` ([Sending inference controls](#sending-inference-controls)) on the same real-gene payload — once with defaults, once with a non-default `{"max_seq_len": "32"}` (values as strings; each cell must have more than 32 expressed genes, or truncation changes nothing) — and assert the embeddings differ (cosine clearly below 1.0). Before the calls, confirm the registered version's params schema (`mlflow.models.get_model_info(model_uri).signature.params`) lists `max_seq_len` and `pooling` as strings — an undeclared control is dropped. Identical output means the control never reached `predict()`; a successful call alone proves nothing. Use `max_seq_len`, not `pooling`, for 70M: its pre-pooled output makes `pooling` a no-op in this wrapper.
 9. **Embedding sanity**: for 70M, embedding dimension should match `config.d_model` (read from `config.json`).
 
 10. **AI Search self-retrieval test**: query the index with a known cell's embedding; top-1 result must be the same cell (score ~1.0). Results must be monotonically ordered by similarity.
@@ -600,7 +600,19 @@ POST /serving-endpoints/<endpoint-name>/invocations
 }
 ```
 
-Type rules: log the signature with string defaults (`default_params = {"max_seq_len": "2048", "pooling": "mean"}`), because MLflow rejects a string sent for an integer-typed param; cast in the wrapper. A control missing from the signature's params schema is dropped with only a log warning. A successful call does not prove a control was applied — run Validation checklist item 8.
+Type rules: log the signature with string defaults, because MLflow rejects a string sent for an integer-typed param; cast in the wrapper:
+
+```python
+from mlflow.models import infer_signature
+from mlflow.types import DataType
+
+default_params = {"max_seq_len": "2048", "pooling": "mean"}  # strings, matching what invoke() sends
+signature = infer_signature(input_example, output_example, params=default_params)
+assert {p.name: p.dtype for p in signature.params.params} == {
+    "max_seq_len": DataType.string, "pooling": DataType.string}
+```
+
+ A control missing from the signature's params schema is dropped with only a log warning. A successful call does not prove a control was applied — run Validation checklist item 8.
 
 ## Open questions
 

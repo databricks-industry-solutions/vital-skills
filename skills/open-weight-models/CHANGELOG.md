@@ -72,10 +72,16 @@ frontmatter `version` is the source of truth for releases.
   package `pyproject.toml` MIT, no `LICENSE` file) and asks the user to confirm with
   the model owner before redistribution.
 - `teddy.md` endpoint-creation example passes `name=` to `EndpointCoreConfigInput`
-  (required since databricks-sdk 0.71.0; all four 2026-10-27 runs hit the
-  `missing ... 'name'` `TypeError`); `SKILL.md` Troubleshooting #27 notes it.
-- `scgpt.md`: wrapper example casts string params (`int(...)`, explicit boolean
-  parse), handles `params=None`, and wraps `pd.read_json` input in `io.StringIO`.
+  (Optional in databricks-sdk <=0.70.0, required from 0.71.0, so passing it works on
+  both; all four 2026-10-27 runs hit the `missing ... 'name'` `TypeError`);
+  `SKILL.md` Troubleshooting #27 notes it. The TEDDY signature example is now
+  explicit (`infer_signature(..., params=default_params)` with string defaults) and
+  the checklist validates the params schema.
+- `scgpt.md`: wrapper example casts every documented string param
+  (`filter_gene_by_counts`, `normalize_total`, `subset_hvg`, `binning`, explicit
+  boolean parse), handles `params=None`, and wraps `pd.read_json` input in
+  `io.StringIO`. Its inference-control test now uses vocabulary gene names and
+  `subset_hvg="20"` so the returned gene set must shrink (inferred, not live-tested).
 
 ## [0.0.1] — 2026-10-01
 

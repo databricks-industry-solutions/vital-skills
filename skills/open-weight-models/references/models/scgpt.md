@@ -289,7 +289,9 @@ def preprocess(self, context, input_dataframe=None, params=None):
 
     preprocessor = Preprocessor(
         use_key=params.get("use_key", "X"),
-        subset_hvg=int(params.get("subset_hvg", self.n_hvg)),  # params arrive as strings
+        filter_gene_by_counts=int(params.get("filter_gene_by_counts", 3)),  # params arrive as strings
+        normalize_total=float(params.get("normalize_total", 1e4)),
+        subset_hvg=int(params.get("subset_hvg", self.n_hvg)),
         binning=int(params.get("binning", self.n_bins)),
         # ... additional params
     )
@@ -341,7 +343,7 @@ Register to Unity Catalog as `<catalog>.<schema>.scgpt`. Log license, paper DOI,
 4. **Preprocessing test**: `Preprocessor` runs on sample h5ad data; produces binned AnnData.
 5. **Forward pass test**: model produces gene embeddings dict with expected genes.
 6. **Signature test**: `infer_signature` with `input_example` and `output_example` + `default_params`.
-7. **Inference-control test**: call the endpoint through the body-`"params"` request above twice on the same payload — defaults, then a non-default value such as `{"subset_hvg": "600"}` — and assert the returned gene set or embeddings differ. A successful call alone does not prove the control was applied.
+7. **Inference-control test** (inferred, not live-tested): the output is one embedding per gene that is both in `vocab.json` and kept by preprocessing, so the test must change the kept gene set. Build a payload whose gene names come from `vocab.json` (the `GENE<i>` placeholders above match nothing, so both calls would return an empty dict) with more than 20 vocabulary genes. Call the endpoint through the body-`"params"` request above twice: defaults (`subset_hvg` 1200 is above the payload's gene count, so highly-variable-gene selection does not cut the set to 20), then `{"subset_hvg": "20"}`, which keeps at most 20 highly variable genes (`scgpt.preprocess.Preprocessor` passes it to `scanpy.pp.highly_variable_genes(n_top_genes=..., subset=True)`). Assert the default call returns more than 20 genes and the second at most 20. Identical gene sets mean the control never reached `predict()`; a successful call alone proves nothing.
 8. **Endpoint teardown**: tear down immediately after validation to stop GPU billing.
 
 ## Open questions
