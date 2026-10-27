@@ -100,6 +100,14 @@ def test_hf_xet_disabled(cc):
                     "from transformers import AutoModel\nm = AutoModel.from_pretrained('/tmp/t')")
     assert _check(cc, "download_staging/hf_xet_disabled", completed, READY)[0] is True
     assert _check(cc, "download_staging/hf_xet_disabled", completed, None)[0] is False   # no run record
+    # Codex review of 117ac56: a later load of OTHER files is no evidence the download completed
+    unrelated = _nb("from huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir='/tmp/t')",
+                    "from transformers import AutoModel\nm = AutoModel.from_pretrained('/Volumes/c/s/v/other')")
+    assert _check(cc, "download_staging/hf_xet_disabled", unrelated, READY)[0] is False
+    joined = _nb("import os\nfrom huggingface_hub import snapshot_download\nV = '/Volumes/c/s/v'\n"
+                 "snapshot_download('Merck/TEDDY', local_dir=V)",
+                 "from transformers import AutoModel\nm = AutoModel.from_pretrained(os.path.join(V, '70M'))")
+    assert _check(cc, "download_staging/hf_xet_disabled", joined, READY)[0] is True
     other = {**cc.scorers.TASKS["teddy-001"], "model_family": "scgpt"}
     assert cc.hf_xet_disabled(cc.pc.PracticalCode(""), "", None, other)[0] is True
 
@@ -137,25 +145,43 @@ def test_infer_signature(cc, cells, record, ok):
     assert _check(cc, "model_registration/infer_signature", _nb(*cells), record)[0] is ok
 
 
+TOKENIZE = ("from teddy.data_processing.tokenization.tokenization import tokenize\n"
+            "tokenize(data_path=f'{W}/in.h5ad', tokenization_args={'save_dir': f'{W}/tokenized'})")
+
+
 @pytest.mark.parametrize("cells, ok", [
     (("vocab = open(f'{D}/vocab.txt').read().split()\nex = {'genes': vocab[:10]}\nsig = s\nREQS = []", LOG), True),
     (("import anndata\na = anndata.read_h5ad(P)\nex = a.var_names[:10]\nsig = s\nREQS = []", LOG), True),
-    (("ex = {'genes': ['ENSG00000000003', 'ENSG00000000005']}\nsig = s\nREQS = []", LOG), True),
-    (("from teddy.data_processing.tokenization.tokenization import tokenize\ntokenize(args)",
-      "ex = load_arrow(OUT)\nsig = s\nREQS = []", LOG), True),
+    (("from teddy.tokenizer.gene_tokenizer import GeneTokenizer\nt = GeneTokenizer.from_pretrained(D)",
+      "ex = {'gene_ids': [t.vocab[g] for g in GENES]}\nsig = s\nREQS = []", LOG), True),
+    # files the upstream tokenizer wrote, read back from its save_dir (artifact relationship)
+    (("W = '/tmp/w'", TOKENIZE, "import glob\nfiles = glob.glob(f'{W}/tokenized/**/*.arrow')\nex = load(files)\nsig = s\nREQS = []",
+      LOG), True),
+    # Codex review of 117ac56: an unrelated upstream-tokenizer call + made-up (non-random) IDs
+    (("W = '/tmp/w'", TOKENIZE, "ex = {'gene_ids': [7, 14, 21, 28]}\nsig = s\nREQS = []", LOG), False),
+    (("W = '/tmp/w'", TOKENIZE, "import glob\nfiles = glob.glob('/tmp/other/*.arrow')\nex = load(files)\nsig = s\nREQS = []",
+      LOG), False),
     (("import torch\nex = torch.randint(2, 100, (2, 8))\nsig = s\nREQS = []", LOG), False),
-    (("from teddy.tokenizer.gene_tokenizer import GeneTokenizer\nimport torch\nt = GeneTokenizer.from_pretrained(D)",
-      "ex = torch.randint(2, 100, (2, 8)).numpy()\nsig = s\nREQS = []", LOG), False),
     (("# see vocab.txt\nex = {'gene_ids': [7, 14, 21]}\nsig = s\nREQS = []", LOG), False),
-    (("ex = {'genes': ['ENSG00000FAKE']}\nsig = s\nREQS = []", LOG), False),
+    # a literal gene ID list does not derive from the model's vocabulary or real data
+    (("ex = {'genes': ['ENSG00000000003', 'ENSG00000000005']}\nsig = s\nREQS = []", LOG), False),
 ])
 def test_real_gene_ids(cc, cells, ok):
     assert _check(cc, "pyfunc_quality/real_gene_ids", _nb(*cells))[0] is ok
 
 
+SNAPSHOT = "from huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir='/tmp/t')"
+
+
 @pytest.mark.parametrize("cells, ok", [
-    (("import tomllib\nwith open(f'{PKG}/pyproject.toml', 'rb') as f:\n    deps = tomllib.load(f)",), True),
+    # the model's own pyproject.toml, parsed, flowing into pip_requirements
+    ((SNAPSHOT, "import tomllib\nwith open('/tmp/t/pyproject.toml', 'rb') as f:\n    deps = tomllib.load(f)",
+      "pins = deps['tool']['poetry']['dependencies']\nREQS = [f'{k}=={v}' for k, v in pins.items()]\nsig = s\nex = x", LOG), True),
     (("REQS = ['torch>=2.3.0', 'transformers==4.41.0', 'numpy>=1.26.4,<2.0']\nsig = s\nex = x", LOG), True),
+    # Codex review of 117ac56: reading some file named requirements.txt / pyproject.toml is not enough
+    ((SNAPSHOT, "reqs = open('requirements.txt').read().split()\nREQS = reqs\nsig = s\nex = x", LOG), False),
+    ((SNAPSHOT, "import tomllib\nwith open('/tmp/t/pyproject.toml', 'rb') as f:\n    deps = tomllib.load(f)",
+      "REQS = ['torch']\nsig = s\nex = x", LOG), False),                       # read, but not used
     (("REQS = ['transformers==4.57.6']\nsig = s\nex = x", LOG), False),
     (("import transformers\nREQS = [f'transformers=={transformers.__version__}']\nsig = s\nex = x", LOG), False),
     (("REQS = ['numpy', 'pandas']\nsig = s\nex = x", LOG), False),              # nothing pinned
@@ -171,23 +197,40 @@ def test_upstream_pins_are_recorded_with_their_source(cc):
     assert upstream["pins"]["transformers"] == "4.41.0"
 
 
+HF = "from huggingface_hub import snapshot_download\n"
+
+
 @pytest.mark.parametrize("cell, ok", [
-    ("import os\ntry:\n    os.makedirs('/local_disk0/tmp')\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'", True),
+    # SKILL.md #16: probe /local_disk0, fall back to /tmp, then use the variable
+    ("import os\ntry:\n    os.makedirs('/local_disk0/tmp')\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'\n"
+     + HF + "snapshot_download('Merck/TEDDY', local_dir=f'{TMP}/teddy')", True),
     ("print('no /local_disk0 on serverless')\nimport os\nos.makedirs('/tmp/x')", True),
     ("import os\nos.makedirs('/local_disk0/teddy')", False),
-    ("from huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')", False),
+    (HF + "snapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')", False),
     ("import shutil\nshutil.copytree('/tmp/t', '/local_disk0/t')", False),
+    # Codex review of 117ac56: a try with any handler is not a fallback
+    ("import os\ntry:\n    os.makedirs('/local_disk0/teddy')\nexcept Exception:\n    pass", False),
+    (HF + "try:\n    snapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')\nexcept Exception:\n    pass", False),
+    # a fallback is assigned, but the download does not use it
+    ("try:\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'\n"
+     + HF + "snapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')", False),
 ])
 def test_local_disk0(cc, cell, ok):
     assert _check(cc, "forbidden_patterns//local_disk0", _nb(cell))[0] is ok
 
 
+REST = "w.api_client.do('POST', '/api/2.0/serving-endpoints', body=body)"
+
+
 @pytest.mark.parametrize("cell, ok", [
-    ("body = {'served_entities': [{'workload_type': 'GPU_SMALL'}]}", True),
+    ("body = {'name': N, 'config': {'served_entities': [{'workload_type': 'GPU_SMALL'}]}}\n" + REST, True),
     ("from databricks.sdk.service.serving import ServedEntityInput, ServingModelWorkloadType\n"
      "e = ServedEntityInput(entity_name=M, workload_type=ServingModelWorkloadType.GPU_SMALL)", True),
     ("e = ServedEntityInput(entity_name=M, workload_type='GPU_SMALL')", False),
     ("WT = 'GPU_SMALL'\ne = ServedEntityInput(entity_name=M, workload_type=WT)", False),
+    # Codex review of 117ac56: a dict is not REST just because it has a workload_type key
+    ("e = ServedEntityInput(**{'entity_name': M, 'workload_type': 'GPU_SMALL'})", False),
+    ("kw = {'entity_name': M, 'workload_type': 'GPU_SMALL'}\ne = ServedEntityInput(**kw)", False),
 ])
 def test_sdk_enums(cc, cell, ok):
     assert _check(cc, "endpoint_deployment/sdk_enums", _nb(cell))[0] is ok
@@ -205,12 +248,23 @@ def test_ai_gateway_config(cc, cell, ok):
     assert _check(cc, "endpoint_deployment/ai_gateway_config", _nb(cell))[0] is ok
 
 
+INDEX = ("vsc.create_delta_sync_index(endpoint_name=E, index_name=I, source_table_name=T,\n"
+         "    primary_key='id', embedding_dimension=512, embedding_vector_column='emb')")
+
+
 @pytest.mark.parametrize("cell, ok", [
-    ("if spark.catalog.tableExists(T):\n    df = spark.table(T)", True),
-    ("from pyspark.errors import AnalysisException\ntry:\n    df = spark.table(T)\nexcept AnalysisException:\n    df = None", True),
-    ("try:\n    spark.sql(f'DROP TABLE IF EXISTS {T}')\nexcept Exception:\n    pass", False),
-    ("spark.sql(f'CREATE TABLE IF NOT EXISTS {T} (id INT)')\ndf = spark.table(T)", False),
-    ("# skip VS if the table does not exist\ndf = spark.table(T)", False),
+    (f"T = 'c.s.cells'\nif spark.catalog.tableExists(T):\n    {INDEX}\nelse:\n    print('skip search')", True),
+    (f"T = 'c.s.cells'\nif not spark.catalog.tableExists(T):\n    print('skip')\nelse:\n    {INDEX}", True),
+    ("from pyspark.errors import AnalysisException\nT = 'c.s.cells'\ntry:\n    df = spark.table(T)\n"
+     f"except AnalysisException:\n    df = None\n{INDEX}", True),
+    (f"T = 'c.s.cells'\ntry:\n    spark.sql(f'DROP TABLE IF EXISTS {{T}}')\nexcept Exception:\n    pass\n{INDEX}", False),
+    (f"T = 'c.s.cells'\nspark.sql(f'CREATE TABLE IF NOT EXISTS {{T}} (id INT)')\ndf = spark.table(T)\n{INDEX}", False),
+    (f"T = 'c.s.cells'\n# skip VS if the table does not exist\ndf = spark.table(T)\n{INDEX}", False),
+    # Codex review of 117ac56: an unrelated table check, and a handler that re-raises
+    (f"T = 'c.s.cells'\nif spark.catalog.tableExists('c.s.other'):\n    print('x')\n{INDEX}", False),
+    (f"T = 'c.s.cells'\ntry:\n    df = spark.table(T)\nexcept Exception as e:\n    raise RuntimeError('missing') from e\n{INDEX}", False),
+    (f"T = 'c.s.cells'\nif not spark.catalog.tableExists(T):\n    raise ValueError('run the embed step first')\n{INDEX}", False),
+    ("if spark.catalog.tableExists('c.s.cells'):\n    print('ok')", False),     # no index at all
 ])
 def test_graceful_skip(cc, cell, ok):
     assert _check(cc, "ai_search/graceful_skip", _nb(cell), task_id="teddy-002")[0] is ok

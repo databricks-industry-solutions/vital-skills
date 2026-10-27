@@ -70,7 +70,7 @@ mixed-length batches (see "Outcome").
 Sep–Oct as originally reported (flawed logic), replicated checks only, critical / major /
 minor failed: teddy-001 baseline 4 / 2 / 2, with skill 0 / 0 / 0; teddy-002 baseline
 1 / 2 / 1, with skill 0 / 0 / 0. Sep–Oct re-scored with corrected logic: teddy-001 baseline
-5 / 3 / 3, with skill 0 / 0 / 1; teddy-002 baseline 3 / 2 / 3, with skill 0 / 0 / 2.
+5 / 3 / 3, with skill 0 / 0 / 1; teddy-002 baseline 3 / 3 / 3, with skill 0 / 0 / 2.
 
 ## teddy-001 — deploy
 
@@ -131,7 +131,7 @@ be shown to default to off).
 
 Sep–Oct as originally reported (flawed logic), replicated checks: baseline 27 / 31, with
 skill 31 / 31 (the second with-skill run, "v2"). Sep–Oct re-scored with corrected logic:
-baseline 23 / 31, with skill 29 / 31. (The verbatim logic gave this round 24 / 31 and
+baseline 22 / 31, with skill 29 / 31. (The verbatim logic gave this round 24 / 31 and
 30 / 31.)
 
 | Sub-check | Severity | baseline | with_skill |
@@ -154,9 +154,11 @@ baseline 23 / 31, with skill 29 / 31. (The verbatim logic gave this round 24 / 3
 Sep–Oct as originally reported (flawed logic), these sub-checks: baseline failed
 `pip_reqs_from_source`, `sdk_enums`, `ai_gateway_config`, `registration_smoke`; with skill
 none. Sep–Oct re-scored with corrected logic: baseline fails `hf_xet_disabled`,
-`deps_pinned`, `forbidden_patterns/transformers`, `ai_gateway_config`, `registration_smoke`,
-`pip_reqs_from_source`, `run_go_gate`, `graceful_skip` (8; `sdk_enums` now passes: no
-workload type was passed as a string); with skill fails `run_go_gate` and `graceful_skip`.
+`deps_pinned`, `forbidden_patterns/transformers`, `real_gene_ids` (its input example is a
+hand-typed list of gene IDs, not derived from the vocabulary or real data),
+`ai_gateway_config`, `registration_smoke`, `pip_reqs_from_source`, `run_go_gate`,
+`graceful_skip` (9; `sdk_enums` now passes: no workload type was passed as a string); with
+skill fails `run_go_gate` and `graceful_skip`.
 
 ⚑ = the verbatim (Sep–Oct 2026) logic gave the other result; the reason says why it was wrong.
 

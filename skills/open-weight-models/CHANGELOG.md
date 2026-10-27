@@ -25,7 +25,12 @@ frontmatter `version` is the source of truth for releases.
   flaws. Tests in `tests/test_corrected_checks.py`. The corrected `run_go_gate` needs
   every serving-endpoint deploy call to be reachable only with the user's flag on, and
   the flag to default to off (a widget default of "true", a constant `True` or a default
-  that cannot be read from the code fails).
+  that cannot be read from the code fails). After review, the other corrections need data
+  flow or file relationships, not presence or line order: the gene IDs of the logged
+  example, the model's own dependency file flowing into `pip_requirements`, a fallback
+  path that is actually used, a REST body actually sent, the guard on the index's source
+  table, and (also in `practical_checks.py`) a weight load that reads the download's
+  destination.
 - TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
   accept any valid way of reaching each goal (parsed code + recorded outcome), with
   tests in `tests/test_practical_checks.py`, and

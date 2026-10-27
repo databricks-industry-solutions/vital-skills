@@ -1092,6 +1092,8 @@ def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None, groups: 
         if metric_group(name) not in groups:
             continue
         key = name[len(CORRECTED_PREFIX):] if name.startswith(CORRECTED_PREFIX) else name
+        if metric_group(name) in ("corrected", "replicated"):
+            key = mlflow_metric_name(key)   # a raw Sep–Oct 2026 key ("forbidden_patterns//local_disk0")
         if key not in meta:
             raise ValueError(f"{task_id}: no severity for metric {name!r} in expectations.json")
         if not ok:

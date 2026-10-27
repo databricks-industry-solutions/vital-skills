@@ -439,6 +439,11 @@ def test_failed_by_severity_and_table(scorers):
     assert "%" not in table
 
 
+def test_severity_lookup_normalises_raw_sep_oct_keys(scorers):
+    raw = {"forbidden_patterns//local_disk0": False, "forbidden_patterns/transformers>=": False}
+    assert scorers.failed_by_severity("teddy-001", raw, groups=("replicated",))["critical"] == list(raw)
+
+
 def test_verbatim_metrics_count_only_when_asked(scorers):
     """Verbatim (Sep–Oct 2026 logic) metrics alone raise by default instead of silently dropping out
     of the count; groups=("replicated",) gives the numbers as originally reported."""

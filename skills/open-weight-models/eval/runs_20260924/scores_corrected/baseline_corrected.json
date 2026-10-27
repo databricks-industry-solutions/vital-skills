@@ -40,7 +40,7 @@
     "corrected/pyfunc_quality/sys_modules_purge": true,
     "corrected/pyfunc_quality/io_stringio": true,
     "corrected/pyfunc_quality/artifacts_declared": true,
-    "corrected/pyfunc_quality/real_gene_ids": true,
+    "corrected/pyfunc_quality/real_gene_ids": false,
     "corrected/model_registration/infer_signature": true,
     "corrected/model_registration/input_example": true,
     "corrected/model_registration/pip_requirements": true,

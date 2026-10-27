@@ -71,8 +71,10 @@ CHECKS = {
                     "exported earlier in the cell",
                     "in the notebook: HF_HUB_DISABLE_XET set before the first huggingface_hub import "
                     "and before the download (teddy.md warns this is not reliable on AI Runtime)",
-                    "recorded evidence the download completed: a later cell loads files it wrote "
-                    "(from_pretrained, safetensors load_file, load_state_dict, log_model artifacts) "
+                    "recorded evidence the download completed: a later cell loads files from the "
+                    "download's destination or a copy of it (from_pretrained, safetensors load_file, "
+                    "load_state_dict, log_model artifacts; paths followed through assignments, joins, "
+                    "copies and function parameters, never line order alone) "
                     "and the run record shows the endpoint READY serving the registered version"],
         "fails": "no download call; HF_HUB_DISABLE_XET set only after the download or import, or to a "
                  "value that does not disable Xet ('0', 'false'); a subprocess without it; and no "
@@ -490,8 +492,11 @@ ACCEPTED_LOCATIONS = {"tmp", "volume", "tempfile"}
 class Download:
     """One Hugging Face download: line, how it ran, destination kinds, revision, Xet setting."""
 
-    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple, resolved=None):
+    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple, resolved=None,
+                 paths=(), node=None):
         self.line, self.how, self.kinds = line, how, kinds
+        self.paths = [p for p in paths if p.replace("{}", "").strip("/")]   # destination strings
+        self.node = node              # the download call in the notebook (its return value is the path)
         self.revision = revision      # (kind, text): kind "sha" | "resolved" | None
         self.xet = xet                # (ok, reason) for HF_HUB_DISABLE_XET
         # for a resolved commit: is a notebook node the source of that commit? (see _resolved_sources)
@@ -574,7 +579,9 @@ def _direct_downloads(nb: PracticalCode, response: str, how: str = "notebook", l
             setting = xet or _set_before_import(nb, response, call.lineno)
             sources = _resolved_nodes(nb, kwargs.get("revision"))
             out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs), setting,
-                                lambda node, s=sources: any(node is x for x in s)))
+                                lambda node, s=sources: any(node is x for x in s),
+                                paths=nb.strings(dest) if dest is not None else [],
+                                node=None if line else call))
     return out
 
 
@@ -657,9 +664,11 @@ def _subprocess_downloads(nb: PracticalCode) -> list:
         for script in [t for t in texts if re.search(r"\b(?:snapshot_download|hf_hub_download)\s*\(", t)]:
             script_nb = PracticalCode(script)
             xet = _subprocess_xet(nb, call, script_nb, script)
+            arg_paths = [t for e in elements for t in nb.strings(e) if t.startswith("/")]
             for download in _direct_downloads(script_nb, script, "subprocess", call.lineno, xet):
                 if download.kinds <= {"unknown"} and path_args:
                     download.kinds = path_args
+                download.paths = download.paths + [t for t in arg_paths if t.replace("{}", "").strip("/")]
                 download.resolved = _resolved_sources(nb, call, script_nb, download)
                 out.append(download)
         for command in texts:
@@ -681,7 +690,7 @@ def _cli_download(rest: str, line: int, xet: tuple) -> Download:
     kinds = {_classify(dest)} if dest else {"hf_default_cache"}
     rev = ("sha", revision) if revision and _SHA.match(revision) else (
         None, f"revision {revision!r} is not a commit SHA" if revision else "no revision")
-    return Download(line, "shell", kinds, rev, xet)
+    return Download(line, "shell", kinds, rev, xet, paths=[dest] if dest else [])
 
 
 def _shell_disables(command: str) -> bool:
@@ -874,15 +883,109 @@ def download_location_ok(nb, response, record, task):
 _WEIGHT_LOADS = ("from_pretrained", "load_file", "load_state_dict")
 
 
-def _later_weight_load(nb: PracticalCode, after: int):
-    for call in sorted(nb.calls, key=lambda c: c.lineno):
-        if call.lineno <= after:
+def _under(path: str, base: str) -> bool:
+    base = base.rstrip("/")
+    return bool(base.replace("{}", "").strip("/")) and (path == base or path.startswith(base + "/"))
+
+
+def _combine(parts: list, sep: str = "") -> list:
+    out = [""]
+    for options in parts:
+        out = [a + (sep if a and sep else "") + b for a in out for b in (options or ["{}"])][:20]
+    return out
+
+
+def _parameter_values(nb: PracticalCode, name: ast.Name) -> list:
+    """Arguments passed for `name` when it is a parameter of a notebook function: one per call site
+    (a method's self / cls is skipped when the call is `x.method(...)`)."""
+    out = []
+    for f in nb.functions.values():
+        params = [a.arg for a in f.args.args]
+        if name.id not in params or not (f.lineno <= name.lineno <= f.end_lineno):
             continue
-        name = _call_name(call)
-        if name in _WEIGHT_LOADS:
-            return call.lineno, name
-        if name == "log_model" and any(k.arg in ("artifacts", "code_paths") for k in call.keywords):
-            return call.lineno, "log_model(artifacts=...)"
+        for call in nb.calls:
+            if _call_name(call) != f.name:
+                continue
+            index = params.index(name.id) - (1 if params[:1] in (["self"], ["cls"]) and isinstance(call.func, ast.Attribute) else 0)
+            if 0 <= index < len(call.args):
+                out.append(call.args[index])
+            out += [k.value for k in call.keywords if k.arg == name.id]
+    return out
+
+
+def path_strings(nb: PracticalCode, node, depth: int = 0) -> list:
+    """Possible string values of a path expression: names followed through assignments and
+    notebook-function parameters (to the call sites), f-strings, `+`, `/` (pathlib),
+    os.path.join(...) and Path(...); an unresolved part becomes '{}'."""
+    if depth > 6 or node is None:
+        return []
+    out = []
+    for v in nb.values(node):
+        if isinstance(v, ast.Constant) and isinstance(v.value, str):
+            out.append(v.value)
+        elif isinstance(v, ast.JoinedStr):
+            out += _combine([[str(p.value)] if isinstance(p, ast.Constant) else path_strings(nb, p.value, depth + 1)
+                             for p in v.values])
+        elif isinstance(v, ast.BinOp) and isinstance(v.op, (ast.Add, ast.Div)):
+            out += _combine([path_strings(nb, v.left, depth + 1), path_strings(nb, v.right, depth + 1)],
+                            "/" if isinstance(v.op, ast.Div) else "")
+        elif isinstance(v, ast.Call) and _call_name(v) in ("join", "Path", "PurePath") and v.args:
+            out += _combine([path_strings(nb, a, depth + 1) for a in v.args], "/")
+        elif isinstance(v, ast.Name):
+            out += [t for arg in _parameter_values(nb, v) for t in path_strings(nb, arg, depth + 1)]
+    return list(dict.fromkeys(out))[:50]
+
+
+def _staged_paths(nb: PracticalCode, download) -> list:
+    """The download's destination plus where shutil copies / moves it (copytree(local, DEST))."""
+    paths = list(download.paths)
+    for call in sorted(nb.calls, key=lambda c: c.lineno):
+        if _call_name(call) in _STAGING_CALLS and len(call.args) >= 2 and any(
+                d.startswith("shutil.") for d in nb.dotted(call.func)):
+            src = call.args[0]
+            if (any(_under(t, b) for t in path_strings(nb, src) for b in paths)
+                    or (download.node is not None and _derives(nb, src, lambda n: n is download.node))):
+                paths += path_strings(nb, call.args[1])
+    return paths
+
+
+def reads_download(nb: PracticalCode, node, download) -> bool:
+    """`node` (a path argument) reads from the download's destination (or a copy of it): one of its
+    string values is that path or a path under it, or it is derived from the download call's
+    return value. Line order alone never links a file use to a download."""
+    if any(_under(t, base) for t in path_strings(nb, node) for base in _staged_paths(nb, download)):
+        return True
+    return download.node is not None and _derives(nb, node, lambda n: n is download.node)
+
+
+def _load_paths(call: ast.Call, nb: PracticalCode) -> list:
+    """Path arguments of a weight load: the first argument / pretrained_model_name_or_path /
+    filename of from_pretrained, load_file and load_state_dict, or the values of a log_model
+    artifacts= dict and code_paths= list."""
+    name = _call_name(call)
+    if name in _WEIGHT_LOADS:
+        return list(call.args[:1]) + [k.value for k in call.keywords
+                                      if k.arg in ("pretrained_model_name_or_path", "filename", "f", "path")]
+    if name == "log_model":
+        out = []
+        for k in call.keywords:
+            if k.arg == "artifacts":
+                out += [v for m in nb.members(k.value) for v in m.values() if v is not None]
+            elif k.arg == "code_paths":
+                out += [e for v in nb.values(k.value) if isinstance(v, (ast.List, ast.Tuple)) for e in v.elts]
+        return out
+    return []
+
+
+def _later_weight_load(nb: PracticalCode, download):
+    """(line, how) of the first weight load after the download that reads from its destination
+    (data flow / path, not line order alone), or None."""
+    for call in sorted(nb.calls, key=lambda c: c.lineno):
+        if call.lineno <= download.line:
+            continue
+        if any(reads_download(nb, arg, download) for arg in _load_paths(call, nb)):
+            name = _call_name(call)
+            return call.lineno, name if name in _WEIGHT_LOADS else "log_model(artifacts=...)"
     return None
 
 
@@ -892,16 +995,16 @@ def xet_download_ok(nb, response, record, task):
         return False, "no Hugging Face download call found"
     if all(d.xet[0] for d in found):
         return True, "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
-    first = found[0].line
-    used = _later_weight_load(nb, first)
-    if used and _endpoint_serves_registration(record):
-        return True, (f"recorded evidence the download completed: line {used[0]} ({used[1]}) uses files from "
-                      f"the download at line {first}, and the run record shows the endpoint READY serving "
-                      f"the registered version")
+    unset = [d for d in found if not d.xet[0]]
+    uses = [(d, _later_weight_load(nb, d)) for d in unset]
+    if all(used for _, used in uses) and _endpoint_serves_registration(record):
+        return True, "recorded evidence the download completed: " + "; ".join(
+            f"line {used[0]} ({used[1]}) loads files from the destination of the download at line {d.line}"
+            for d, used in uses) + ", and the run record shows the endpoint READY serving the registered version"
     settings = "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
-    return False, (f"{settings}; no recorded evidence the download completed (later file use: "
-                   f"{used and used[0]}; endpoint READY + registered version in run record: "
-                   f"{_endpoint_serves_registration(record)})")
+    return False, (f"{settings}; no recorded evidence the download completed (load from its destination: "
+                   f"{[used and used[0] for _, used in uses]}; endpoint READY + registered version in run "
+                   f"record: {_endpoint_serves_registration(record)})")
 
 
 def _pip_specs(response: str) -> list:

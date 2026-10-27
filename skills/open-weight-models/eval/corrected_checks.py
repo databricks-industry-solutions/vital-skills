@@ -111,41 +111,60 @@ def infer_signature(nb, response, record, task):
     return False, "; ".join(e["text"] for e in seen) or "no MLflow log_model call"
 
 
-_ENSEMBL = re.compile(r"\bENSG\d{11}\b")
 _REAL_DATA_FILES = ("vocab.txt", ".h5ad")
+_OUTPUT_KEYS = re.compile(r"save|output|out_dir|^out$|dest", re.I)
+_FILE_READ_CALLS = ("glob", "load_dataset", "load_from_disk", "from_file", "read_parquet", "read_csv",
+                    "read_h5ad", "open", "load", "read_table")
+
+
+def _tokenizer_calls(nb, packages: tuple) -> list:
+    """Calls into the upstream package whose dotted name mentions token (GeneTokenizer(...),
+    tokenize(...), _build_batch_tensors(...))."""
+    return [c for c in nb.calls if any(d.split(".")[0] in packages and "token" in d.lower() and "." in d
+                                       for d in nb.dotted(c.func))]
+
+
+def _tokenizer_outputs(nb, packages: tuple) -> list:
+    """Paths an upstream tokenizer call writes to: values under save / output / dest keys of its
+    keyword arguments or of a dict passed to it (tokenize(..., tokenization_args={"save_dir": P}))."""
+    out = []
+    for call in _tokenizer_calls(nb, packages):
+        for k in call.keywords:
+            if k.arg and _OUTPUT_KEYS.search(k.arg):
+                out += pc.path_strings(nb, k.value)
+            out += [t for key_node in pc._keyed_nodes(nb, k.value, _OUTPUT_KEYS) for t in pc.path_strings(nb, key_node)]
+        for a in call.args:
+            out += [t for key_node in pc._keyed_nodes(nb, a, _OUTPUT_KEYS) for t in pc.path_strings(nb, key_node)]
+    return [t for t in dict.fromkeys(out) if t.replace("{}", "").strip("/")]
 
 
 def _real_gene_source(nb, node, packages: tuple):
-    """What makes a value real gene data, or None: the model vocabulary (vocab.txt), a real
-    single-cell file (.h5ad, read_h5ad), the upstream tokenizer (a call into the upstream
-    package whose name mentions token), or an Ensembl gene ID literal (not ENSG00000FAKE)."""
+    """What the scored value's gene IDs derive from (data flow), or None: the model vocabulary
+    (vocab.txt), a real single-cell file (.h5ad / read_h5ad), an upstream tokenizer call, or a file
+    the upstream tokenizer wrote (read back from its save / output path)."""
+    tokenizers = {id(c) for c in _tokenizer_calls(nb, packages)}
+    outputs = _tokenizer_outputs(nb, packages)
     for n in pc.flow_nodes(nb, node):
         if isinstance(n, ast.Constant) and isinstance(n.value, str):
-            text = n.value
-            if any(f in text for f in _REAL_DATA_FILES):
-                return f"line {n.lineno}: reads {text!r}"
-            if _ENSEMBL.search(text) and "FAKE" not in text:
-                return f"line {n.lineno}: Ensembl gene ID {_ENSEMBL.search(text).group(0)}"
+            if any(f in n.value for f in _REAL_DATA_FILES):
+                return f"line {n.lineno}: reads {n.value!r}"
         elif isinstance(n, ast.Call):
-            for d in nb.dotted(n.func):
-                if d.endswith("read_h5ad"):
-                    return f"line {n.lineno}: {d}"
-                if d.split(".")[0] in packages and "token" in d.lower():
-                    return f"line {n.lineno}: upstream tokenizer {d}"
+            if id(n) in tokenizers:
+                return f"line {n.lineno}: upstream tokenizer {nb.dotted(n.func)[0]}"
+            if any(d.endswith("read_h5ad") for d in nb.dotted(n.func)):
+                return f"line {n.lineno}: {nb.dotted(n.func)[0]}"
+            if outputs and _call_name(n) in _FILE_READ_CALLS:
+                for a in list(n.args) + [k.value for k in n.keywords]:
+                    hit = next((t for t in pc.path_strings(nb, a) for base in outputs if pc._under(t, base)), None)
+                    if hit:
+                        return f"line {n.lineno}: reads {hit!r}, written by the upstream tokenizer"
     return None
 
 
-_RANDOM = re.compile(r"(?:^|\.)(?:randint|rand|randn|random_integers|choice|integers)\(\)")
-
-
-def _random_source(nb, node) -> bool:
-    return any(isinstance(n, ast.Call) and any(_RANDOM.search(d) for d in nb.dotted(n.func))
-               for n in pc.flow_nodes(nb, node))
-
-
 def real_gene_ids(nb, response, record, task):
-    """pyfunc_quality/real_gene_ids : the input example (or the payload sent to the endpoint)
-    is built from real gene data, not random or made-up token IDs."""
+    """pyfunc_quality/real_gene_ids : the input example logged with the model (or the payload sent
+    to the endpoint) derives — by data flow, not presence — from real gene data: the model
+    vocabulary, a real .h5ad file, the upstream tokenizer, or files the upstream tokenizer wrote."""
     if not _is_teddy(task):
         return True, "not a TEDDY task (vocab.txt is TEDDY's tokenizer)"
     packages = pc.UPSTREAM_PACKAGES.get(task.get("model_family"), ())
@@ -157,16 +176,8 @@ def real_gene_ids(nb, response, record, task):
         for line, node in items:
             source = _real_gene_source(nb, node, packages)
             if source:
-                return True, f"{kind} at line {line} built from real gene data ({source})"
-    # The upstream tokenizer run on real data, its output read back from files (no data flow
-    # to follow), with no random generator behind the example.
-    tokenizer = [c.lineno for c in nb.calls if any(d.split(".")[0] in packages and "token" in d.lower()
-                                                   for d in nb.dotted(c.func))]
-    random = [line for line, node in examples + payloads if _random_source(nb, node)]
-    if tokenizer and examples and not random:
-        return True, (f"the notebook runs the upstream tokenizer (line {tokenizer[0]}) and its input example "
-                      f"has no random source")
-    return False, (f"no input example or endpoint payload built from real gene data "
+                return True, f"{kind} at line {line} derives from real gene data ({source})"
+    return False, (f"no input example or endpoint payload derives from real gene data "
                    f"({len(examples)} input example(s), {len(payloads)} endpoint payload argument(s) checked)")
 
 
@@ -174,7 +185,9 @@ _DEPENDENCY_FILES = ("pyproject.toml", "requirements.txt", "setup.cfg", "setup.p
 _FILE_READS = ("open", "read_text", "read_bytes")
 
 
-def _reads_dependency_file(nb) -> str | None:
+def _dependency_reads(nb) -> list:
+    """(call, path) for every read of a file named like a dependency spec."""
+    out = []
     for call in nb.calls:
         name = _call_name(call)
         holder = call.func.value if isinstance(call.func, ast.Attribute) else None
@@ -182,9 +195,26 @@ def _reads_dependency_file(nb) -> str | None:
             [a for v in nb.values(holder) if isinstance(v, ast.Call) for a in v.args[:1]]
             if name in _FILE_READS and holder is not None else [])
         for node in nodes:
-            for text in nb.strings(node):
+            for text in pc.path_strings(nb, node):
                 if text.rsplit("/", 1)[-1] in _DEPENDENCY_FILES:
-                    return f"line {call.lineno} reads {text!r}"
+                    out.append((call, text))
+    return out
+
+
+def _model_dependency_read(nb, response):
+    """A read of the MODEL's dependency file (under the download destination, or a copy of it)
+    whose parsed contents flow into the serving requirements; (line, path) or None."""
+    found = pc.downloads(nb, response)
+    model_reads = [(call, path) for call, path in _dependency_reads(nb)
+                   if any(pc._under(path, base) for d in found for base in pc._staged_paths(nb, d))]
+    if not model_reads:
+        return None
+    reqs = [node for call in pc._mlflow_log_model_calls(nb) for kwargs in nb.keyword_maps(call)
+            for key in ("pip_requirements", "extra_pip_requirements") if (node := kwargs.get(key)) is not None]
+    for call, path in model_reads:
+        # followed through `with open(P) as f: tomllib.load(f)` (with-targets are flow sources)
+        if any(pc._derives(nb, req, lambda n, c=call: n is c) for req in reqs):
+            return call.lineno, path
     return None
 
 
@@ -207,15 +237,17 @@ def _normalise(name: str) -> str:
 
 def pip_reqs_from_source(nb, response, record, task):
     """model_registration/pip_reqs_from_source : the serving requirements come from the model's
-    own dependency file — the notebook reads that file, or the serving pins agree with it."""
-    read = _reads_dependency_file(nb)
+    own dependency file — the notebook reads that file from the downloaded model (or a copy of it)
+    and the parsed pins flow into pip_requirements, or the serving pins agree with it."""
+    read = _model_dependency_read(nb, response)
     if read:
-        return True, f"the notebook reads the model's dependency file ({read})"
+        return True, (f"line {read[0]} reads the model's dependency file {read[1]!r} and its contents flow "
+                      f"into the serving requirements")
     upstream = (family_settings.load_family(task["model_family"], EVAL_DIR).get("upstream_dependencies")
                 or {}) if task.get("model_family") else {}
     pins = {_normalise(k): v for k, v in (upstream.get("pins") or {}).items()}
     if not pins:
-        return False, "no dependency file read, and no upstream pins recorded for this model family"
+        return False, "no model dependency file read into the requirements, and no upstream pins recorded"
     agree, disagree, unknown, unpinned = [], [], [], []
     for line, text in serving_requirements(nb):
         try:
@@ -241,20 +273,66 @@ def pip_reqs_from_source(nb, response, record, task):
 # Calls that write to a path: (call name, position of the path argument).
 _WRITE_CALLS = {"makedirs": 0, "mkdir": None, "copytree": 1, "copy": 1, "copy2": 1, "copyfile": 1,
                 "move": 1, "write_text": None, "write_bytes": None, "save_model": 1}
+_ACCEPTED = pc.ACCEPTED_LOCATIONS
 
 
-def _inside_try(nb, line: int) -> bool:
-    return any(t.body and t.body[0].lineno <= line <= t.body[-1].end_lineno and t.handlers
-               for t in nb.nodes(ast.Try))
+def _assigns(stmts: list) -> dict:
+    """{name: [value nodes]} for plain assignments anywhere inside `stmts`."""
+    out = {}
+    for stmt in stmts:
+        for n in ast.walk(stmt):
+            if isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        out.setdefault(t.id, []).append(n.value)
+    return out
+
+
+def _fallbacks(nb) -> dict:
+    """{name: (line of the try / if)} for a path variable set to /local_disk0 on one side and to an
+    accepted location (/tmp, tempfile, Volume) on the other: try body vs a handler, or if vs else.
+    These are the compute-adaptive paths: the alternative is assigned to the same name."""
+    out = {}
+    pairs = [(t.body, [s for h in t.handlers for s in h.body] + t.orelse, t.lineno) for t in nb.nodes(ast.Try)]
+    pairs += [(i.body, i.orelse, i.lineno) for i in nb.nodes(ast.If)] + [(i.orelse, i.body, i.lineno) for i in nb.nodes(ast.If)]
+    for first, other, line in pairs:
+        a, b = _assigns(first), _assigns(other)
+        for name in set(a) & set(b):
+            if (any("local_disk0" in pc._path_kinds(nb, v) for v in a[name])
+                    and any(pc._path_kinds(nb, v) & _ACCEPTED for v in b[name])):
+                out[name] = line
+    return out
+
+
+def _uses_fallback(nb, node, fallbacks: dict) -> bool:
+    return any(isinstance(n, ast.Name) and n.id in fallbacks for n in pc.flow_nodes(nb, node))
+
+
+def _probe(nb, call, fallbacks: dict):
+    """A /local_disk0 write inside a try body whose handler assigns a fallback path that the
+    notebook then uses (the README's makedirs probe); the try's line, or None."""
+    for t in nb.nodes(ast.Try):
+        if _contains(t.body, call) and t.handlers:
+            handled = _assigns([s for h in t.handlers for s in h.body])
+            if any(name in fallbacks for name in handled):
+                return t.lineno
+    return None
 
 
 def local_disk0(nb, response, record, task):
     """forbidden_patterns//local_disk0 : nothing is written to /local_disk0 (not writable on
-    serverless) unless that use is compute-adaptive (inside a try with a fallback, or the
-    path can also be a /tmp / Volume / tempfile location). Other strings do not count."""
+    serverless) unless it is compute-adaptive: the path variable has an alternative (/tmp,
+    tempfile, Volume) assigned in the try handler or the other if branch, and that same
+    variable is what the download / write uses; or the write is the probe inside such a try.
+    A try with any handler (even `except: pass`) is not enough. Other strings do not count."""
+    fallbacks = _fallbacks(nb)
     sites = []
     for d in pc.downloads(nb, response):
-        sites.append((d.line, f"download ({d.how})", d.kinds))
+        dest = None
+        if d.node is not None:
+            dest = next((m.get("local_dir") or m.get("cache_dir") for m in nb.keyword_maps(d.node)
+                         if m.get("local_dir") or m.get("cache_dir")), None)
+        sites.append((d.line, f"download ({d.how})", d.kinds, dest, d.node))
     for call in nb.calls:
         name = _call_name(call)
         if name not in _WRITE_CALLS and name != "open":
@@ -265,47 +343,78 @@ def local_disk0(nb, response, record, task):
                 continue
             node = call.args[0]
         elif _WRITE_CALLS[name] is None:
-            holder = call.func.value if isinstance(call.func, ast.Attribute) else None
-            node = holder
+            node = call.func.value if isinstance(call.func, ast.Attribute) else None
         else:
             position = _WRITE_CALLS[name]
             node = call.args[position] if len(call.args) > position else next(
                 (k.value for k in call.keywords if k.arg in ("dst", "path", "name")), None)
         if node is not None:
-            sites.append((call.lineno, name, pc._path_kinds(nb, node)))
-    bad = [(line, how) for line, how, kinds in sites
-           if kinds == {"local_disk0"} and not _inside_try(nb, line)]
-    adaptive = [line for line, _, kinds in sites if "local_disk0" in kinds and (len(kinds) > 1 or _inside_try(nb, line))]
+            sites.append((call.lineno, name, pc._path_kinds(nb, node), node, call))
+    bad, adaptive = [], []
+    for line, how, kinds, node, call in sites:
+        if "local_disk0" not in kinds:
+            continue
+        if node is not None and _uses_fallback(nb, node, fallbacks):
+            adaptive.append(line)
+        elif call is not None and _probe(nb, call, fallbacks):
+            adaptive.append(line)
+        else:
+            bad.append(f"line {line} {how}")
     if bad:
-        return False, "writes to /local_disk0: " + "; ".join(f"line {line} {how}" for line, how in bad)
+        return False, "writes to /local_disk0 without a used fallback: " + "; ".join(bad)
     if adaptive:
-        return True, f"/local_disk0 used only with a fallback (lines {adaptive})"
+        return True, f"/local_disk0 used only with a fallback path that is then used (lines {adaptive})"
     return True, f"no write to /local_disk0 ({len(sites)} write / download site(s) checked)"
 
 
 _SDK_SERVED = ("ServedEntityInput", "ServedModelInput")
+_HTTP_SENDS = ("do", "post", "put", "patch", "request")
+
+
+def _rest_bodies(nb) -> list:
+    """Body arguments of HTTP calls to a serving-endpoints URL (api_client.do, requests.post /
+    put / patch, ...): (line, node)."""
+    out = []
+    for call in nb.calls:
+        if _call_name(call) not in _HTTP_SENDS:
+            continue
+        args = list(call.args) + [k.value for k in call.keywords]
+        if not any("serving-endpoints" in t for a in args for t in nb.strings(a)):
+            continue
+        out += [(call.lineno, k.value) for k in call.keywords if k.arg in ("body", "json", "data")]
+        out += [(call.lineno, a) for a in call.args[2:]]
+    return out
+
+
+def _is_plain_string(nb, node) -> bool:
+    return any(isinstance(v, (ast.Constant, ast.JoinedStr)) and not (isinstance(v, ast.Constant) and v.value is None)
+               for v in nb.values(node))
 
 
 def sdk_enums(nb, response, record, task):
-    """endpoint_deployment/sdk_enums : the SDK gets ServingModelWorkloadType, not a plain string.
-    A string workload type in a REST body is valid for the REST API."""
-    sdk, bad, rest = [], [], []
+    """endpoint_deployment/sdk_enums : the SDK gets ServingModelWorkloadType, not a plain string —
+    for ServedEntityInput / ServedModelInput constructors, keywords and **kwargs alike. A string is
+    valid only in a body actually sent to the REST API, or through the SDK's from_dict (which
+    converts it)."""
+    sdk, bad = [], []
     for call in nb.calls:
-        if _call_name(call) in _SDK_SERVED:
-            for k in call.keywords:
-                if k.arg != "workload_type":
-                    continue
-                values = nb.values(k.value)
-                plain = [v for v in values if isinstance(v, (ast.Constant, ast.JoinedStr))]
-                (bad if plain else sdk).append(call.lineno)
-    for node in nb.nodes(ast.Dict):
-        if any(isinstance(key, ast.Constant) and key.value == "workload_type" for key in node.keys):
-            rest.append(node.lineno)
+        if _call_name(call) not in _SDK_SERVED:
+            continue
+        for kwargs in nb.keyword_maps(call):
+            node = kwargs.get("workload_type")
+            if node is None:
+                continue
+            (bad if _is_plain_string(nb, node) else sdk).append(call.lineno)
+    rest = []
+    for line, body in _rest_bodies(nb):
+        if any(isinstance(n, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == "workload_type" for k in n.keys)
+               for n in pc.flow_nodes(nb, body)):
+            rest.append(line)
     if bad:
-        return False, f"plain string workload_type passed to the SDK at lines {bad}"
+        return False, f"plain string workload_type passed to the SDK at lines {sorted(set(bad))}"
     if sdk or rest:
-        return True, "; ".join(x for x in (sdk and f"SDK enum at lines {sdk}",
-                                           rest and f"REST body / dict at lines {rest}") if x)
+        return True, "; ".join(x for x in (sdk and f"SDK enum at lines {sorted(set(sdk))}",
+                                           rest and f"REST body sent at lines {rest}") if x)
     return True, "no workload type set (the default is used; GPU use is reported separately)"
 
 
@@ -321,6 +430,25 @@ def ai_gateway_config(nb, response, record, task):
 
 
 _TABLE_EXISTS = re.compile(r"(?:^|\.)(?:tableExists|table_exists|exists)$")
+_INDEX_SOURCE_KEYS = ("source_table_name", "source_table")
+
+
+def _index_sources(nb) -> list:
+    """Table names a Vector Search index is built from (create_delta_sync_index(source_table_name=...),
+    DeltaSyncVectorIndexSpecRequest(source_table=...), or a REST / dict body with those keys)."""
+    out = []
+    for call in nb.calls:
+        for kwargs in nb.keyword_maps(call):
+            for key in _INDEX_SOURCE_KEYS:
+                if kwargs.get(key) is not None:
+                    out += nb.strings(kwargs[key])
+    for node in nb.nodes(ast.Dict):
+        for k, v in zip(node.keys, node.values):
+            if isinstance(k, ast.Constant) and k.value in _INDEX_SOURCE_KEYS:
+                out += nb.strings(v)
+    return [t for t in dict.fromkeys(out) if t.replace("{}", "").strip(".")]
+
+
 def _is_table_read(nb, call) -> bool:
     """spark.table(...) / spark.read.table(...) / read_table(...), or spark.sql("SELECT ...")
     (a DROP / CREATE statement is not a read)."""
@@ -331,19 +459,37 @@ def _is_table_read(nb, call) -> bool:
                                                      for t in nb.strings(call.args[0]))
 
 
+def _raises(stmts: list) -> bool:
+    return any(isinstance(n, ast.Raise) for stmt in stmts for n in ast.walk(stmt))
+
+
 def graceful_skip(nb, response, record, task):
-    """ai_search/graceful_skip : the search step copes with a missing source table — an
-    existence check, or a table read inside try/except. Creating the table (CREATE TABLE IF NOT
-    EXISTS, DROP + write) is not a guard: the step then never meets a missing table."""
-    checks = [c.lineno for c in nb.calls if any(_TABLE_EXISTS.search(d.rstrip("()")) for d in nb.dotted(c.func))
-              and any("table" in d.lower() for d in nb.dotted(c.func))]
-    if checks:
-        return True, f"table existence check at line {checks[0]}"
+    """ai_search/graceful_skip : the search step copes with its source table missing — an
+    existence check ON THE TABLE THE INDEX IS BUILT FROM whose missing branch skips or creates it
+    (does not raise), or the read of that table inside try/except whose handler does not re-raise.
+    Creating the table (CREATE TABLE IF NOT EXISTS, DROP + write) is not a guard."""
+    sources = _index_sources(nb)
+    if not sources:
+        return False, "no Vector Search index source table found"
+    names = lambda node: set(nb.strings(node)) & set(sources)  # noqa: E731
+    for node in nb.nodes(ast.If):
+        checks = [c for c in ast.walk(node.test) if isinstance(c, ast.Call)
+                  and any(_TABLE_EXISTS.search(d.rstrip("()")) for d in nb.dotted(c.func))
+                  and any("table" in d.lower() for d in nb.dotted(c.func)) and c.args and names(c.args[0])]
+        if not checks:
+            continue
+        negated = isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
+        missing = node.body if negated else node.orelse
+        if not _raises(missing):
+            return True, (f"line {node.lineno} checks that the index source table exists and the missing case "
+                          f"{'skips' if not missing else 'is handled without raising'}")
     for t in nb.nodes(ast.Try):
-        reads = [c.lineno for stmt in t.body for c in ast.walk(stmt) if isinstance(c, ast.Call) and _is_table_read(nb, c)]
-        if reads and t.handlers:
-            return True, f"table read at line {reads[0]} inside try/except"
-    return False, "no table existence check and no table read inside try/except"
+        reads = [c.lineno for stmt in t.body for c in ast.walk(stmt) if isinstance(c, ast.Call)
+                 and _is_table_read(nb, c) and c.args and names(c.args[0])]
+        if reads and t.handlers and not any(_raises(h.body) for h in t.handlers):
+            return True, f"read of the index source table at line {reads[0]} inside try/except that does not re-raise"
+    return False, (f"no existence check or non-raising try/except on the index source table "
+                   f"({', '.join(sources)})")
 
 
 _DEPLOY_CALLS = ("create", "create_and_wait", "update_config", "update_config_and_wait", "put_ai_gateway",
@@ -605,15 +751,16 @@ CORRECTIONS = {
     "pyfunc_quality/real_gene_ids": {
         "flaw": "looks for the text 'vocab.txt', so an input built with TEDDY's own tokenizer fails and a "
                 "mention in a comment passes",
-        "accepts": "the input example or endpoint payload is built from real gene data: vocab.txt, a "
-                   ".h5ad file, the upstream tokenizer, or Ensembl gene IDs (not ENSG00000FAKE); or the "
-                   "notebook runs the upstream tokenizer and the input example has no random source",
+        "accepts": "the logged input example (or endpoint payload) derives by data flow from real gene "
+                   "data: the model vocabulary (vocab.txt), a real .h5ad file, an upstream tokenizer call, "
+                   "or files the upstream tokenizer wrote (read back from its save / output path)",
         "check": real_gene_ids,
     },
     "model_registration/pip_reqs_from_source": {
         "flaw": "looks for the text 'pyproject.toml' / 'requirements.txt' anywhere (a download filter "
                 "passes) and fails pins copied from the file without naming it",
-        "accepts": "the notebook reads the model's dependency file, or the serving requirements pin at least "
+        "accepts": "the notebook reads the model's dependency file from the downloaded model (or a copy) "
+                   "and the parsed contents flow into pip_requirements, or the serving requirements pin at least "
                    "one package the upstream file pins and every such pin admits the upstream version "
                    "(family.json upstream_dependencies; a pin to the version installed at run time does not "
                    "count — it records the environment, not the source)",
@@ -622,13 +769,16 @@ CORRECTIONS = {
     "forbidden_patterns//local_disk0": {
         "flaw": "fails the text '/local_disk0' anywhere in code, including messages and compute-adaptive "
                 "code that falls back to /tmp",
-        "accepts": "no download, copy or file write to /local_disk0, except with a fallback",
+        "accepts": "no download, copy or file write to /local_disk0, unless the path variable has an "
+                   "alternative (/tmp, tempfile, Volume) assigned in the try handler or other if branch and "
+                   "that variable is what is used (or the write is the probe inside that try)",
         "check": local_disk0,
     },
     "endpoint_deployment/sdk_enums": {
         "flaw": "requires the name ServingModelWorkloadType, so a REST body with \"workload_type\": "
                 "\"GPU_SMALL\" (valid for the REST API) fails",
-        "accepts": "no plain-string workload_type passed to the SDK (enum, REST body, or none set)",
+        "accepts": "no plain-string workload_type passed to an SDK constructor (keywords or **kwargs); "
+                   "a string only in a body sent to the REST API",
         "check": sdk_enums,
     },
     "endpoint_deployment/ai_gateway_config": {
@@ -642,7 +792,8 @@ CORRECTIONS = {
         "flaw": "looks for words such as tableExists or 'table ... not ... exist' anywhere, so the task "
                 "prompt quoted in the first cell or 'CREATE TABLE IF NOT EXISTS' passes, and fails "
                 "try/except around the table read",
-        "accepts": "a table existence check, or the table read inside try/except",
+        "accepts": "an existence check on the table the index is built from whose missing branch does not "
+                   "raise, or the read of that table inside try/except that does not re-raise",
         "check": graceful_skip,
     },
     "endpoint_deployment/run_go_gate": {
