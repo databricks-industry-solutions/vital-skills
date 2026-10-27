@@ -9,23 +9,27 @@ the Sep 24 – Oct 7, 2026 runs were removed before the reruns, for both pairs.
 
 ## TEDDY
 
-**Status: retest pending** (round `models/teddy/runs_20261026/`). Built-in skills + this
-skill against built-in skills only, a fresh chat per task per run, the skill installed
-without `eval/`, a recorded Skills panel, and hidden codes showing which skill files
-Genie Code read. Every run creates its own resources under schema `skills_owm_202610`
-(names in `models/teddy/family.json`). Two pairs:
+**Status: standard pair run on 2026-10-27 — results draft for review:**
+[`models/teddy/runs_20261026/RESULTS.md`](models/teddy/runs_20261026/RESULTS.md).
+Built-ins + this skill against built-ins only, one fresh chat per task per run, the skill
+installed without `eval/`, a recorded Skills panel, self-report and visible steps. Every
+run created its own resources under schema `skills_owm_202610` (names in
+`models/teddy/family.json`). The replication pair (Sep–Oct 2026 prompts) was not run.
 
-- **standard** — `baseline` vs `with_skill`, the `evalset.json` query with the run's
-  names: the evaluation and the ship gate. Run first: teddy-002 (the MVP), then teddy-001;
-- **replication** — `old_prompt_baseline` vs `old_prompt_with_skill`, the recorded
-  Sep–Oct 2026 prompts with this round's names: the replication of the results below
-  (optional).
+Failed checks per run (raw counts; the shared-input-format convention is shown apart):
 
-Each run is scored in groups — the replicated Sep–Oct 2026 checks, the new checks, and an
-outcome group measured on the live deployment before teardown (endpoint ready, valid
-512-dimension embeddings for a fixed request, working search for teddy-002) — and every
-failed check is counted by severity (critical / major / minor) next to whether the run's
-outcome passed. Score files appear in `models/teddy/runs_20261026/scores/` after the runs.
+| Task | Run | Critical failed | Major failed | Minor failed | Outcome passed | Shared input format |
+|---|---|---|---|---|---|---|
+| teddy-001 | baseline (attempt 2) | 5 | 6 | 2 | no | no |
+| teddy-001 | baseline (attempt 1) | 3 | 8 | 2 | no | no |
+| teddy-001 | with_skill | 0 | 0 | 0 | yes | yes |
+| teddy-002 | baseline | 4 | 5 | 2 | yes | no |
+| teddy-002 | with_skill | 0 | 0 | 1 | yes | yes |
+
+Several baseline failures are false negatives of checks written from the skill's own
+content; `RESULTS.md` lists them, the outcome evidence, the skill-use evidence and the
+caveats (one sample per arm except teddy-001 baseline; outcome partly measured by hand
+before teardown).
 
 ### Task IDs
 
@@ -54,11 +58,12 @@ first run's failures; all on the pre-rename skill.
 
 ### Verdict
 
-None yet — pending the retest.
+None yet — the 2026-10-27 results are a draft pending review (`RESULTS.md`).
 
 ### Limitations
 
-Two tasks, one run each per arm: directional evidence, not statistical.
+Two tasks, one run each per arm (two baseline attempts for teddy-001): directional
+evidence, not statistical.
 
 ## Geneformer
 
