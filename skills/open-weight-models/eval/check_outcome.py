@@ -266,7 +266,7 @@ def main(argv=None) -> int:
     index = max(i for i, r in enumerate(records) if r["run_id"] == args.run_id and r["task_id"] == args.task_id)
     resources = records[index].get("resources_created") or {}
     if not resources.get("serving_endpoint"):
-        parser.error("fill resources_created in the run record first (README step 7)")
+        parser.error("fill resources_created in the run record first (README step 8)")
 
     from databricks.sdk import WorkspaceClient
 

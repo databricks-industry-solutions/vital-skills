@@ -28,8 +28,12 @@ frontmatter `version` is the source of truth for releases.
   the recorded version, one finite 512-dimension embedding per cell, working
   nearest-neighbour search for teddy-002), per-check severity / source / environment
   dependence in `expectations.json`, an optional guideline LLM judge, and a README list
-  of known false negatives in the replicated checks. Unit tests in
-  `tests/test_install_skill_for_run.py` and `tests/test_eval_scorers.py`.
+  of known false negatives in the replicated checks. Run protocol also records the
+  Customizations → Skills panel before each run, the chat's visible steps and Genie
+  Code's (unverified) skill self-report after it; `--extra-skill-dir` gives any
+  additional installed skill its own hidden code. Unit tests in
+  `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
+  `tests/test_check_outcome.py`.
 - `eval/previous_runs_2026-10/`: the 2026-10 TEDDY evaluation kept as a frozen record
   in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005
   with-skill output from a workspace backup (user name, project folder and catalog

@@ -325,3 +325,100 @@ def test_backup_of_eval_copy_is_labelled(fake_skill, tmp_path, no_git):
     record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
     assert record["backup_of"] == inst.EVAL_COPY
     assert inst.first_backup([record]) is None
+
+
+# ---- extra skills, skills panel, visible steps, self-report -------------------------
+
+def _extra_skill(tmp_path, name="bulk-rnaseq"):
+    skill = tmp_path / "extras" / name
+    (skill / "references").mkdir(parents=True)
+    (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\n# {name}\n")
+    (skill / "references" / "r.md").write_text("ref")
+    (skill / "eval").mkdir()
+    (skill / "eval" / "expectations.json").write_text("{}")
+    return skill
+
+
+def test_stage_extra_skill_gets_its_own_marker(tmp_path):
+    root = tmp_path / "staged"
+    root.mkdir()
+    name, staged, code = inst.stage_extra_skill(_extra_skill(tmp_path), root)
+    assert name == "bulk-rnaseq" and not (staged / "eval").exists()
+    assert f"`# skill-proof-bulk-rnaseq: {code}`" in (staged / "SKILL.md").read_text()
+    assert inst.is_eval_copy((staged / "SKILL.md").read_bytes(), "bulk-rnaseq")
+    assert not inst.is_eval_copy((staged / "SKILL.md").read_bytes())  # not an open-weight-models marker
+
+
+def test_stage_extra_skill_rejects_bad_names(tmp_path):
+    skill = _extra_skill(tmp_path, "my-skill")
+    (skill / "SKILL.md").write_text("---\nname: other\n---\n")
+    with pytest.raises(ValueError, match="must match the folder name"):
+        inst.stage_extra_skill(skill, tmp_path)
+    with pytest.raises(ValueError, match="not an extra skill"):
+        inst.stage_extra_skill(_extra_skill(tmp_path, "oss-models"), tmp_path)
+
+
+def test_all_codes_and_expected_panel():
+    record = {"codes": {"SKILL.md": "a", "references/models/teddy.md": "b"},
+              "extra_skills": [{"name": "bulk-rnaseq", "code": "c"}]}
+    assert inst.all_codes(record) == {"SKILL.md": "a", "references/models/teddy.md": "b", "bulk-rnaseq/SKILL.md": "c"}
+    assert inst.all_codes({"codes": {}}) == {}
+    assert inst.expected_panel("off", []) == []
+    assert inst.expected_panel("on", []) == ["open-weight-models"]
+    assert inst.expected_panel("on", ["bulk-rnaseq"]) == ["bulk-rnaseq", "open-weight-models"]
+
+
+def test_record_protocol_fields():
+    record = inst.build_record(run_id="baseline", task_id="teddy-001", state="off", user="u",
+                               codes={}, environment={}, skill_commit="abc")
+    assert record["skills_panel"] == {"screenshot": "", "expected": [], "observed_user_tab": [],
+                                      "observed_all_skills_tab": []}
+    assert record["visible_steps"] == {"text": "", "screenshot": ""}
+    assert record["skills_self_report"] == {"source": inst.SELF_REPORT_FOLLOW_UP, "text": ""}
+    assert record["extra_skills"] == []
+    old = inst.build_record(run_id="old_prompt_with_skill", task_id="teddy-001", state="on", user="u",
+                            codes={"SKILL.md": "a"}, environment={}, skill_commit="abc")
+    assert old["skills_self_report"]["source"] == inst.SELF_REPORT_IN_NOTEBOOK
+    assert old["skills_panel"]["expected"] == ["open-weight-models"]
+
+
+def test_self_report_prompt_is_the_2026_10_line():
+    recorded = (SKILL_DIR / "eval" / "previous_runs_2026-10" / "results" / "with_skill" / "oss-001.txt").read_text()
+    line = recorded.splitlines()[22]
+    assert line == "# MAGIC > At the end, l" + inst.SELF_REPORT_PROMPT[1:]
+
+
+def test_extra_skill_installed_and_recorded(fake_skill, tmp_path, no_git):
+    extra = _extra_skill(tmp_path, "cohort-builder")  # not listed as installed by FakeCli
+    args = inst.parse_args(
+        ["--profile", "PROFILE", "--user", USER, "--state", "on", "--run-id", "with_skill", "--task-id", "teddy-001",
+         "--skill-dir", str(fake_skill), "--records", str(tmp_path / "outputs" / "run_records.json"),
+         "--extra-skill-dir", str(extra)])
+    cli = FakeCli(installed=False)
+    assert inst.set_state(args, cli) == 0
+    imports = [c[3] for c in cli.calls if c[1] == "import-dir"]
+    assert imports == [TARGET, f"{inst.user_skills_dir(USER)}/cohort-builder"]
+    record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
+    (entry,) = record["extra_skills"]
+    assert entry["name"] == "cohort-builder" and entry["backup"] is None
+    assert record["skills_panel"]["expected"] == ["cohort-builder", "open-weight-models"]
+    notebook = tmp_path / "nb.py"
+    notebook.write_text(f"# skill-proof-cohort-builder: {entry['code']}\n")
+    assert inst.check_notebook(notebook.read_text(), inst.all_codes(record)) == {
+        "SKILL.md": False, "references/models/teddy.md": False, "cohort-builder/SKILL.md": True}
+
+
+def test_installed_extra_skill_needs_replace_and_is_backed_up(fake_skill, tmp_path, no_git):
+    extra = _extra_skill(tmp_path)
+    base = ["--profile", "PROFILE", "--user", USER, "--state", "off", "--run-id", "baseline", "--task-id",
+            "teddy-001", "--skill-dir", str(fake_skill), "--records", str(tmp_path / "outputs" / "run_records.json"),
+            "--extra-skill-dir", str(extra)]
+    cli = FakeCli(installed=False)  # FakeCli always lists bulk-rnaseq as installed
+    assert inst.set_state(inst.parse_args(base), cli) == 3
+    assert cli.mutations() == []
+    cli = FakeCli(installed=False)
+    assert inst.set_state(inst.parse_args(base + ["--replace-existing"]), cli) == 0
+    assert cli.mutations() == ["export-dir", "delete", "mkdirs", "import-dir"]
+    (entry,) = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]["extra_skills"]
+    assert entry["backup"].startswith("baseline/backup/teddy-001-") and entry["backup"].endswith("/extra/bulk-rnaseq")
+    assert entry["backup_of"] == inst.PRE_EVAL

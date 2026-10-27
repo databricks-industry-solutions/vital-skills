@@ -55,7 +55,7 @@ from scorers import (
 )
 from check_outcome import outcome_scores
 from compare_runs import extract_scores, main as compare_main
-from install_skill_for_run import check_notebook, latest_record, load_records
+from install_skill_for_run import all_codes, check_notebook, latest_record, load_records
 
 PAIRS = [("baseline", "with_skill"), ("old_prompt_baseline", "old_prompt_with_skill")]
 RUNS = [run for pair in PAIRS for run in pair]
@@ -99,8 +99,8 @@ sources = {
 # MAGIC `references/models/teddy.md`. A code in a notebook means Genie Code read that file.
 # MAGIC Baseline runs record no codes; with-skill runs should show them. A with-skill run
 # MAGIC that shows neither code did not pick the skill up — report it, do not drop it.
-# MAGIC A run marked `discarded` (README step 10) stops the notebook: redo it before scoring.
-# MAGIC So does a run without a recorded outcome (README step 8, `check_outcome.py`).
+# MAGIC A run marked `discarded` (README step 11) stops the notebook: redo it before scoring.
+# MAGIC So does a run without a recorded outcome (README step 9, `check_outcome.py`).
 
 # COMMAND ----------
 
@@ -111,7 +111,7 @@ for run in RUNS:
         record = latest_record(records, run, task_id)
         assert not record.get("discarded"), f"{run}/{task_id} was discarded ({record['discard_reason']}): redo it first"
         outcomes[(run, task_id)] = outcome_scores(record)
-        print(run, task_id, record["state"], record["compute"], check_notebook(sources[run][task_id], record["codes"]))
+        print(run, task_id, record["state"], record["compute"], check_notebook(sources[run][task_id], all_codes(record)))
 
 # COMMAND ----------
 

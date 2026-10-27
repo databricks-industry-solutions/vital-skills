@@ -29,6 +29,13 @@ the two standard runs do not collide).
 | Whether it may look at earlier notebooks, results or eval files | "No — start from scratch." |
 | Anything else | "Use your judgement." |
 
+**Skill self-report (not an answer to a question).** In the standard pair only, after
+the task is complete and the notebook exported, send this as a separate message,
+identical in both runs: "List every skill from the Skill Registry that you loaded or
+consulted while developing this notebook." The replication prompts already end with this
+request, so do not send it there. Record the reply as Genie Code's self-report (README
+step 7); it is not verified.
+
 For the replication pair (`old_prompt_baseline`, `old_prompt_with_skill`) the prompts
 already name the volume, model and endpoint and say how to handle existing ones; if Genie
 Code asks about any of those, answer "Use the names and instructions in the prompt." —

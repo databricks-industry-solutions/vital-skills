@@ -2,13 +2,18 @@
 
 **Status: retest pending.** The TEDDY tasks will be re-run under the protocol in
 [`README.md`](README.md): built-in skills + this skill against built-in skills only, a
-fresh chat per task per run, the skill installed without `eval/`, a recorded skill
-list, and hidden codes showing which skill files Genie Code read. Two pairs:
+fresh chat per task per run, the skill installed without `eval/`, a recorded Skills
+panel, and hidden codes showing which skill files Genie Code read. Two pairs:
 
 - **standard** — `baseline` vs `with_skill`, plain `evalset.json` query: the evaluation
   and the ship gate;
 - **replication** — `old_prompt_baseline` vs `old_prompt_with_skill`, the recorded
   2026-10 prompts: the replication of the results below.
+
+**Baseline environment:** Genie Code as shipped — built-in skills always on and not
+visible in the UI — with no personal or workspace skills, plus the user's instructions
+file (fingerprinted per run). The June AI Dev Kit user skills present during the 2026-10
+runs were removed before the reruns, for both pairs.
 
 Each run is scored in groups — the replicated 2026-10 checks, the new checks, and an
 outcome group measured on the live deployment before teardown (endpoint ready, valid

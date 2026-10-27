@@ -7,6 +7,12 @@ teddy-002). Geneformer tasks come later.
 Genie Code with its built-in skills **only**. Built-in skills cannot be disabled, so the
 result is the extra value of this skill on top of them.
 
+**Baseline environment:** Genie Code as shipped — built-in skills always on and not
+visible in the UI — with no personal or workspace skills, plus the user's instructions
+file (`.assistant_instructions.md`, fingerprinted in every run record). The June AI Dev
+Kit user skills that were installed during the 2026-10 runs were removed before the
+reruns, for both pairs.
+
 **Four runs per task, in two pairs.** Each pair is compared only within itself.
 
 | Pair | Run (`run_id`) | Skill | What is pasted into the chat |
@@ -24,11 +30,11 @@ result is the extra value of this skill on top of them.
   export path were changed (listed at the top of each file). The 2026-10 record is in
   [`previous_runs_2026-10/`](previous_runs_2026-10/README.md).
 
-**Environment per pair.** The replication pair is run with the user's skills as already
-installed (as in 2026-10). The standard pair may be run after the user has removed
-deprecated copies of other skills (for example old AI Dev Kit copies). Every run record
-therefore stores the environment Genie Code could see (step 1), and each pair is compared
-only within itself — never a run of one pair against a run of the other.
+**Environment per pair.** Both pairs run in the baseline environment above (the AI Dev
+Kit user skills from 2026-10 removed), so the replication pair is *not* the 2026-10
+environment. Every run record stores the environment Genie Code could see (step 1) and
+the Skills panel as observed (step 3), and each pair is compared only within itself —
+never a run of one pair against a run of the other.
 
 > [!WARNING]
 > **The replication prompts replace the 2026-10 resources.** They name the same volume,
@@ -50,7 +56,7 @@ only within itself — never a run of one pair against a run of the other.
 | `scorers.py` | MLflow scorers (exports `scorers`) | scoring only |
 | `score_open_weight_models.py` | Databricks scoring notebook | scoring only |
 | `outputs/<run_id>/<task_id>.py` | exported notebooks (after the runs) | scoring only |
-| `outputs/run_records.json` | one record per run: skill state, environment, hidden codes, backup, commit, compute, resources created, outcome, discarded / reason, notes | scoring only |
+| `outputs/run_records.json` | one record per run: skill state, environment, hidden codes (incl. extra skills), backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, discarded / reason, notes | scoring only |
 | `<run_id>_scores.json`, `outputs/scores/` | per-task scores (after scoring) | — |
 | `eval_report.md` | results | — |
 | `README_environments.md` | known Genie Code runtime snapshots | — |
@@ -58,7 +64,7 @@ only within itself — never a run of one pair against a run of the other.
 Genie Code must never see `eval/`. The skill is installed by
 `install_skill_for_run.py`, which copies only `SKILL.md` and `references/` (plus
 `assets/` and `scripts/` if they exist). Do not copy the repo to the workspace until all
-runs are done (step 12).
+runs are done (step 13).
 
 ## Run protocol
 
@@ -95,12 +101,23 @@ Checklist for **each** (run, task):
      and whether `/Workspace/.assistant/skills` and
      `/Workspace/.assistant_workspace_instructions.md` exist. For `on` it prints the two
      hidden codes.
+   - Default: open-weight-models is the only skill installed. If a run needs other skills
+     too, pass each with `--extra-skill-dir <skill folder>` (repeatable): each is staged
+     the same way (no `eval/` or `tests/`), gets its own hidden code in its `SKILL.md`
+     (`# skill-proof-<name>: <code>`), is recorded under `extra_skills`, and is checked in
+     step 6. Pass the same extra skills in both runs of a pair.
 2. **Clear memory.** In Genie Code, ask it to delete any memories about this
    evaluation, TEDDY, or the open-weight-models skill. Close that chat.
-3. **Check the skill list.** Hard refresh the browser (Cmd+Shift+R), type `@` in a new
-   chat, and screenshot the list of skills. Save it as
-   `outputs/<run_id>/<task_id>_skills.png`. For skill-off runs, open-weight-models must
-   not be listed; for with-skill runs it must be.
+3. **Check the Skills panel — before pasting the prompt.** Hard refresh the browser
+   (Cmd+Shift+R), open Genie Code → **Customizations → Skills**, and screenshot both the
+   **User** and the **All skills** tabs (save as `outputs/<run_id>/<task_id>_skills_panel.png`;
+   add `_user` / `_all` if they need two images). Record the filename(s) and the skills
+   listed on each tab in the record's `skills_panel` (`screenshot`,
+   `observed_user_tab`, `observed_all_skills_tab`). Expected (`skills_panel.expected`,
+   written by step 1): skill-off runs show no skills ("No skills found"); with-skill runs
+   show only `open-weight-models` (plus any `--extra-skill-dir` skills). **If what you
+   see differs from expected, stop and fix the installs before running** — built-in
+   skills are not listed here, so anything shown is a personal or workspace skill.
 4. **Fresh notebook and chat.** Create a blank notebook `<task_id>` in the run folder
    and open a new Genie Code chat on it.
 5. **Run.** Paste the prompt verbatim — the `query` from `evalset.json` for the
@@ -114,18 +131,36 @@ Checklist for **each** (run, task):
        /Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/<task_id> \
        --format SOURCE --file skills/open-weight-models/eval/outputs/<run_id>/<task_id>.py -p <profile>
    ```
-   Then check the hidden codes:
+   Then check the hidden codes (every installed skill has one; they are the proof of
+   which skill files Genie Code read):
    ```bash
    python3 skills/open-weight-models/eval/install_skill_for_run.py --run-id <run_id> \
        --task-id <task_id> --check-notebook skills/open-weight-models/eval/outputs/<run_id>/<task_id>.py
    ```
-7. **Fill `resources_created` and `compute`** in the run's record in
+7. **Visible steps and skill self-report — after the task is complete and exported.**
+   - Copy the chat's visible step list (for example "Searched documentation", file
+     reads) into the record's `visible_steps.text` and save a screenshot
+     (`outputs/<run_id>/<task_id>_steps.png`, filename in `visible_steps.screenshot`).
+     Step 11 (leak check) reads this list.
+   - **Standard pair only:** send this as a separate message, identical in both runs:
+     "List every skill from the Skill Registry that you loaded or consulted while
+     developing this notebook." Record the reply verbatim in
+     `skills_self_report.text`. It is sent only after the task is done, so it cannot
+     steer the work.
+   - **Replication pair:** skip the follow-up — the 2026-10 prompts already end with
+     this request (for example
+     `previous_runs_2026-10/results/with_skill/oss-001.txt:23`). Record the answer
+     Genie Code gave in the notebook or chat instead (`skills_self_report.source` is
+     pre-filled accordingly).
+   - The self-report is **Genie Code's own claim, not verified**. The hidden codes
+     (step 6) remain the proof that open-weight-models was read.
+8. **Fill `resources_created` and `compute`** in the run's record in
    `outputs/run_records.json`, from the notebook: `serving_endpoint`, `uc_model`
    (three-part name), `uc_model_version`, and for teddy-002 `delta_table`,
    `vector_search_endpoint`, `vector_search_index`; `compute.type` and
    `compute.runtime` from the notebook's runtime cell or the compute it ran on (for
    example "serverless GPU (GPU_1xA10)", "AI Runtime v5").
-8. **Outcome checks — before any teardown.** From the laptop (needs
+9. **Outcome checks — before any teardown.** From the laptop (needs
    `databricks-sdk`, verified with 0.157.0):
    ```bash
    python3 skills/open-weight-models/eval/check_outcome.py --profile <profile> \
@@ -140,7 +175,7 @@ Checklist for **each** (run, task):
    column. Results go into the record's `"outcome"`. `--reference-endpoint` (optional)
    adds the per-cell cosine similarity against another TEDDY endpoint, as information
    only — no pass/fail threshold is defined.
-9. **Tear down what the run created** — and only that, using the names in
+10. **Tear down what the run created** — and only that, using the names in
    `resources_created`:
    ```bash
    databricks serving-endpoints delete <serving_endpoint> -p <profile>
@@ -152,22 +187,22 @@ Checklist for **each** (run, task):
    Also drop the AI Gateway inference/usage tables the endpoint created, if any.
    Tear down the replication pair's resources too: its prompts reuse the 2026-10 names
    (see the warning above).
-10. **Check for leaks.** Read the chat's visible steps. If Genie Code opened, searched
+11. **Check for leaks.** Read the chat's visible steps (step 7). If Genie Code opened, searched
     or listed any file or folder whose path contains `oss-0`, `gt_`, `hls-skills-tests`,
     `previous_runs_2026-10` or `/eval/`, the run saw earlier results or the answer key:
     set `"discarded": true` and `"discard_reason"` (which path, which step) in its
     record, delete its exported notebook, and redo the run from step 1 in a fresh chat
     (`skills/skill-eval/references/combined-job.md:16-39`: a contaminated context is
     discarded and restarted, never "unlearned"). Discarded runs are not scored.
-11. **Record.** Write anything unusual (questions asked and answers given, crashes,
+12. **Record.** Write anything unusual (questions asked and answers given, crashes,
     how long it ran) into the record's `"notes"`.
 
 After all eight (run, task) sessions:
 
-12. **Score.** Copy the repo to a workspace folder **outside** `.assistant/skills/`
+13. **Score.** Copy the repo to a workspace folder **outside** `.assistant/skills/`
     (for example a Git folder at `/Workspace/Users/<workspace-user>/<repo-folder>`),
     set the paths at the top of `score_open_weight_models.py`, and run it.
-13. **Put the user's setup back.** Run
+14. **Put the user's setup back.** Run
     ```bash
     python3 skills/open-weight-models/eval/install_skill_for_run.py --profile <profile> \
         --user <workspace-user> --restore-original
@@ -176,7 +211,9 @@ After all eight (run, task) sessions:
     skill installed before the eval, re-imports that original install from its backup —
     the first backup whose record says `"backup_of": "pre-eval install"` (a copy without
     the hidden codes). If there is none, the user had no install before the eval and the
-    skill is left removed. Add `--dry-run` first to see which applies.
+    skill is left removed. Add `--dry-run` first to see which applies. Extra skills
+    (`--extra-skill-dir`) are not restored by this command: delete them, or re-import
+    their recorded `extra_skills[].backup`, by hand.
 
 A with-skill run whose notebook shows neither code did not pick up the skill. Keep it
 and report it — that is a result, not a failed run.
@@ -217,7 +254,7 @@ each result's rationale says why it passed or failed):
 | `existing_resources/endpoint` (`/table`, `/index` for teddy-002) | looks for an existing endpoint / table / index before the first create or delete call | both |
 
 **Outcome group** (metric names start with `outcome/`): did what the run built actually
-work? Measured live by `check_outcome.py` (step 8, before teardown), stored in the run
+work? Measured live by `check_outcome.py` (step 9, before teardown), stored in the run
 record, and read by the scorer — nothing is re-measured at scoring time.
 
 | Check | Passes when | Tasks |
@@ -249,7 +286,7 @@ Every check in every group has an entry in `expectations.json` → `"checks"`:
   `teddy.md:160`), or `none`; with `assumes` naming the environment. The task's
   `environment_assumed` is serverless GPU notebook compute (GPU_1xA10) on AI Runtime
   v5 with Model Serving GPU_SMALL (`README_environments.md`). Each run records its
-  actual compute and runtime (step 7), so a check that depends on compute can be read
+  actual compute and runtime (step 8), so a check that depends on compute can be read
   against what the run used.
 
 The scoring notebook prints, per pair, run and task, the **raw counts of failed checks
