@@ -47,6 +47,7 @@ schema by hand.
 Other changes:
 
 - `open-weight-models` eval: moved from `tests/` to the standard `eval/` layout — shared harness, per-family settings and run rounds under `eval/models/<family>/` (TEDDY: teddy-001, teddy-002), and the Sep 24 – Oct 7, 2026 runs kept in `eval/runs_20260924/`
+- `open-weight-models` eval: `eval/eval_report.md` is now the one complete report for the skill (TEDDY 2026-10-27 results, failure taxonomy, verdict, limitations, reproduce; Sep–Oct 2026 historical; Geneformer pending)
 
 ### Fixed
 

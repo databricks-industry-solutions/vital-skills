@@ -25,7 +25,7 @@ reports were generated on 2026-10-01 (`reports/`).
 
 The retest renames the tasks. Files in this folder keep the old IDs.
 
-| Sep–Oct 2026 ID | Retest ID | Task |
+| Sep–Oct 2026 ID | ID | Task |
 |---|---|---|
 | oss-001 | teddy-001 | TEDDY-70M deploy |
 | oss-002 | teddy-002 | TEDDY-70M deploy + nearest-neighbour cell search |

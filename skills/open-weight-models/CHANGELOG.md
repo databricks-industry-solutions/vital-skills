@@ -84,6 +84,13 @@ frontmatter `version` is the source of truth for releases.
   `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
   Sep–Oct 2026 files keep the old IDs).
+- `eval/eval_report.md` rewritten as the one complete report for the skill (skill-eval
+  report layout: results, failure taxonomy, verdict, limitations, reproduce): TEDDY
+  2026-10-27 group tables (replicated, new, outcome, convention apart), severity counts,
+  the practical trial reported separately, GPU guideline, skill-use evidence, the six
+  findings for the skill, then the Sep–Oct 2026 round (historical) and Geneformer
+  (pending). Counts re-derived from the committed score files. Task-ID tables now head
+  the current ID column "ID" (was "Retest ID"), also in `runs_20260924/eval_report.md`.
 
 ### Fixed
 - Inference controls for custom PyFunc endpoints: the guidance to pass them as
@@ -108,7 +115,7 @@ frontmatter `version` is the source of truth for releases.
   the model owner before redistribution.
 - `teddy.md` endpoint-creation example passes `name=` to `EndpointCoreConfigInput`
   (Optional in databricks-sdk <=0.70.0, required from 0.71.0, so passing it works on
-  both; all four 2026-10-27 runs hit the `missing ... 'name'` `TypeError`);
+  both; four of the five 2026-10-27 runs record the `missing ... 'name'` `TypeError`);
   `SKILL.md` Troubleshooting #27 notes it. The TEDDY signature example is now
   explicit (`infer_signature(..., params=default_params)` with string defaults) and
   the checklist validates the params schema.
