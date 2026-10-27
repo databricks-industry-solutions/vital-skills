@@ -56,7 +56,7 @@ recorded scores are kept as reported), so each table gives one line comparing th
 |---|---|---|---|---|---|---|
 | teddy-001 | baseline (attempt 2) | 0 | 5 | 3 | no | no |
 | teddy-001 | baseline (attempt 1) | 1 | 8 | 2 | no | no |
-| teddy-001 | with_skill | 0 | 0 | 0 | yes | yes |
+| teddy-001 | with_skill | 0 | 0 | 1 | yes | yes |
 | teddy-002 | baseline | 0 | 5 | 4 | yes | no |
 | teddy-002 | with_skill | 0 | 0 | 0 | yes | yes |
 
@@ -70,7 +70,7 @@ mixed-length batches (see "Outcome").
 Sep–Oct as originally reported (flawed logic), replicated checks only, critical / major /
 minor failed: teddy-001 baseline 4 / 2 / 2, with skill 0 / 0 / 0; teddy-002 baseline
 1 / 2 / 1, with skill 0 / 0 / 0. Sep–Oct re-scored with corrected logic: teddy-001 baseline
-5 / 3 / 3, with skill 0 / 0 / 0; teddy-002 baseline 3 / 2 / 3, with skill 0 / 0 / 2.
+5 / 3 / 3, with skill 0 / 0 / 1; teddy-002 baseline 3 / 2 / 3, with skill 0 / 0 / 2.
 
 ## teddy-001 — deploy
 
@@ -78,13 +78,13 @@ Passed / total sub-checks per group:
 
 | Group | baseline attempt 1 | baseline attempt 2 | with_skill |
 |---|---|---|---|
-| Replicated Sep–Oct 2026 checks (corrected) | 23 / 29 | 25 / 29 | 29 / 29 |
+| Replicated Sep–Oct 2026 checks (corrected) | 23 / 29 | 25 / 29 | 28 / 29 |
 | New checks | 2 / 5 | 2 / 5 | 5 / 5 |
 | Outcome | 2 / 4 | 3 / 4 | 4 / 4 |
 | Convention: shared input format | 0 / 1 | 0 / 1 | 1 / 1 |
 
 Sep–Oct as originally reported (flawed logic), replicated checks: baseline 21 / 29, with
-skill 29 / 29. Sep–Oct re-scored with corrected logic: baseline 18 / 29, with skill 29 / 29.
+skill 29 / 29. Sep–Oct re-scored with corrected logic: baseline 18 / 29, with skill 28 / 29.
 (The verbatim logic gave this round 21 / 29, 20 / 29 and 29 / 29.)
 
 Every sub-check that failed in at least one run, or where the verbatim result differs:
@@ -102,7 +102,7 @@ Every sub-check that failed in at least one run, or where the verbatim result di
 | `smoke_tests/registration_smoke` | major | fail | pass | pass |
 | `smoke_tests/endpoint_query` | major | fail | pass | pass |
 | `pyfunc_quality/sys_modules_purge` | minor | fail | fail | pass |
-| `endpoint_deployment/run_go_gate` | minor | fail | fail | pass |
+| `endpoint_deployment/run_go_gate` | minor | fail | fail | fail (⚑ verbatim: pass — the gate exists, but the `run_go` widget defaults to "true" (line 12), so the deploy runs unless the user turns it off) |
 | `new_checks/ai_gateway/inference_table` | major | fail | fail | pass |
 | `new_checks/ai_gateway/usage_tracking` | major | fail | fail | pass |
 | `new_checks/uc_provenance/provenance_tags` | major | fail | fail | pass |
@@ -114,7 +114,9 @@ Sep–Oct as originally reported (flawed logic), these sub-checks: baseline fail
 `uses_tmp`, `hf_xet_disabled`, `deps_pinned`, `sys_modules_purge`, `artifacts_declared`,
 `pip_reqs_from_source`, `ai_gateway_config`, `registration_smoke`; with skill none. Sep–Oct
 re-scored with corrected logic: baseline also fails `real_gene_ids`, `run_go_gate` and
-`forbidden_patterns/transformers` (11 in all); with skill none.
+`forbidden_patterns/transformers` (11 in all); with skill fails `run_go_gate` (its deploy
+is behind a `deploy_endpoint` widget whose default is not set in the notebook, so it cannot
+be shown to default to off).
 
 ⚑ = the verbatim (Sep–Oct 2026) logic gave the other result; the reason says why it was wrong.
 

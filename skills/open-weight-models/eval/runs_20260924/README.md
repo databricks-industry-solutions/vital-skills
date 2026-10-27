@@ -101,7 +101,7 @@ Replicated sub-checks passed, as originally reported → re-scored with correcte
 
 | Task | Baseline | With skill |
 |---|---|---|
-| oss-001 (teddy-001) | 21 / 29 → 18 / 29 | 29 / 29 → 29 / 29 |
+| oss-001 (teddy-001) | 21 / 29 → 18 / 29 | 29 / 29 → 28 / 29 |
 | oss-002 (teddy-002) | 27 / 31 → 23 / 31 | 31 / 31 → 29 / 31 (the "v2" run) |
 
 Counts as in the score files (a not-applicable group counts as one pass). The direction is

@@ -216,19 +216,55 @@ def test_graceful_skip(cc, cell, ok):
     assert _check(cc, "ai_search/graceful_skip", _nb(cell), task_id="teddy-002")[0] is ok
 
 
+DEPLOY = "w.serving_endpoints.create(name=N, config=c)"
+
+
 @pytest.mark.parametrize("cells, ok", [
-    (("DEPLOY = dbutils.widgets.get('deploy') == 'yes'",
-      "if DEPLOY:\n    w.serving_endpoints.create(name=N, config=c)"), True),
-    (("RUN_GO = dbutils.widgets.get('run_go') == 'true'",
-      "if not RUN_GO:\n    print('off')\nelse:\n    w.serving_endpoints.create(name=N, config=c)"), True),
-    (("GO = False", "if not GO:\n    dbutils.notebook.exit('gate off')"), True),
+    # widget gate, default off -> pass; default on -> fail
+    (("dbutils.widgets.dropdown('run_go', 'false', ['false', 'true'])",
+      "RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}"), True),
+    (("dbutils.widgets.dropdown('run_go', 'true', ['false', 'true'])",
+      "RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}"), False),
+    # the deploy in the else branch of `if not RUN_GO`
+    (("dbutils.widgets.dropdown('run_go', 'false', ['false', 'true'])",
+      "RUN_GO = dbutils.widgets.get('run_go') == 'true'",
+      f"if not RUN_GO:\n    print('off')\nelse:\n    {DEPLOY}"), True),
+    # any widget name; text widget with defaultValue=
+    (("dbutils.widgets.text(name='deploy', defaultValue='no')",
+      "if dbutils.widgets.get('deploy').lower() == 'yes':\n    " + DEPLOY), True),
+    # plain constants
+    (("GO = False", f"if GO:\n    {DEPLOY}"), True),
+    (("GO = True", f"if GO:\n    {DEPLOY}"), False),
+    # environment / notebook parameters with a default
+    (("import os\nGO = os.environ.get('RUN_GO', 'false') == 'true'", f"if GO:\n    {DEPLOY}"), True),
+    (("import os\nGO = os.getenv('RUN_GO', '1') == '1'", f"if GO:\n    {DEPLOY}"), False),
+    # default not determinable: the widget is never defined in the notebook
+    (("RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}"), False),
+    # early exit before the deploy when the flag is off
+    (("GO = False", "if not GO:\n    dbutils.notebook.exit('gate off')", DEPLOY), True),
+    # Codex review of 117ac56: an exit with no deploy call at all is not a gate
+    (("GO = False", "if not GO:\n    dbutils.notebook.exit('gate off')"), False),
+    # an exit AFTER the deploy does not gate it
+    (("GO = False", DEPLOY, "if not GO:\n    dbutils.notebook.exit('gate off')"), False),
+    # one deploy gated, another not
+    (("GO = False", f"if GO:\n    {DEPLOY}", "w.serving_endpoints.update_config(name=N, served_entities=e)"), False),
+    # a flag the notebook sets from endpoint state is idempotency, not a gate
     (("SKIP_DEPLOY = False\ntry:\n    SKIP_DEPLOY = w.serving_endpoints.get(N).state.ready == 'READY'\nexcept Exception:\n    pass",
-      "if not SKIP_DEPLOY:\n    w.serving_endpoints.create(name=N, config=c)"), False),
-    (("# run_go gate\nw.serving_endpoints.create(name=N, config=c)",), False),
+      f"if not SKIP_DEPLOY:\n    {DEPLOY}"), False),
+    (("# run_go gate\n" + DEPLOY,), False),
     (("NAME = 'ep'", "if NAME in existing:\n    w.serving_endpoints.update_config(name=NAME, served_entities=e)"), False),
 ])
 def test_run_go_gate(cc, cells, ok):
     assert _check(cc, "endpoint_deployment/run_go_gate", _nb(*cells))[0] is ok
+
+
+def test_run_go_gate_reasons(cc):
+    on = _nb("dbutils.widgets.dropdown('run_go', 'true', ['false', 'true'])",
+             "RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}")
+    assert "defaults to on" in _check(cc, "endpoint_deployment/run_go_gate", on)[1]
+    unknown = _nb("RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}")
+    assert "cannot be determined" in _check(cc, "endpoint_deployment/run_go_gate", unknown)[1]
+    assert "no serving-endpoint deploy call" in _check(cc, "endpoint_deployment/run_go_gate", _nb("GO = False"))[1]
 
 
 # ---- verbatim logic and recorded files unchanged; committed corrected files reproduce ---------

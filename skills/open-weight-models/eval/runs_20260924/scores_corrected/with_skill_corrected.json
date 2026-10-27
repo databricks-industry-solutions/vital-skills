@@ -18,7 +18,7 @@
     "corrected/endpoint_deployment/sdk_enums": true,
     "corrected/endpoint_deployment/ai_gateway_config": true,
     "corrected/endpoint_deployment/scale_to_zero": true,
-    "corrected/endpoint_deployment/run_go_gate": true,
+    "corrected/endpoint_deployment/run_go_gate": false,
     "corrected/smoke_tests/registration_smoke": true,
     "corrected/smoke_tests/endpoint_query": true,
     "corrected/smoke_tests/output_shape_check": true,

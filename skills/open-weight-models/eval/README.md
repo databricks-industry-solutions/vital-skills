@@ -362,7 +362,7 @@ untouched), so rounds are compared corrected against corrected.
 | `endpoint_deployment/sdk_enums` | needs the enum name; a REST body fails | no plain-string `workload_type` passed to the SDK |
 | `endpoint_deployment/ai_gateway_config` | the class name (even an import); a REST body fails | an inference table enabled on an attached AI Gateway config, no `AutoCaptureConfigInput` |
 | `ai_search/graceful_skip` | words such as "table … not … exist" anywhere (the quoted prompt, `CREATE TABLE IF NOT EXISTS`) | a table existence check, or the table read inside try/except |
-| `endpoint_deployment/run_go_gate` | the names `run_go` / `SKIP_DEPLOY` anywhere | the deploy call is behind a widget or a user-set True/False flag (a flag set from endpoint state is idempotency, not a gate) |
+| `endpoint_deployment/run_go_gate` | the names `run_go` / `SKIP_DEPLOY` anywhere | every serving-endpoint deploy call runs only when a user flag (widget, notebook / environment parameter, or True/False constant) is on — in its flag-on branch, or after a top-level `if` that stops the notebook when the flag is off — and the flag defaults to off (widget default `"false"`, constant `False`); a flag set from endpoint state is idempotency, not a gate, and a default that cannot be read from the code fails |
 
 The Sep–Oct 2026 runs have no run records, so the record-based alternatives (Xet, signature)
 cannot be credited for them.

@@ -350,11 +350,17 @@ _DEPLOY_CALLS = ("create", "create_and_wait", "update_config", "update_config_an
                  "create_endpoint", "update_endpoint")
 
 
+_WIDGET_DEFINE = ("widgets.dropdown", "widgets.text", "widgets.combobox", "widgets.multiselect")
+_PARAM_READS = ("widgets.get", "getArgument", "environ.get", "getenv")
+_UNKNOWN = object()
+
+
 def _is_flag(nb, test) -> str | None:
-    """The `if` test derives from a widget value or a user-set True/False flag (_user_flags)."""
+    """The `if` test derives from a widget / notebook parameter / environment value, or a
+    user-set True/False flag (_user_flags)."""
     for n in pc.flow_nodes(nb, test):
-        if isinstance(n, ast.Call) and any(d.endswith("widgets.get") for d in nb.dotted(n.func)):
-            return f"widget at line {n.lineno}"
+        if isinstance(n, ast.Call) and any(d.endswith(_PARAM_READS) for d in nb.dotted(n.func)):
+            return f"{'widget' if any(d.endswith('widgets.get') for d in nb.dotted(n.func)) else 'parameter'} at line {n.lineno}"
     for n in ast.walk(test):
         if isinstance(n, ast.Name) and n.id in _user_flags(nb):
             return f"flag {n.id}"
@@ -381,24 +387,181 @@ def _user_flags(nb) -> set:
     return set(top) - nested
 
 
-def run_go_gate(nb, response, record, task):
-    """endpoint_deployment/run_go_gate : the costly deploy step is behind a flag the user sets
-    (a widget or a user-set True/False notebook constant), under any name — an `if` whose either branch
-    holds the deploy call, or an early exit before it."""
+def _widget_default(nb, name: str):
+    """Default of the widget `name` from its dbutils.widgets.dropdown / text / ... definition
+    (second argument or defaultValue=); _UNKNOWN if it is not defined in the notebook or its
+    definitions disagree."""
+    found = set()
+    for call in nb.calls:
+        if not any(d.endswith(_WIDGET_DEFINE) for d in nb.dotted(call.func)):
+            continue
+        name_node = call.args[0] if call.args else next((k.value for k in call.keywords if k.arg == "name"), None)
+        if name_node is None or name not in nb.strings(name_node):
+            continue
+        node = call.args[1] if len(call.args) > 1 else next(
+            (k.value for k in call.keywords if k.arg in ("defaultValue", "default_value", "default")), None)
+        values = nb.strings(node) if node is not None else []
+        if len(values) != 1:
+            return _UNKNOWN
+        found.add(values[0])
+    return found.pop() if len(found) == 1 else _UNKNOWN
+
+
+def _default_value(nb, node, line: int, depth: int = 0):
+    """The value an expression has when the notebook runs with every widget, notebook parameter
+    and environment variable at its default; _UNKNOWN when that cannot be read from the code."""
+    if depth > 12:
+        return _UNKNOWN
+    value = lambda n: _default_value(nb, n, line, depth + 1)  # noqa: E731
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        reaching = pc._reaching(nb, node.id, line)
+        if not reaching:
+            return _UNKNOWN
+        results = {repr(value(v)) if value(v) is not _UNKNOWN else "?" for v in reaching}
+        return value(reaching[0]) if len(results) == 1 and "?" not in results else _UNKNOWN
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        inner = value(node.operand)
+        return _UNKNOWN if inner is _UNKNOWN else not inner
+    if isinstance(node, ast.BoolOp):
+        parts = [value(v) for v in node.values]
+        if any(p is _UNKNOWN for p in parts):
+            return _UNKNOWN
+        return all(parts) if isinstance(node.op, ast.And) else any(parts)
+    if isinstance(node, ast.Compare) and len(node.ops) == 1:
+        left, right = value(node.left), value(node.comparators[0])
+        if left is _UNKNOWN or right is _UNKNOWN:
+            return _UNKNOWN
+        op = node.ops[0]
+        try:
+            return {ast.Eq: lambda: left == right, ast.NotEq: lambda: left != right,
+                    ast.In: lambda: left in right, ast.NotIn: lambda: left not in right,
+                    ast.Is: lambda: left is right, ast.IsNot: lambda: left is not right}[type(op)]()
+        except (KeyError, TypeError):
+            return _UNKNOWN
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        items = [value(e) for e in node.elts]
+        return _UNKNOWN if any(i is _UNKNOWN for i in items) else tuple(items)
+    if isinstance(node, ast.Call):
+        dotted = nb.dotted(node.func)
+        args = node.args
+        if any(d.endswith("widgets.get") for d in dotted) and args:
+            names = nb.strings(args[0])
+            return _widget_default(nb, names[0]) if len(names) == 1 else _UNKNOWN
+        if any(d.endswith("getArgument") for d in dotted) and args:
+            if len(args) > 1:
+                return value(args[1])
+            names = nb.strings(args[0])
+            return _widget_default(nb, names[0]) if len(names) == 1 else _UNKNOWN
+        if any(d.endswith(("environ.get", "getenv")) for d in dotted) and args:
+            return value(args[1]) if len(args) > 1 else None      # unset variable -> None
+        if isinstance(node.func, ast.Attribute) and node.func.attr in ("lower", "upper", "strip") and not args:
+            inner = value(node.func.value)
+            return getattr(inner, node.func.attr)() if isinstance(inner, str) else _UNKNOWN
+        if isinstance(node.func, ast.Name) and node.func.id in ("bool", "str", "int") and len(args) == 1:
+            inner = value(args[0])
+            if inner is _UNKNOWN:
+                return _UNKNOWN
+            try:
+                return {"bool": bool, "str": str, "int": int}[node.func.id](inner)
+            except (TypeError, ValueError):
+                return _UNKNOWN
+    return _UNKNOWN
+
+
+def _contains(stmts: list, node) -> bool:
+    return any(n is node for stmt in stmts for n in ast.walk(stmt))
+
+
+def _deploy_sites(nb) -> list:
+    """Costly deploy calls (serving-endpoint create / update): the call itself, or, for a call
+    inside a notebook function, each call of that function (where the deploy really happens)."""
+    calls = [c for c in nb.calls if _call_name(c) in _DEPLOY_CALLS
+             and any("serving_endpoints" in d or "deploy" in d for d in nb.dotted(c.func))]
+    sites = []
+    for call in calls:
+        owner = next((f for f in nb.functions.values() if _contains(f.body, call)), None)
+        if owner is None:
+            sites.append(call)
+        else:
+            sites += [c for c in nb.calls if _call_name(c) == owner.name and not _contains(owner.body, c)]
+    return sorted(set(sites), key=lambda c: c.lineno)
+
+
+def _top_level(nb) -> set:
+    return {id(stmt) for tree in nb.trees for stmt in tree.body}
+
+
+def _gate_for(nb, site, top: set):
+    """(flag, if node, side) of a gate that the deploy `site` needs: side "body" / "orelse" when the
+    site is inside that branch of a flag `if`, "exit-body" / "exit-orelse" for a top-level flag `if`
+    BEFORE the site whose branch stops the notebook (dbutils.notebook.exit / sys.exit / raise).
+    The innermost enclosing gate wins; None when nothing gates the site."""
+    enclosing = []
     for node in nb.nodes(ast.If):
         flag = _is_flag(nb, node.test)
         if not flag:
             continue
-        # either branch: `if RUN_GO: deploy` or `if not RUN_GO: print(...) else: deploy`
-        body_calls = [c for stmt in node.body + node.orelse for c in ast.walk(stmt) if isinstance(c, ast.Call)]
-        deploys = [c.lineno for c in body_calls if _call_name(c) in _DEPLOY_CALLS
-                   and any("serving_endpoints" in d or "deploy" in d for d in nb.dotted(c.func))]
-        exits = [c.lineno for c in body_calls if any(d.endswith("notebook.exit") for d in nb.dotted(c.func))]
-        if deploys:
-            return True, f"deploy call at line {deploys[0]} runs only if {flag} (if at line {node.lineno})"
-        if exits:
-            return True, f"notebook exits at line {exits[0]} unless {flag} (if at line {node.lineno})"
-    return False, "no deploy call behind a widget or flag"
+        if _contains(node.body, site):
+            enclosing.append((node, flag, "body"))
+        elif _contains(node.orelse, site):
+            enclosing.append((node, flag, "orelse"))
+    if enclosing:
+        node, flag, side = max(enclosing, key=lambda e: e[0].lineno)
+        return flag, node, side
+    for node in sorted(nb.nodes(ast.If), key=lambda n: n.lineno):
+        if id(node) not in top or node.end_lineno >= site.lineno:
+            continue
+        flag = _is_flag(nb, node.test)
+        if not flag:
+            continue
+        for side in ("body", "orelse"):
+            if any(_stops(nb, n) for stmt in getattr(node, side) for n in ast.walk(stmt)):
+                return flag, node, f"exit-{side}"
+    return None
+
+
+def _stops(nb, n) -> bool:
+    if isinstance(n, ast.Raise):
+        return True
+    return isinstance(n, ast.Call) and any(d.endswith(("notebook.exit", "sys.exit")) for d in nb.dotted(n.func))
+
+
+def run_go_gate(nb, response, record, task):
+    """endpoint_deployment/run_go_gate : every costly deploy call (serving-endpoint create / update)
+    is reachable only when a flag the user sets is on — a widget, a notebook / environment parameter
+    or a user-set True/False notebook constant, under any name: the call sits in the flag-on branch
+    of an `if`, or a top-level `if` before it stops the notebook in the flag-off branch — AND the
+    gate defaults to off: with every widget, parameter and environment variable at its default, the
+    deploy does not run. A default that cannot be read from the code fails."""
+    sites = _deploy_sites(nb)
+    if not sites:
+        return False, "no serving-endpoint deploy call"
+    top, ok, problems = _top_level(nb), [], []
+    for site in sites:
+        where = f"deploy call at line {site.lineno}"
+        gate = _gate_for(nb, site, top)
+        if gate is None:
+            problems.append(f"{where} is not behind a widget or flag")
+            continue
+        flag, node, side = gate
+        default = _default_value(nb, node.test, node.lineno)
+        if default is _UNKNOWN:
+            problems.append(f"{where} is gated by {flag} (if at line {node.lineno}), but the gate's default "
+                            f"cannot be determined from the code")
+            continue
+        test = bool(default)
+        # does the deploy run at the defaults?
+        runs = {"body": test, "orelse": not test, "exit-body": not test, "exit-orelse": test}[side]
+        if runs:
+            problems.append(f"{where} is gated by {flag} (if at line {node.lineno}), but the gate defaults to on "
+                            f"(the deploy runs with the defaults)")
+        else:
+            ok.append(f"{where} runs only when {flag} is turned on (if at line {node.lineno}; off by default)")
+    if problems:
+        return False, "; ".join(problems)
+    return True, "; ".join(ok)
 
 
 # ---- registry ---------------------------------------------------------------------------------
@@ -486,9 +649,12 @@ CORRECTIONS = {
         "flaw": "looks for the names run_go / RUN_GO / SKIP_DEPLOY anywhere (comments count; SKIP_DEPLOY is "
                 "usually 'skip because the endpoint is already READY', not a user gate) and fails a "
                 "widget guard with another name",
-        "accepts": "the deploy call is behind a widget or a user-set True/False flag (any name; a flag the "
-                   "notebook sets from endpoint state does not count), or the notebook exits before it "
-                   "unless the flag is set",
+        "accepts": "every serving-endpoint deploy call is reachable only when a flag the user sets is on "
+                   "(a widget, a notebook / environment parameter or a user-set True/False constant, any name; "
+                   "a flag the notebook sets from endpoint state does not count): the call is in the flag-on "
+                   "branch, or a top-level `if` before it stops the notebook in the flag-off branch — and the "
+                   "gate defaults to off (widget default 'false', constant False, unset parameter), so nothing "
+                   "costly runs until the user turns it on; a default that cannot be read from the code fails",
         "check": run_go_gate,
     },
 }

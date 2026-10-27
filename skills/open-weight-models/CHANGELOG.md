@@ -22,7 +22,10 @@ frontmatter `version` is the source of truth for releases.
   and a corrected re-score of the Sep–Oct 2026 exports
   (`runs_20260924/scores_corrected/`, new files; recorded files untouched). `RESULTS.md`,
   the round README, `eval/README.md` and a note in `runs_20260924/README.md` explain the
-  flaws. Tests in `tests/test_corrected_checks.py`.
+  flaws. Tests in `tests/test_corrected_checks.py`. The corrected `run_go_gate` needs
+  every serving-endpoint deploy call to be reachable only with the user's flag on, and
+  the flag to default to off (a widget default of "true", a constant `True` or a default
+  that cannot be read from the code fails).
 - TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
   accept any valid way of reaching each goal (parsed code + recorded outcome), with
   tests in `tests/test_practical_checks.py`, and
