@@ -134,3 +134,115 @@ def test_args_require_profile_user_state_unless_checking():
         inst.parse_args(["--run-id", "baseline", "--task-id", "teddy-001"])
     args = inst.parse_args(["--run-id", "with_skill", "--task-id", "teddy-001", "--check-notebook", "nb.py"])
     assert args.check_notebook == "nb.py"
+
+
+def test_validate_staged_rejects_leaks_and_missing_markers(fake_skill, tmp_path):
+    dest = tmp_path / "staged"
+    dest.mkdir()
+    inst.stage_skill(fake_skill, dest)
+    codes = inst.make_codes()
+    with pytest.raises(ValueError, match="marker"):
+        inst.validate_staged(dest, codes)
+    inst.insert_codes(dest, codes)
+    inst.validate_staged(dest, codes)
+    (dest / "eval").mkdir()
+    (dest / "eval" / "expectations.json").write_text("{}")
+    with pytest.raises(ValueError, match="eval/ or tests/"):
+        inst.validate_staged(dest, codes)
+
+
+def test_record_has_empty_notes():
+    record = inst.build_record(run_id="baseline", task_id="teddy-001", state="off", user="u",
+                               codes={}, listings={}, skill_commit="abc")
+    assert record["notes"] == ""
+
+
+# ---- set_state ordering, CLI mocked -------------------------------------------
+
+USER = "someone@example.com"
+TARGET = inst.target_dir(USER)
+
+
+class FakeCli(inst.Cli):
+    """Records every command; serves canned listings; can fail the import."""
+
+    def __init__(self, installed: bool, fail_import: bool = False):
+        super().__init__("PROFILE", dry_run=False)
+        self.installed = installed
+        self.fail_import = fail_import
+        self.calls = []
+
+    def run(self, *args, check=True):
+        import subprocess
+
+        self.calls.append(args)
+        if args[:2] == ("workspace", "list"):
+            entries = []
+            if args[2] == inst.user_skills_dir(USER) and self.installed:
+                entries = [{"path": TARGET, "object_type": "DIRECTORY"}]
+            return subprocess.CompletedProcess(args, 0, json.dumps(entries), "")
+        if args[:2] == ("workspace", "export") and args[2].endswith("/SKILL.md"):
+            return subprocess.CompletedProcess(args, 1, "", "not exported in tests")
+        if args[:2] == ("workspace", "import-dir") and self.fail_import:
+            raise RuntimeError("import failed")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def mutations(self):
+        return [c[1] for c in self.calls if c[1] in ("export-dir", "delete", "mkdirs", "import-dir")]
+
+
+def _args(fake_skill, tmp_path, state="on", replace=False):
+    return inst.parse_args(
+        ["--profile", "PROFILE", "--user", USER, "--state", state, "--run-id", "with_skill",
+         "--task-id", "teddy-001", "--skill-dir", str(fake_skill),
+         "--records", str(tmp_path / "outputs" / "run_records.json")]
+        + (["--replace-existing"] if replace else [])
+    )
+
+
+@pytest.fixture()
+def no_git(monkeypatch):
+    monkeypatch.setattr(inst, "skill_commit", lambda _: "abc")
+
+
+def test_on_fresh_install_imports_without_deleting(fake_skill, tmp_path, no_git):
+    cli = FakeCli(installed=False)
+    assert inst.set_state(_args(fake_skill, tmp_path), cli) == 0
+    assert cli.mutations() == ["mkdirs", "import-dir"]
+    record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
+    assert set(record["codes"]) == set(inst.MARKED_FILES) and record["notes"] == ""
+
+
+def test_existing_target_stops_without_flag(fake_skill, tmp_path, no_git):
+    cli = FakeCli(installed=True)
+    assert inst.set_state(_args(fake_skill, tmp_path), cli) == 3
+    assert cli.mutations() == []
+    assert not (tmp_path / "outputs" / "run_records.json").exists()
+
+
+@pytest.mark.parametrize("state, expected", [
+    ("on", ["export-dir", "delete", "mkdirs", "import-dir"]),
+    ("off", ["export-dir", "delete"]),
+])
+def test_replace_existing_backs_up_before_delete(fake_skill, tmp_path, no_git, state, expected):
+    cli = FakeCli(installed=True)
+    assert inst.set_state(_args(fake_skill, tmp_path, state=state, replace=True), cli) == 0
+    assert cli.mutations() == expected
+    export = next(c for c in cli.calls if c[1] == "export-dir")
+    assert export[2] == TARGET
+    assert Path(export[3]).parent == tmp_path / "outputs" / "with_skill" / "backup"
+
+
+def test_staging_failure_touches_nothing(tmp_path, no_git):
+    cli = FakeCli(installed=True)
+    with pytest.raises(FileNotFoundError):
+        inst.set_state(_args(tmp_path / "missing-skill", tmp_path, replace=True), cli)
+    assert cli.calls == []
+
+
+def test_import_failure_prints_restore(fake_skill, tmp_path, no_git, capsys):
+    cli = FakeCli(installed=True, fail_import=True)
+    assert inst.set_state(_args(fake_skill, tmp_path, replace=True), cli) == 1
+    out = capsys.readouterr().out
+    assert "To restore the previous install" in out and "import-dir" in out and TARGET in out
+    assert not (tmp_path / "outputs" / "run_records.json").exists()

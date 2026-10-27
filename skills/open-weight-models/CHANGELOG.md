@@ -14,12 +14,15 @@ frontmatter `version` is the source of truth for releases.
   runtime-environment reference (now `eval/README_environments.md`).
 - TEDDY retest harness in the standard skill-eval `eval/` layout: `evalset.json` and
   `expectations.json` (teddy-001, teddy-002, queries identical to 2026-10), new
-  `scorers.py` (the 2026-10 checks unchanged, plus separately reported new checks for
-  AI Gateway inference table + usage tracking, Unity Catalog provenance tags, and
-  checking for existing resources), `score_open_weight_models.py`, run protocol
-  (`README.md`), `answer_sheet.md`, `old_prompt_with_skill.md`, and
-  `install_skill_for_run.py` (switches the skill off/on, hides codes that show which
-  skill files were read, records each run). Unit tests in
+  `scorers.py` (the 2026-10 checks unchanged, plus separately reported new checks:
+  AI Gateway inference table + usage tracking enabled on the endpoint, Unity Catalog
+  registration, license + Hugging Face revision tags, and checking for existing
+  resources), `score_open_weight_models.py` (standard pair `baseline` vs `with_skill`;
+  replication pair `old_prompt_baseline` vs `old_prompt_with_skill`), run protocol
+  (`README.md`), `answer_sheet.md`, `old_prompt_baseline.md`,
+  `old_prompt_with_skill.md`, and `install_skill_for_run.py` (switches the skill
+  off/on, hides codes that show which skill files were read, backs up before replacing
+  an existing install, records each run). Unit tests in
   `tests/test_install_skill_for_run.py` and `tests/test_eval_scorers.py`.
 - `eval/previous_runs_2026-10/`: the 2026-10 TEDDY evaluation kept as a frozen record
   in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005

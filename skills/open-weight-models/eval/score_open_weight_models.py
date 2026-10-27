@@ -2,13 +2,15 @@
 # MAGIC %md
 # MAGIC # open-weight-models — TEDDY retest scoring
 # MAGIC
-# MAGIC Scores the exported Genie Code notebooks for teddy-001 and teddy-002 in three runs:
+# MAGIC Scores the exported Genie Code notebooks for teddy-001 and teddy-002 in four runs,
+# MAGIC forming two pairs that are compared only within themselves:
 # MAGIC
-# MAGIC | Run | Skill | Prompt |
-# MAGIC |---|---|---|
-# MAGIC | `baseline` | built-in skills only | `evalset.json` query |
-# MAGIC | `with_skill` | built-in skills + open-weight-models | `evalset.json` query |
-# MAGIC | `with_skill_old_prompt` | built-in skills + open-weight-models | `old_prompt_with_skill.md` (2026-10 forced-read prompt) |
+# MAGIC | Pair | Run | Skill | Prompt |
+# MAGIC |---|---|---|---|
+# MAGIC | standard | `baseline` | built-in skills only | `evalset.json` query |
+# MAGIC | standard | `with_skill` | built-in skills + open-weight-models | `evalset.json` query |
+# MAGIC | replication | `old_prompt_baseline` | built-in skills only | `old_prompt_baseline.md` (2026-10 baseline prompt) |
+# MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `old_prompt_with_skill.md` (2026-10 forced-read prompt) |
 # MAGIC
 # MAGIC Scorers come from `scorers.py`; extraction and the paired comparison from
 # MAGIC `skills/skill-eval/scripts/compare_runs.py`. The replicated 2026-10 checks and the
@@ -50,7 +52,8 @@ from scorers import scorers as all_scorers, NEW_CHECK_PREFIX
 from compare_runs import extract_scores, main as compare_main
 from install_skill_for_run import check_notebook, latest_record, load_records
 
-RUNS = ["baseline", "with_skill", "with_skill_old_prompt"]
+PAIRS = [("baseline", "with_skill"), ("old_prompt_baseline", "old_prompt_with_skill")]
+RUNS = [run for pair in PAIRS for run in pair]
 OUTPUTS_DIR = EVAL_DIR / "outputs"
 SCORES_DIR = OUTPUTS_DIR / "scores"
 SCORES_DIR.mkdir(parents=True, exist_ok=True)
@@ -131,16 +134,18 @@ for run in RUNS:
 
 # MAGIC %md
 # MAGIC ## Paired comparisons
-# MAGIC Baseline vs each with-skill run, replicated checks first, then the new checks.
+# MAGIC Within each pair only: `baseline` vs `with_skill`, then `old_prompt_baseline` vs
+# MAGIC `old_prompt_with_skill` (the replication of 2026-10). Replicated checks first, then
+# MAGIC the new checks.
 
 # COMMAND ----------
 
-for candidate in ("with_skill", "with_skill_old_prompt"):
+for reference, candidate in PAIRS:
     for group in ("replicated", "new_checks"):
-        print(f"\n===== baseline vs {candidate} — {group} =====")
+        print(f"\n===== {reference} vs {candidate} — {group} =====")
         compare_main(
             [
-                str(SCORES_DIR / f"baseline_{group}.json"),
+                str(SCORES_DIR / f"{reference}_{group}.json"),
                 str(SCORES_DIR / f"{candidate}_{group}.json"),
                 "--difficulty",
                 str(EVAL_DIR / "expectations.json"),

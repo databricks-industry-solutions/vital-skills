@@ -1,17 +1,11 @@
 [
   {
     "task_id": "teddy-001",
-    "model_family": "teddy",
-    "variant": "70M",
-    "capability": "deploy_embedding_endpoint",
     "dataset": "https://huggingface.co/Merck/TEDDY",
     "query": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills. Write the code and explain your decisions."
   },
   {
     "task_id": "teddy-002",
-    "model_family": "teddy",
-    "variant": "70M",
-    "capability": "deploy_embedding_endpoint+nearest_neighbor_search",
     "dataset": "https://huggingface.co/Merck/TEDDY",
     "query": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills. Write the code."
   }

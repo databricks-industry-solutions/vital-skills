@@ -1,14 +1,14 @@
 # Answer sheet — fixed replies for every run
 
 Give one of these answers **only if Genie Code asks**. Never volunteer them, never add
-anything else, and give the same answer in every run (baseline, with_skill,
-with_skill_old_prompt). These are preferences and settings, not how-to guidance: if a
+anything else, and give the same answer in every run (`baseline`, `with_skill`,
+`old_prompt_baseline`, `old_prompt_with_skill`). These are preferences and settings, not how-to guidance: if a
 question is about *how* to do something ("which transformers version?", "how do I
 handle the tokenizer?"), reply **"Use your judgement."**
 
 Fill the placeholders once, before the first run, and keep them identical across runs:
-`<catalog>` (the catalog named in the query), `<run-id>` (`baseline`, `with_skill` or
-`with_skill_old_prompt`, so runs do not collide).
+`<catalog>` (the catalog named in the query), `<run-id>` (`baseline` or `with_skill`, so
+the two standard runs do not collide).
 
 | If Genie Code asks about | Reply |
 |---|---|
@@ -28,5 +28,7 @@ Fill the placeholders once, before the first run, and keep them identical across
 | One notebook or several | "One notebook." |
 | Anything else | "Use your judgement." |
 
-For the `with_skill_old_prompt` run the prompt itself already names the volume, model and
-endpoint; if Genie Code asks about those, answer "Use the names in the prompt."
+For the replication pair (`old_prompt_baseline`, `old_prompt_with_skill`) the prompts
+already name the volume, model and endpoint and say how to handle existing ones; if Genie
+Code asks about any of those, answer "Use the names and instructions in the prompt." —
+not the rows above. All other rows apply unchanged.

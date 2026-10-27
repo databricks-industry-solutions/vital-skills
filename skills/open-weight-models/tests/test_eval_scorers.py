@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -77,14 +78,14 @@ def test_retest_queries_identical_to_2026_10(scorers):
         assert scorers.TASKS[new_id]["query"] == combined[old_id]["query"]
 
 
-def test_evalset_holds_no_answer_key():
+def test_evalset_is_canonical():
     for request in json.loads((EVAL_DIR / "evalset.json").read_text()):
-        assert not {"difficulty", "expectations", "deterministic_checks", "new_checks"} & set(request)
+        assert set(request) == {"task_id", "dataset", "query"}
+    for answer in json.loads((EVAL_DIR / "expectations.json").read_text()):
+        assert {"model_family", "variant", "capability", "difficulty"} <= set(answer)
 
 
 def test_metric_names_are_valid_mlflow_names(scorers):
-    import re
-
     for arm in RECORDED:
         for key in _recorded(arm)["oss-002"]:
             name = scorers.mlflow_metric_name(key)
@@ -98,41 +99,131 @@ def test_search_flag_from_capability(scorers):
     assert scorers.TASKS["teddy-002"]["vs"] is True
 
 
+GOOD_SOURCE = """
+from databricks.sdk.service.serving import AiGatewayConfig, AiGatewayInferenceTableConfig, AiGatewayUsageTrackingConfig
+mlflow.set_registry_uri("databricks-uc")
+UC_MODEL_NAME = f"{CATALOG}.{SCHEMA}.teddy_70m"
+mlflow.set_tags({"license": "Apache-2.0", "hf_revision": REV})
+w.serving_endpoints.get(NAME)
+gateway = AiGatewayConfig(
+    inference_table_config=AiGatewayInferenceTableConfig(catalog_name=CATALOG, schema_name=SCHEMA, enabled=True),
+    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True),
+)
+w.serving_endpoints.create(name=NAME, config=cfg, ai_gateway=gateway)
+spark.catalog.tableExists(T)
+df.write.saveAsTable(T)
+vsc.create_delta_sync_index(endpoint_name=E, index_name=I)
+"""
+
+
 def test_new_checks_are_separate_and_listed_per_task(scorers):
     task = scorers.TASKS["teddy-002"]
-    source = (
-        "from databricks.sdk.service.serving import AiGatewayConfig, AiGatewayInferenceTableConfig, "
-        "AiGatewayUsageTrackingConfig\n"
-        "mlflow.set_registry_uri('databricks-uc')\n"
-        "mlflow.set_tags({'license': 'Apache-2.0', 'hf_revision': REV})\n"
-        "w.serving_endpoints.get(NAME)\n"
-        "w.serving_endpoints.create(name=NAME)\n"
-        "spark.catalog.tableExists(T)\n"
-        "df.write.saveAsTable(T)\n"
-        "vsc.create_delta_sync_index(...)\n"
-    )
-    scores = scorers.new_check_scores(task, source)
+    scores = scorers.new_check_scores(task, GOOD_SOURCE)
     assert all(k.startswith(scorers.NEW_CHECK_PREFIX) for k in scores)
     assert scores == {
         "new_checks/ai_gateway/inference_table": True,
         "new_checks/ai_gateway/usage_tracking": True,
-        "new_checks/uc_provenance/uc_registration": True,
-        "new_checks/uc_provenance/license_tag": True,
-        "new_checks/uc_provenance/hf_revision_tag": True,
+        "new_checks/uc_provenance/uc_registry": True,
+        "new_checks/uc_provenance/provenance_tags": True,
         "new_checks/existing_resources/endpoint": True,
         "new_checks/existing_resources/table": True,
         "new_checks/existing_resources/index": False,  # created without looking first
     }
-    assert not set(scores) & set(scorers.sub_check_scores(task, source))
+    assert not set(scores) & set(scorers.sub_check_scores(task, GOOD_SOURCE))
+
+
+def test_ai_gateway_imports_alone_fail(scorers):
+    imports_only = (
+        "from databricks.sdk.service.serving import AiGatewayConfig, AiGatewayInferenceTableConfig, "
+        "AiGatewayUsageTrackingConfig\nw.serving_endpoints.create(name=NAME, config=cfg)\n"
+    )
+    result = scorers.ai_gateway_logging(imports_only, {})
+    assert result["inference_table"][0] is False and result["usage_tracking"][0] is False
+
+
+def test_ai_gateway_needs_enabled_and_attached(scorers):
+    not_attached = GOOD_SOURCE.replace(", ai_gateway=gateway", "")
+    assert not any(ok for ok, _ in scorers.ai_gateway_logging(not_attached, {}).values())
+    usage_off = GOOD_SOURCE.replace("AiGatewayUsageTrackingConfig(enabled=True)", "AiGatewayUsageTrackingConfig()")
+    result = scorers.ai_gateway_logging(usage_off, {})
+    assert result["inference_table"][0] is True and result["usage_tracking"][0] is False
+    put_call = (
+        "w.serving_endpoints.put_ai_gateway(name=NAME,\n"
+        "    inference_table_config=AiGatewayInferenceTableConfig(enabled=True),\n"
+        "    usage_tracking_config=AiGatewayUsageTrackingConfig(enabled=True))\n"
+    )
+    assert all(ok for ok, _ in scorers.ai_gateway_logging(put_call, {}).values())
+
+
+def test_uc_registry_two_part_name_fails(scorers):
+    two_part = 'mlflow.pyfunc.log_model(name="m", python_model=M(), registered_model_name="skills.teddy_70m")\n'
+    assert scorers.uc_provenance(two_part, {})["uc_registry"][0] is False
+    three_part = two_part.replace('"skills.teddy_70m"', 'f"{CATALOG}.skills.teddy_70m"')
+    assert scorers.uc_provenance(three_part, {})["uc_registry"][0] is True
+
+
+def test_provenance_tags_need_hf_revision_and_report_kind(scorers):
+    no_revision = 'mlflow.set_tags({"license": "Apache-2.0", "hf_source": URL})\n'
+    ok, reason = scorers.uc_provenance(no_revision, {})["provenance_tags"]
+    assert ok is False and "hf_revision: not recorded as a tag" in reason and "license: run tags" in reason
+    uc_tags = (
+        'client.set_model_version_tag(NAME, VERSION, "license", "Apache-2.0")\n'
+        'client.set_registered_model_tag(NAME, "hf_revision", REV)\n'
+    )
+    ok, reason = scorers.uc_provenance(uc_tags, {})["provenance_tags"]
+    assert ok is True and "UC model tags" in reason
+    # license in a provenance JSON file, not a tag, does not count
+    not_a_tag = 'provenance = {"license": "Apache-2.0", "revision": REV}\njson.dump(provenance, f)\n'
+    assert scorers.uc_provenance(not_a_tag, {})["provenance_tags"][0] is False
 
 
 def test_existing_resource_check_must_come_first(scorers):
     late = "w.serving_endpoints.delete(NAME)\nw.serving_endpoints.get(NAME)\n"
-    assert scorers.existing_resources(late, {})["endpoint"] is False
+    assert scorers.existing_resources(late, {})["endpoint"][0] is False
     commented = "# w.serving_endpoints.get(NAME)\nw.serving_endpoints.create(name=NAME)\n"
-    assert scorers.existing_resources(commented, {})["endpoint"] is False
+    assert scorers.existing_resources(commented, {})["endpoint"][0] is False
 
 
 def test_exports(scorers):
     assert scorers.scorers == scorers.replicated_scorers + scorers.new_check_scorers
     assert len(scorers.replicated_scorers) == 8 and len(scorers.new_check_scorers) == 3
+
+
+def _prompt_blocks(path: Path) -> dict:
+    """{task_id: prompt text} from the ```text blocks of an old-prompt file."""
+    text = path.read_text()
+    out = {}
+    for m in re.finditer(r"^## (teddy-\d+) .*?^```text\n(.*?)\n```", text, re.M | re.S):
+        out[m.group(1)] = m.group(2)
+    return out
+
+
+def _recorded_prompt(path: Path) -> str:
+    lines = path.read_text().splitlines()
+    k = next(i for i, line in enumerate(lines) if "arm prompt (this notebook)" in line) + 1
+    while not lines[k].startswith("# MAGIC >"):
+        k += 1
+    out = []
+    while k < len(lines) and lines[k].startswith("# MAGIC >"):
+        line = lines[k][len("# MAGIC >"):]
+        out.append(line[1:] if line.startswith(" ") else line)
+        k += 1
+    return "\n".join(out)
+
+
+@pytest.mark.parametrize("run, arm", [("old_prompt_baseline", "baseline"), ("old_prompt_with_skill", "with_skill")])
+def test_old_prompts_are_recorded_text_except_paths(run, arm):
+    blocks = _prompt_blocks(EVAL_DIR / f"{run}.md")
+    assert set(blocks) == set(OLD_TO_NEW.values())
+    for old_id, new_id in OLD_TO_NEW.items():
+        restored = blocks[new_id].replace(
+            "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models/",
+            "/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/.assistant/skills/oss-models/",
+        )
+        restored = re.sub(
+            rf"/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/{run}/{new_id}\.txt",
+            "<export>", restored)
+        recorded = re.sub(
+            r"/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/results/\w+/oss-00\d\.txt",
+            "<export>", _recorded_prompt(PREVIOUS / "results" / arm / f"{old_id}.txt"))
+        assert restored == recorded

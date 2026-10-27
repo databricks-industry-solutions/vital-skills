@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """Turn the open-weight-models skill off or on in a user's Genie Code skills folder for one eval run.
 
-Run from a laptop with the Databricks CLI before each run (see eval/README.md):
+Run from a laptop with the Databricks CLI before each run (see eval/README.md).
+Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
 
-  OFF  deletes /Workspace/Users/<user>/.assistant/skills/open-weight-models (fine if missing).
-  ON   deletes that folder, then imports a fresh copy of SKILL.md + references/ (+ assets/,
-       scripts/ if present; never eval/ or tests/). The copied SKILL.md and
-       references/models/teddy.md each get an extra line asking Genie Code to put a
-       random code at the top of any notebook it creates, so the exported notebook
-       shows which file was read.
+  ON   first stages a copy locally — SKILL.md + references/ (+ assets/, scripts/ if
+       present; never eval/ or tests/) — and appends to the copied SKILL.md and
+       references/models/teddy.md a line asking Genie Code to put a random code at the
+       top of any notebook it creates, so the exported notebook shows which file was
+       read. The staged copy is validated before anything touches the workspace.
+       Then imports it to the target.
+  OFF  leaves the target absent.
   BOTH refuse to run if another copy of the skill is installed (an oss-models folder,
        or any folder whose SKILL.md is named open-weight-models, in the user or the
-       workspace skills folder), then append a record to eval/outputs/run_records.json:
-       both skills-folder listings, the codes, the skill's git commit and a UTC timestamp.
+       workspace skills folder). If the target already exists they stop, unless
+       --replace-existing is given: then the target is first exported to
+       eval/outputs/<run-id>/backup/<task-id>-<timestamp>/, then deleted (and, for ON,
+       the staged copy imported; if the import fails, the restore command is printed).
+       Finally a record is appended to eval/outputs/run_records.json: both
+       skills-folder listings, the codes, the skill's git commit, a UTC timestamp and an
+       empty "notes" field for the person running the eval.
 
   --check-notebook <exported .py> reports which codes from the latest record for
   --run-id/--task-id appear in that notebook. Nothing is sent to the workspace.
@@ -104,6 +111,19 @@ def insert_codes(staged: Path, codes: dict[str, str]) -> None:
         path.write_text(text, encoding="utf-8")
 
 
+def validate_staged(staged: Path, codes: dict[str, str]) -> None:
+    """Raise if the staged copy holds eval/ or tests/, lacks SKILL.md, or lacks a marker."""
+    if not (staged / "SKILL.md").is_file():
+        raise ValueError(f"{staged}: SKILL.md missing from the staged copy")
+    leaked = sorted(str(p.relative_to(staged)) for p in staged.rglob("*")
+                    if p.relative_to(staged).parts[0] in ("eval", "tests"))
+    if leaked:
+        raise ValueError(f"staged copy must not contain eval/ or tests/: {leaked}")
+    for rel, code in codes.items():
+        if marker_line(rel, code) not in (staged / rel).read_text(encoding="utf-8"):
+            raise ValueError(f"marker for {rel} missing from the staged copy")
+
+
 def check_notebook(text: str, codes: dict[str, str]) -> dict[str, bool]:
     """{marked file: True if its code appears in the notebook text}. Empty for skill-off runs."""
     return {rel: code in text for rel, code in codes.items()}
@@ -149,6 +169,7 @@ def build_record(*, run_id, task_id, state, user, codes, listings, skill_commit,
         "target": redact_user(target_dir(user), user),
         "codes": codes,
         "listings": {redact_user(path, user): entries for path, entries in listings.items()},
+        "notes": "",
     }
 
 
@@ -257,38 +278,69 @@ def conflicts_for(cli: Cli, listings: dict[str, list[dict] | None], user: str) -
     return found
 
 
-def set_state(args) -> int:
-    cli = Cli(args.profile, args.dry_run)
-    listings = collect_listings(cli, args.user)
-    if args.dry_run:
-        print("(dry run: listings and the duplicate-skill check are skipped)")
-    else:
-        conflicts = conflicts_for(cli, listings, args.user)
-        if conflicts:
-            print("Refusing to continue: another copy of the skill is installed and would leak into this run:")
-            for path in conflicts:
-                print(f"  {path}")
-            print("Move or delete those folders in the workspace UI (or ask their owner), then re-run.")
-            return 2
+def backup_dir(records: Path, run_id: str, task_id: str, stamp: str) -> Path:
+    """Local folder for a backup of the installed skill: eval/outputs/<run-id>/backup/<task-id>-<stamp>."""
+    return Path(records).parent / run_id / "backup" / f"{task_id}-{stamp}"
 
+
+def set_state(args, cli: Cli | None = None) -> int:
+    cli = cli or Cli(args.profile, args.dry_run)
     target = target_dir(args.user)
-    user_entries = listings[user_skills_dir(args.user)] or []
-    if args.dry_run or any(e["name"] == SKILL_NAME for e in user_entries):
-        cli.run("workspace", "delete", target, "--recursive")
-
     codes: dict[str, str] = {}
-    if args.state == "on":
-        codes = make_codes()
-        with tempfile.TemporaryDirectory() as tmp:
-            staged = Path(tmp) / SKILL_NAME
+    with tempfile.TemporaryDirectory() as tmp:
+        # 1. Stage and validate locally before touching the workspace.
+        staged = Path(tmp) / SKILL_NAME
+        if args.state == "on":
             staged.mkdir()
             files = stage_skill(Path(args.skill_dir), staged)
+            codes = make_codes()
             insert_codes(staged, codes)
+            validate_staged(staged, codes)
             print(f"staged {len(files)} files: {', '.join(files)}")
+
+        # 2. Look at what is installed; stop on other copies of the skill.
+        listings = collect_listings(cli, args.user)
+        if args.dry_run:
+            print("(dry run: listings and the duplicate-skill check are skipped)")
+        else:
+            conflicts = conflicts_for(cli, listings, args.user)
+            if conflicts:
+                print("Refusing to continue: another copy of the skill is installed and would leak into this run:")
+                for path in conflicts:
+                    print(f"  {path}")
+                print("Move or delete those folders in the workspace UI (or ask their owner), then re-run.")
+                return 2
+
+        # 3. An existing install is only replaced with --replace-existing, after a local backup.
+        exists = any(e["name"] == SKILL_NAME for e in listings[user_skills_dir(args.user)] or [])
+        backup = None
+        if exists and not args.replace_existing:
+            print(f"Refusing to continue: {target} already exists.")
+            print("Re-run with --replace-existing to back it up locally, delete it, and continue.")
+            return 3
+        if exists or (args.dry_run and args.replace_existing):
+            backup = backup_dir(Path(args.records), args.run_id, args.task_id,
+                                datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+            if args.dry_run:
+                print("(dry run: the next two commands run only if the target exists)")
+            else:
+                backup.parent.mkdir(parents=True, exist_ok=True)
+            cli.run("workspace", "export-dir", target, str(backup))
+            cli.run("workspace", "delete", target, "--recursive")
+
+        # 4. Install the staged copy.
+        if args.state == "on":
             cli.run("workspace", "mkdirs", user_skills_dir(args.user))
-            cli.run("workspace", "import-dir", str(staged), target, "--overwrite")
-        for rel, code in codes.items():
-            print(f"code for {rel}: {marker_line(rel, code)}")
+            try:
+                cli.run("workspace", "import-dir", str(staged), target, "--overwrite")
+            except RuntimeError as err:
+                print(f"Import failed: {err}")
+                if backup:
+                    print("To restore the previous install:")
+                    print(f"  databricks workspace import-dir {backup} {target} --overwrite -p {args.profile}")
+                return 1
+            for rel, code in codes.items():
+                print(f"code for {rel}: {marker_line(rel, code)}")
 
     if args.dry_run:
         print("(dry run: no record written)")
@@ -318,10 +370,14 @@ def parse_args(argv=None):
     parser.add_argument("--profile", help="Databricks CLI profile")
     parser.add_argument("--user", help="workspace user name, e.g. someone@example.com")
     parser.add_argument("--state", choices=("on", "off"))
-    parser.add_argument("--run-id", required=True, help="baseline | with_skill | with_skill_old_prompt")
+    parser.add_argument("--run-id", required=True,
+                        help="baseline | with_skill | old_prompt_baseline | old_prompt_with_skill")
     parser.add_argument("--task-id", required=True, help="e.g. teddy-001")
     parser.add_argument("--skill-dir", default=str(DEFAULT_SKILL_DIR))
     parser.add_argument("--records", default=str(DEFAULT_RECORDS))
+    parser.add_argument("--replace-existing", action="store_true",
+                        help="if the skill is already installed, back it up to "
+                             "eval/outputs/<run-id>/backup/ and delete it before continuing")
     parser.add_argument("--dry-run", action="store_true", help="print the CLI commands, run nothing")
     parser.add_argument("--check-notebook", metavar="EXPORTED_PY",
                         help="report which recorded codes appear in this exported notebook")

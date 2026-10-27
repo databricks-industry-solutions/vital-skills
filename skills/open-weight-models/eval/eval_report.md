@@ -3,9 +3,16 @@
 **Status: retest pending.** The TEDDY tasks will be re-run under the protocol in
 [`README.md`](README.md): built-in skills + this skill against built-in skills only, a
 fresh chat per task per run, the skill installed without `eval/`, a recorded skill
-list, and hidden codes showing which skill files Genie Code read. The score files
-(`baseline_scores.json`, `with_skill_scores.json`, `with_skill_old_prompt_scores.json`)
-appear after those runs.
+list, and hidden codes showing which skill files Genie Code read. Two pairs:
+
+- **standard** — `baseline` vs `with_skill`, plain `evalset.json` query: the evaluation
+  and the ship gate;
+- **replication** — `old_prompt_baseline` vs `old_prompt_with_skill`, the recorded
+  2026-10 prompts: the replication of the results below.
+
+The score files (`baseline_scores.json`, `with_skill_scores.json`,
+`old_prompt_baseline_scores.json`, `old_prompt_with_skill_scores.json`) appear after
+those runs.
 
 ## Task IDs
 

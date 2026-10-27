@@ -19,14 +19,18 @@ Two groups, reported separately:
   function to an old score key to compare it.
 
   New checks — added for the retest, metric names start with "new_checks/":
-    ai_gateway           — inference table AND usage tracking on the endpoint
-    uc_provenance        — Unity Catalog registration with license + HF revision tags
+    ai_gateway           — inference table AND usage tracking enabled in an AI Gateway
+                           config attached to the serving endpoint
+    uc_provenance        — uc_registry (registered in Unity Catalog) and provenance_tags
+                           (license + Hugging Face revision recorded as tags; the
+                           rationale says whether run, logged-model or UC model tags)
     existing_resources   — looks for an existing endpoint/table/index before
                            creating or deleting it
   Which sub-checks apply to a task is set by "new_checks" in expectations.json.
 
-Task metadata (model_family, variant, capability, difficulty, checks) is read
-from evalset.json + expectations.json next to this file, keyed by task_id. Each
+Task metadata is read from evalset.json (task_id, dataset, query) and
+expectations.json (difficulty, model_family, variant, capability, checks) next to
+this file, keyed by task_id. Each
 eval row's outputs must carry the exported notebook text as "notebook_source".
 
 Exports: `scorers` (both groups), `replicated_scorers`, `new_check_scorers`,
@@ -334,32 +338,150 @@ def mlflow_metric_name(key: str) -> str:
 
 
 # ---- New checks (reported separately) ---------------------------------------
+#
+# Each returns {check: (passed, reason)}. They read code only (comments and
+# markdown stripped) and look for real calls, not imports or names.
 
 def _first(pattern: str, text: str):
     m = re.search(pattern, text)
     return m.start() if m else None
 
 
+def _balanced(text: str, open_at: int) -> str:
+    """Text between the bracket at `open_at` and its matching close bracket (to the end if unclosed)."""
+    pairs = {"(": ")", "{": "}", "[": "]"}
+    stack = []
+    for i in range(open_at, len(text)):
+        ch = text[i]
+        if ch in pairs:
+            stack.append(pairs[ch])
+        elif stack and ch == stack[-1]:
+            stack.pop()
+            if not stack:
+                return text[open_at + 1:i]
+    return text[open_at + 1:]
+
+
+def _call_args(code: str, callee: str) -> list:
+    """Argument text of every call to `callee` (a regex for the name before '(')."""
+    return [_balanced(code, m.end() - 1) for m in re.finditer(rf"{callee}\s*\(", code)]
+
+
+def _assigned(code: str, name: str) -> str:
+    """Right-hand side of every `name = ...` assignment; a bracketed value or call is taken in full."""
+    out = []
+    for m in re.finditer(rf"^\s*{re.escape(name)}\s*=(?!=)\s*", code, re.M):
+        start = m.end()
+        opener = re.match(r"[\w.]*\s*([({\[])", code[start:])
+        if opener:
+            open_at = start + opener.start(1)
+            close = {"(": ")", "{": "}", "[": "]"}[code[open_at]]
+            out.append(code[start:open_at + 1] + _balanced(code, open_at) + close)
+        else:
+            end = code.find("\n", start)
+            out.append(code[start:end if end != -1 else len(code)])
+    return "\n".join(out)
+
+
+def _with_names(code: str, args: str) -> str:
+    """`args` plus the assigned values of identifiers used in it (one level)."""
+    names = set(re.findall(r"(?<![\w.\"'])([A-Za-z_]\w*)(?![\w(\"'])", args))
+    return args + "\n" + "\n".join(_assigned(code, n) for n in names)
+
+
+_ENABLED_TRUE = r"enabled\s*=\s*True|[\"']enabled[\"']\s*:\s*True"
+
+
 def ai_gateway_logging(response: str, task: dict) -> dict:
-    """Inference table AND usage tracking set on the endpoint's AI Gateway config
-    (SDK classes, or the same field names in a REST body / put_ai_gateway call)."""
+    """Inference table AND usage tracking enabled in an AI Gateway config that is
+    attached to the endpoint (`ai_gateway=` on serving_endpoints.create /
+    create_and_wait, a `put_ai_gateway(...)` call, or an "ai_gateway" REST body)."""
     code = _strip_comments(response)
+    sdk_attach = [_with_names(code, a) for a in _call_args(code, r"serving_endpoints\.create(?:_and_wait)?")
+                  if re.search(r"\bai_gateway\s*=", a)]
+    put_attach = [_with_names(code, a) for a in _call_args(code, r"\.put_ai_gateway")]
+    rest_attach = [_balanced(code, m.end() - 1) for m in re.finditer(r"[\"']ai_gateway[\"']\s*:\s*\{", code)]
+    attached = sdk_attach + put_attach + rest_attach
+    if not attached:
+        reason = "no AI Gateway config attached to a serving endpoint"
+        return {"inference_table": (False, reason), "usage_tracking": (False, reason)}
+
+    def enabled(cls: str, field: str) -> bool:
+        # Two levels of name lookup: ai_gateway=cfg -> cfg = AiGatewayConfig(x=itc) -> itc = ...
+        for site in (_with_names(code, s) for s in attached):
+            configs = _call_args(site, cls) + [
+                _balanced(site, m.end() - 1) for m in re.finditer(rf"[\"']{field}[\"']\s*:\s*\{{", site)
+            ]
+            if any(re.search(_ENABLED_TRUE, c) for c in configs):
+                return True
+        return False
+
+    inference = enabled("AiGatewayInferenceTableConfig", "inference_table_config")
+    usage = enabled("AiGatewayUsageTrackingConfig", "usage_tracking_config")
     return {
-        "inference_table": bool(re.search(r"AiGatewayInferenceTableConfig|inference_table_config", code)),
-        "usage_tracking":  bool(re.search(r"AiGatewayUsageTrackingConfig|usage_tracking_config", code)),
+        "inference_table": (inference, "enabled" if inference else "attached config does not enable the inference table"),
+        "usage_tracking":  (usage, "enabled" if usage else "attached config does not enable usage tracking"),
     }
 
 
+_THREE_PART = r"[\"'](?=[^\"'\s]*\.[^\"'\s]*\.)[^\"'\s.]+\.[^\"'\s.]+\.[^\"'\s.]+[\"']"
+
+# Where a tag can be recorded: (kind, call name regex, look only at its tags= argument?)
+_TAG_SITES = [
+    ("run tags", r"\bmlflow\.set_tags?", False),
+    ("run tags", r"\bstart_run", True),
+    ("logged-model tags", r"\bset_logged_model_tags", False),
+    ("logged-model tags", r"\blog_model", True),
+    ("UC model tags", r"\bset_registered_model_tag|\bset_model_version_tag", False),
+    ("UC model tags", r"\bregister_model|\bcreate_registered_model", True),
+]
+_TAG_KEYS = {
+    "license": r"[\"'][\w.-]*license[\w.-]*[\"']\s*[:,]",
+    "hf_revision": r"[\"'][\w.-]*(revision|commit|sha)[\w.-]*[\"']\s*[:,]",
+}
+
+
+def provenance_tag_sources(code: str) -> dict:
+    """{"license"|"hf_revision": [kinds of tag where it was recorded]} for comment-stripped code."""
+    found = {key: [] for key in _TAG_KEYS}
+    for kind, callee, tags_kwarg_only in _TAG_SITES:
+        for args in _call_args(code, rf"(?:{callee})"):
+            if tags_kwarg_only:
+                m = re.search(r"\btags\s*=\s*", args)
+                if not m:
+                    continue
+                args = args[m.end():]
+            text = _with_names(code, args)
+            for key, pattern in _TAG_KEYS.items():
+                if re.search(pattern, text, re.I) and kind not in found[key]:
+                    found[key].append(kind)
+    return found
+
+
 def uc_provenance(response: str, task: dict) -> dict:
-    """Registered to Unity Catalog with license and Hugging Face revision recorded as tags."""
+    """(a) uc_registry: registered in Unity Catalog — `mlflow.set_registry_uri("databricks-uc")`
+    or a three-part name passed to registered_model_name= / register_model(...).
+    (b) provenance_tags: license AND Hugging Face revision recorded as tags (run tags,
+    logged-model tags or UC model tags all count; the reason names which)."""
     code = _strip_comments(response)
-    tagging = r"(set_registered_model_tag|set_model_version_tag|set_tag|tags\s*=|[\"']tags[\"']\s*:)"
-    has_tagging = bool(re.search(tagging, code))
+    uc_uri = bool(re.search(r"set_registry_uri\(\s*[\"']databricks-uc[\"']\s*\)", code))
+    name_sites = [_with_names(code, a) for a in _call_args(code, r"\bregister_model")]
+    name_sites += [_with_names(code, m.group(1)) for m in
+                   re.finditer(r"registered_model_name\s*=\s*([^,\n)]+)", code)]
+    name_sites += [_with_names(code, m.group(1)) for m in
+                   re.finditer(r"[\"']registered_model_name[\"']\s*:\s*([^,\n}]+)", code)]
+    three_part = any(re.search(_THREE_PART, s) for s in name_sites)
+    registry = uc_uri or three_part
+    registry_reason = ("set_registry_uri('databricks-uc')" if uc_uri else
+                       "three-part registered model name" if three_part else
+                       "no databricks-uc registry URI and no three-part registered model name")
+
+    sources = provenance_tag_sources(code)
+    tags_ok = all(sources.values())
+    tags_reason = "; ".join(f"{k}: {', '.join(v) if v else 'not recorded as a tag'}" for k, v in sources.items())
     return {
-        "uc_registration": bool(re.search(r"databricks-uc|registered_model_name\s*=|register_model\(", code)),
-        "license_tag":     has_tagging and bool(re.search(r"[\"'][\w.]*license[\w.]*[\"']", code, re.I)),
-        "hf_revision_tag": has_tagging and bool(re.search(
-            r"[\"'][\w.]*(revision|commit|sha)[\w.]*[\"']", code, re.I)),
+        "uc_registry":     (registry, registry_reason),
+        "provenance_tags": (tags_ok, tags_reason),
     }
 
 
@@ -387,7 +509,10 @@ def existing_resources(response: str, task: dict) -> dict:
     out = {}
     for resource, (check_pat, mutate_pat) in _RESOURCE_PATTERNS.items():
         check_at, mutate_at = _first(check_pat, code), _first(mutate_pat, code)
-        out[resource] = check_at is not None and (mutate_at is None or check_at < mutate_at)
+        ok = check_at is not None and (mutate_at is None or check_at < mutate_at)
+        reason = ("checked before first create/delete" if ok else
+                  "no existence check" if check_at is None else "existence check comes after first create/delete")
+        out[resource] = (ok, reason)
     return out
 
 
@@ -398,11 +523,9 @@ NEW_CHECKS = {
 }
 
 
-def new_check_scores(task: dict, response: str, groups=None) -> dict:
-    """{"new_checks/<group>/<check>": bool} for the sub-checks listed in the task's new_checks.
-
-    `groups` limits scoring to those new-check groups (default: all listed).
-    """
+def new_check_details(task: dict, response: str, groups=None) -> dict:
+    """{"new_checks/<group>/<check>": (passed, reason)} for the sub-checks listed in the
+    task's new_checks. `groups` limits scoring to those groups (default: all listed)."""
     out = {}
     for group, wanted in task.get("new_checks", {}).items():
         if groups is not None and group not in groups:
@@ -411,8 +534,13 @@ def new_check_scores(task: dict, response: str, groups=None) -> dict:
         unknown = set(wanted) - set(results)
         if unknown:
             raise ValueError(f"{task['task_id']}: unknown {group} checks {sorted(unknown)}")
-        out.update({f"{NEW_CHECK_PREFIX}{group}/{c}": bool(results[c]) for c in wanted})
+        out.update({f"{NEW_CHECK_PREFIX}{group}/{c}": (bool(results[c][0]), results[c][1]) for c in wanted})
     return out
+
+
+def new_check_scores(task: dict, response: str, groups=None) -> dict:
+    """{"new_checks/<group>/<check>": bool} — new_check_details without the reasons."""
+    return {k: ok for k, (ok, _) in new_check_details(task, response, groups).items()}
 
 
 # ---- MLflow @scorer wrappers -------------------------------------------------
@@ -443,8 +571,8 @@ def _phase_feedbacks(phase: str, inputs, outputs) -> list:
 
 
 def _group_feedbacks(group: str, inputs, outputs) -> list:
-    scores = new_check_scores(_task(inputs), _source(outputs), groups={group})
-    return [Feedback(name=k, value=ok, rationale="pass" if ok else "fail") for k, ok in scores.items()]
+    details = new_check_details(_task(inputs), _source(outputs), groups={group})
+    return [Feedback(name=k, value=ok, rationale=reason) for k, (ok, reason) in details.items()]
 
 
 @mlflow_scorer

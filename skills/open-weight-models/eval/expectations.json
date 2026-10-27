@@ -3,6 +3,9 @@
     "task_id": "teddy-001",
     "dataset": "https://huggingface.co/Merck/TEDDY",
     "difficulty": "hard",
+    "model_family": "teddy",
+    "variant": "70M",
+    "capability": "deploy_embedding_endpoint",
     "expectations": {
       "expected_facts": [
         "Sets HF_HUB_DISABLE_XET=1 before importing huggingface_hub",
@@ -61,9 +64,8 @@
         "usage_tracking"
       ],
       "uc_provenance": [
-        "uc_registration",
-        "license_tag",
-        "hf_revision_tag"
+        "uc_registry",
+        "provenance_tags"
       ],
       "existing_resources": [
         "endpoint"
@@ -74,6 +76,9 @@
     "task_id": "teddy-002",
     "dataset": "https://huggingface.co/Merck/TEDDY",
     "difficulty": "hard",
+    "model_family": "teddy",
+    "variant": "70M",
+    "capability": "deploy_embedding_endpoint+nearest_neighbor_search",
     "expectations": {
       "expected_facts": [
         "Sets HF_HUB_DISABLE_XET=1 before importing huggingface_hub",
@@ -132,9 +137,8 @@
         "usage_tracking"
       ],
       "uc_provenance": [
-        "uc_registration",
-        "license_tag",
-        "hf_revision_tag"
+        "uc_registry",
+        "provenance_tags"
       ],
       "existing_resources": [
         "endpoint",
