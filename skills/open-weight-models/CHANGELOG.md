@@ -39,9 +39,10 @@ frontmatter `version` is the source of truth for releases.
 - `eval/models/teddy/runs_20261026/`: the 2026-10-27 TEDDY runs (five exported notebooks,
   catalog name replaced by `<catalog>`), filled run records, score files and the results
   (`RESULTS.md`); `eval_report.md` points to it. The first baseline/teddy-001 attempt
-  is kept as a second sample: the run guide supplied the wrong prompt (the planned
-  with-skill teddy-001 prompt, with `_001_with_skill` names); wording is otherwise
-  identical to the teddy-001 request.
+  is kept as a second sample: the prompt is the standard teddy-001 request, identical word
+  for word; only the resource names and download path differ — they carried the
+  `_001_with_skill` suffix from the run guide before per-run names were finalised. The
+  skill was off, so this is a valid baseline sample.
 - Convention check `convention/shared_single_cell_format` (shared `adata_*` input format),
   scored and reported apart from the outcome group; outcome checks
   `returns_valid_embeddings`, `accepts_expression_input`, `nn_returns_cell_type`.

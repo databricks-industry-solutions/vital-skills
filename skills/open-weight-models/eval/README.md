@@ -51,9 +51,11 @@ open-weight-models; managed volume `owm_teddy_files`), named per run with `<run>
 | download folder | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_<run>/` | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_<run>/` |
 
 Exception this round: teddy-001 `with_skill` uses `<run>` = `skill_on`
-(`run_suffix_overrides`), because for the first `baseline`/teddy-001 run the run guide
-supplied the wrong prompt (the planned with-skill teddy-001 prompt, with `_001_with_skill`
-names); wording is otherwise identical to the teddy-001 request (see the round README).
+(`run_suffix_overrides`), because the first `baseline`/teddy-001 run used those names:
+the prompt is the standard teddy-001 request, identical word for word; only the resource
+names and download path differ — they carried the `_001_with_skill` suffix from the run
+guide before per-run names were finalised. The skill was off, so this is a valid baseline
+sample (see the round README).
 
 If a run's pasted prompt or resource names differ from the rendered ones, record what was
 actually used in its run record (`prompt_used`, `resources_created`, and a line in

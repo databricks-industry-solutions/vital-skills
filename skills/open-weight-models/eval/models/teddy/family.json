@@ -19,7 +19,7 @@
       "with_skill": "skill_on"
     }
   },
-  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because for the first baseline/teddy-001 run (2026-10-27) the run guide supplied the wrong prompt (the planned with-skill teddy-001 prompt, with `_001_with_skill` names); see runs_20261026/README.md.",
+  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because the first baseline/teddy-001 run (2026-10-27) used the `_001_with_skill` names: its prompt is the standard teddy-001 request, identical word for word; only the resource names and download path differ - they carried the `_001_with_skill` suffix from the run guide before per-run names were finalised; see runs_20261026/README.md.",
   "names": {
     "teddy-001": {
       "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_{run}",

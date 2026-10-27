@@ -26,17 +26,18 @@ Filled in during the runs (see `../../../README.md`, run protocol). Run IDs: `ba
 
 ## Deviations from plan
 
-1. **`baseline`/teddy-001 attempt 1 (2026-10-27): the run guide supplied the wrong prompt**
-   (the planned with-skill teddy-001 prompt, with `_001_with_skill` names); wording is
-   otherwise identical to the teddy-001 request. The guide listed several prompts without
-   marking the current one. The run used model
+1. **`baseline`/teddy-001 attempt 1 (2026-10-27): resource names only.** The prompt is the
+   standard teddy-001 request, identical word for word; only the resource names and
+   download path differ — they carried the `_001_with_skill` suffix from the run
+   guide before per-run names were finalised. The skill was off, so this is a valid
+   baseline sample. The run used model
    `<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill`, endpoint
    `owm_teddy_ep_001_with_skill` and files
    `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_with_skill/`. Its record holds
    the actual names in `resources_created`, the pasted text in `prompt_used`, and a note.
-   The skill was off for this run; only the names are affected. It was kept as attempt 1
-   (`baseline/teddy-001_attempt1.py`) and the run repeated with the `_001_baseline` names
-   as attempt 2 (`baseline/teddy-001_attempt2.py`, the primary sample).
+   It was kept as attempt 1 (`baseline/teddy-001_attempt1.py`) and the run repeated with
+   the `_001_baseline` names as attempt 2 (`baseline/teddy-001_attempt2.py`, the primary
+   sample).
 2. **`with_skill`/teddy-001 therefore uses suffix `skill_on`** (model
    `owm_teddy_model_001_skill_on`, endpoint `owm_teddy_ep_001_skill_on`, files
    `001_skill_on/`), set in `../family.json` → `run_suffix_overrides`, so it cannot clash

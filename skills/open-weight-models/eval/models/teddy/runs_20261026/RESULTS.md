@@ -199,10 +199,11 @@ licence mismatch upstream (model card Apache-2.0, `pyproject` MIT).
 
 1. **One sample per arm**, except baseline/teddy-001 (two attempts). Directional, not
    statistical.
-2. **baseline/teddy-001 attempt 1: the run guide supplied the wrong prompt** (the planned
-   with-skill teddy-001 prompt, with `_001_with_skill` names); wording is otherwise
-   identical to the teddy-001 request. The skill was off; only the names differ. Attempt 2
-   used the right names and is the primary sample.
+2. **baseline/teddy-001 attempt 1:** the prompt is the standard teddy-001 request,
+   identical word for word; only the resource names and download path differ — they
+   carried the `_001_with_skill` suffix from the run guide before per-run names were
+   finalised. The skill was off, so this is a valid baseline sample. Attempt 2 used the
+   `_001_baseline` names and is the primary sample.
 3. **Runs 4 and 5 (with_skill/teddy-002 and with_skill/teddy-001) overlapped** and shared
    one skill install, so no files were replaced under a running chat.
 4. **Outcome partly measured by hand before teardown** (see "Outcome"); it cannot be

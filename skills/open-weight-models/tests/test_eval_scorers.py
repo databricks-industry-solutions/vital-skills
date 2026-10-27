@@ -354,8 +354,8 @@ def test_run_prompts_standard_pair_renders_evalset_query(scorers):
     assert set(prompts) == set(scorers.RUN_IDS)
     for run in ("baseline", "with_skill"):
         assert prompts[run] == {tid: fs.render_query(t["query"], settings, run, tid) for tid, t in scorers.TASKS.items()}
-    # teddy-001 with_skill uses suffix skill_on (for baseline attempt 1 the run guide supplied the
-    # planned with-skill teddy-001 prompt, with `_001_with_skill` names)
+    # teddy-001 with_skill uses suffix skill_on: baseline attempt 1 (the standard teddy-001 request)
+    # used the `_001_with_skill` names from the run guide before per-run names were finalised
     assert "owm_teddy_ep_001_skill_on" in prompts["with_skill"]["teddy-001"]
     assert "_with_skill" not in prompts["with_skill"]["teddy-001"]
     assert "owm_teddy_ep_002_with_skill" in prompts["with_skill"]["teddy-002"]
