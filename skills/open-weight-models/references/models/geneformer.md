@@ -273,7 +273,7 @@ Each path has its own **self-contained GT notebook** (download → register → 
 
 Both notebooks use:
 * Widget-based configuration (`catalog`, `schema`, `volume_name`, `endpoint_name`, `run_go`)
-* `run_go` gate for expensive operations (deploy, endpoint creation)
+* `run_go` gate for expensive operations (deploy, endpoint creation), default `"false"` — nothing costly runs until the user sets it to `true` (SKILL.md Troubleshooting #14)
 * Idempotent cleanup cell before registration — deletes only the endpoint and model versions this notebook created earlier; if an endpoint or model with the target name exists from anything else, stop and ask the user (reuse under a new name, or replace only with their confirmation)
 * Sentinel files for download idempotency
 * Dry-load test before `log_model` (pre-deploy gate)
@@ -317,7 +317,7 @@ Artifacts: `{"model_dir": SNAPSHOT_DIR, "token_dict": dict_path}`
 * `GPU_SMALL` (A10G) with `scale_to_zero_enabled=True`.
 * Use `ServingModelWorkloadType.GPU_SMALL` SDK enum (not string literal).
 * Enable AI Gateway inference table + usage tracking.
-* `run_go` gate widget to prevent accidental deployment.
+* `run_go` gate widget, default `"false"`, to prevent accidental deployment.
 * **Prefer Jobs** for dataset-scale embedding, preprocessing, or fine-tuning.
 * Path A is simpler (no stubs). Path B produces richer embeddings (1152-dim vs 256-dim).
 

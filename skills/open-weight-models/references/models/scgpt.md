@@ -198,7 +198,7 @@ Use **two separate notebooks**:
 1. **Download notebook (CPU)** — `gdown` from Google Drive + `wget` from Figshare. No GPU. Installs `gdown` + `wget` only. Sentinel files for idempotency. Provenance manifest.
 2. **Register and deploy notebook (GPU)** — loads model on GPU (flash-attn requires it), wraps in `TransformerModelWrapper` PyFunc, builds input_example from sample data, infers signature, registers to UC, deploys to GPU Model Serving endpoint.
 
-Use `run_go` widget gate for expensive operations.
+Use a `run_go` widget gate for expensive operations, defaulting to off (`"false"`) so nothing costly runs until the user sets it to `true` (SKILL.md Troubleshooting #14).
 
 ### GWB lineage
 
@@ -328,7 +328,7 @@ def predict(self, context, model_input=None, params=None):
 
 * `scale_to_zero_enabled=True` with `ServingModelWorkloadType.GPU_SMALL`.
 * Enable AI Gateway inference table + usage tracking.
-* `run_go` gate widget to prevent accidental deployment.
+* `run_go` gate widget, default `"false"`, to prevent accidental deployment.
 * **Prefer Jobs** for large-batch embedding, perturbation prediction, or dataset-scale workflows.
 
 ## Registration and observability

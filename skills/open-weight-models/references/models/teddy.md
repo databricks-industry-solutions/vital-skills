@@ -212,7 +212,7 @@ Alternatively, **two separate notebooks** (download CPU + register/deploy GPU) c
 | **3. Score / Eval** | 3a: Endpoint smoke test. 3b: AI Search eval scorer (self-retrieval, monotonic distances) | 28–29 |
 | **4. Teardown** | Delete this run's endpoint + optionally its AI Search resources. Inference table + UC model preserved | 31 |
 
-Use `run_go` widget gate (`dbutils.widgets.dropdown("run_go", "false", ["false", "true"])`) for expensive operations.
+Gate expensive operations behind a `run_go` widget that **defaults to off** — `dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")` — print how to turn it on when it is off, and run nothing costly (endpoint, deployment, AI Search index) until the user sets it to `true` (SKILL.md Troubleshooting #14).
 
 ### GWB lineage
 

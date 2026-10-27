@@ -121,6 +121,17 @@ frontmatter `version` is the source of truth for releases.
   `SKILL.md` Troubleshooting #27 notes it. The TEDDY signature example is now
   explicit (`infer_signature(..., params=default_params)` with string defaults) and
   the checklist validates the params schema.
+- `run_go` gate defaults to OFF, stated explicitly: `SKILL.md` Troubleshooting #14 now
+  says to create the widget with default `"false"`
+  (`dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")`),
+  print how to turn it on, and run nothing costly until the user sets it to `true`; the
+  `run_go` mentions in `teddy.md`, `scgpt.md`, `scimilarity.md`, `geneformer.md` and
+  `model-template.md` say the same. Motivating case: in the 2026-10-27 eval, with-skill
+  teddy-001 created the gate with default `"true"`
+  (`eval/models/teddy/runs_20261026/with_skill/teddy-001.py:12`), so its costly steps ran
+  without the user switching them on; with-skill teddy-002 defaulted it to `"false"`
+  (`with_skill/teddy-002.py:30`) but its run notes record the widget being switched to
+  `true` during the run. #14 now also says the agent does not switch it on for the user.
 - Validation now requires an **upstream-parity test** (`SKILL.md` Workflow step 7 and
   Protocol Guidelines item 9, `model-template.md`, `teddy.md` checklist item 13 and a new
   "Upstream-parity test" section): run a few real samples through the model's own

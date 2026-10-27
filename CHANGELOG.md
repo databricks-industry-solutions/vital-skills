@@ -51,7 +51,7 @@ Other changes:
 
 ### Fixed
 
-- `open-weight-models`: custom PyFunc inference controls now go in the REST body `"params"` field; the SDK's `serving_endpoints.query(extra_params=...)` is silently ignored by these endpoints (measured on TEDDY 2026-10-27). TEDDY guidance also drops a hardcoded Genesis Workbench Vector Search endpoint, corrects the vocabulary size, records both declared licenses, and passes the now-required `name=` to `EndpointCoreConfigInput`. Validation now requires comparing the wrapper with the model's own upstream preprocessing and inference; TEDDY drops out-of-vocabulary genes and applies upstream normalisation as upstream does; the skill asks before deleting or overwriting an existing table, index, endpoint or model version. See `skills/open-weight-models/CHANGELOG.md`.
+- `open-weight-models`: custom PyFunc inference controls now go in the REST body `"params"` field; the SDK's `serving_endpoints.query(extra_params=...)` is silently ignored by these endpoints (measured on TEDDY 2026-10-27). TEDDY guidance also drops a hardcoded Genesis Workbench Vector Search endpoint, corrects the vocabulary size, records both declared licenses, and passes the now-required `name=` to `EndpointCoreConfigInput`. Validation now requires comparing the wrapper with the model's own upstream preprocessing and inference; TEDDY drops out-of-vocabulary genes and applies upstream normalisation as upstream does; the skill asks before deleting or overwriting an existing table, index, endpoint or model version; the `run_go` gate for costly steps defaults to off until the user turns it on. See `skills/open-weight-models/CHANGELOG.md`.
 
 ### Notes
 

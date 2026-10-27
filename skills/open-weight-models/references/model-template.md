@@ -39,7 +39,7 @@ Describe `load_context`, request normalization, prediction, postprocessing, and 
 
 ## Deployment recommendation
 
-Choose Model Serving, Jobs, or hybrid. Explain the decision using latency, resource, request-size, database, and output-size constraints.
+Choose Model Serving, Jobs, or hybrid. Explain the decision using latency, resource, request-size, database, and output-size constraints. Gate costly steps (endpoint, deployment, index) behind a `run_go` widget that defaults to `"false"` and prints how to turn it on (SKILL.md Troubleshooting #14).
 
 ## Registration and observability
 
