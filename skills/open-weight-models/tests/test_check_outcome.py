@@ -17,7 +17,10 @@ sys.path.insert(0, str(EVAL_DIR))
 
 import check_outcome as co  # noqa: E402
 
-EXPECTATIONS = {t["task_id"]: t for t in json.loads((EVAL_DIR / "expectations.json").read_text())}
+import family_settings as fs  # noqa: E402
+
+SETTINGS = fs.load_family("teddy")
+CHECKS = {tid: fs.outcome_checks(SETTINGS, tid) for tid in ("teddy-001", "teddy-002")}
 
 
 def test_request_matches_pandas_split_format_and_contract():
@@ -122,7 +125,7 @@ RESOURCES = {"serving_endpoint": "teddy-70m-with_skill", "uc_model": "cat.skills
 @pytest.mark.parametrize("task_id", ["teddy-001", "teddy-002"])
 def test_run_outcome_checks_all_pass_on_a_working_deployment(task_id):
     w = FakeWorkspace()
-    checks = EXPECTATIONS[task_id]["outcome_checks"]
+    checks = CHECKS[task_id]
     results = co.run_outcome_checks(w, RESOURCES, checks)
     assert set(results) == set(checks) and all(ok for ok, _ in results.values())
     query = next(c for c in w.calls if c[0] == "query")
@@ -132,14 +135,14 @@ def test_run_outcome_checks_all_pass_on_a_working_deployment(task_id):
 
 def test_run_outcome_checks_wrong_dim_and_missing_endpoint_fail_their_checks_only():
     results = co.run_outcome_checks(FakeWorkspace(dim=1024, fail_endpoint=True), RESOURCES,
-                                    EXPECTATIONS["teddy-002"]["outcome_checks"])
+                                    CHECKS["teddy-002"])
     assert not results["outcome/endpoint_ready"][0] and "RESOURCE_DOES_NOT_EXIST" in results["outcome/endpoint_ready"][1]
     assert not results["outcome/embedding_dim"][0]
     assert results["outcome/index_ready"][0] and results["outcome/nn_query_returns_rows"][0]
 
 
 def test_reference_cosine_is_informational():
-    results = co.run_outcome_checks(FakeWorkspace(), RESOURCES, EXPECTATIONS["teddy-001"]["outcome_checks"],
+    results = co.run_outcome_checks(FakeWorkspace(), RESOURCES, CHECKS["teddy-001"],
                                     reference_endpoint="gwb-teddy")
     ok, detail = results["outcome/reference_cosine"]
     assert ok is None and "gwb-teddy" in detail and "1.0" in detail
@@ -171,4 +174,28 @@ def test_check_endpoint_reads_legacy_served_models():
 
 def test_docstring_notebook_example_passes_check_names():
     doc = co.__doc__
-    assert 'run_outcome_checks(WorkspaceClient(), resources, checks)' in doc and '["outcome_checks"]' in doc
+    assert 'checks = outcome_checks(load_family("teddy"), "teddy-002")' in doc
+    assert 'run_outcome_checks(WorkspaceClient(), resources, checks, family="teddy")' in doc
+
+
+def test_family_outcome_settings():
+    assert SETTINGS["outcome"]["embedding_dim"] == 512 == co.load_fixture("teddy")["expected"]["embedding_dim"]
+    assert SETTINGS["outcome"]["vector_search_tasks"] == ["teddy-002"]
+    assert "outcome/index_ready" in CHECKS["teddy-002"] and "outcome/index_ready" not in CHECKS["teddy-001"]
+
+
+def test_fill_catalog():
+    filled = co.fill_catalog({"uc_model": "<catalog>.skills_owm_202610.m", "serving_endpoint": "ep"}, "main")
+    assert filled == {"uc_model": "main.skills_owm_202610.m", "serving_endpoint": "ep"}
+    with pytest.raises(ValueError, match="--catalog"):
+        co.fill_catalog({"uc_model": "<catalog>.s.m"}, None)
+    assert co.fill_catalog({"serving_endpoint": "ep"}, None) == {"serving_endpoint": "ep"}
+
+
+def test_family_settings_prompt_cli(capsys):
+    assert fs.main(["prompt", "--run-id", "baseline", "--task-id", "teddy-002"]) == 0
+    out = capsys.readouterr().out
+    assert "owm_teddy_ep_002_baseline" in out and "{run}" not in out
+    assert fs.main(["names", "--run-id", "old_prompt_baseline", "--task-id", "teddy-001"]) == 0
+    assert json.loads(capsys.readouterr().out)["serving_endpoint"] == "owm_teddy_ep_001_old_baseline"
+    assert fs.round_dir("teddy") == EVAL_DIR / "models" / "teddy" / "runs_20261026"

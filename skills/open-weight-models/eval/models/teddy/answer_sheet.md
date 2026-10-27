@@ -6,17 +6,14 @@ anything else, and give the same answer in every run (`baseline`, `with_skill`,
 question is about *how* to do something ("which transformers version?", "how do I
 handle the tokenizer?"), reply **"Use your judgement."**
 
-Fill the placeholders once, before the first run, and keep them identical across runs:
-`<catalog>` (the catalog named in the query), `<run-id>` (`baseline` or `with_skill`, so
-the two standard runs do not collide).
+Every prompt (both pairs) now names all of the run's resources — schema
+`skills_owm_202610`, model, endpoint, Vector Search endpoint, table, index and download
+folder (`models/teddy/family.json` → `names`). If Genie Code asks about any of them, reply
+**"Use the names in the prompt."** Fill `<catalog>` the same way in every run.
 
 | If Genie Code asks about | Reply |
 |---|---|
-| Catalog / schema | "Catalog `<catalog>`, schema `skills`." (as in the query) |
-| Volume / where to store downloaded files | "Use the volume `/Volumes/<catalog>/skills/eval_<run-id>/`; create it if it does not exist." |
-| Model name in Unity Catalog | "`<catalog>.skills.teddy_70m_<run-id>`" |
-| Endpoint name | "`teddy-70m-<run-id>`" |
-| Table / index names (teddy-002) | "Prefix them with `teddy_70m_<run-id>_`." |
+| Catalog / schema / volume / download folder / model / endpoint / table / index names | "Use the names in the prompt." |
 | Model variant | "70M." (as in the query) |
 | GPU / compute tier for serving | "Use whatever GPU tier you think is right for the 70M model." |
 | Notebook compute | "Use the compute you think is right." |
@@ -36,7 +33,5 @@ consulted while developing this notebook." The replication prompts already end w
 request, so do not send it there. Record the reply as Genie Code's self-report (README
 step 7); it is not verified.
 
-For the replication pair (`old_prompt_baseline`, `old_prompt_with_skill`) the prompts
-already name the volume, model and endpoint and say how to handle existing ones; if Genie
-Code asks about any of those, answer "Use the names and instructions in the prompt." —
-not the rows above. All other rows apply unchanged.
+The replication prompts also say how to handle existing endpoints and model versions
+(recorded wording); if asked about that, answer "Use the instructions in the prompt."

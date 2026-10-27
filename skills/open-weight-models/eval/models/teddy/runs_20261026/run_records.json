@@ -50,5 +50,57 @@
     "discarded": false,
     "discard_reason": "",
     "notes": ""
+  },
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-002",
+    "state": "off",
+    "timestamp": "2026-10-27T03:55:49+00:00",
+    "skill_commit": "bc54eca007cc8c0d3d36c3996da9bc74d31184b3+uncommitted",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": null,
+      "user_instructions": {
+        "bytes": 11229,
+        "sha256": "8862eb2380c2ff96fa91c1c879a12ff6d76b904ac1b7def46a226f94236f44ca"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "",
+      "expected": [],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": []
+    },
+    "visible_steps": {
+      "text": "",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": ""
+    },
+    "compute": {
+      "type": "",
+      "runtime": ""
+    },
+    "resources_created": {
+      "serving_endpoint": "",
+      "uc_model": "",
+      "uc_model_version": "",
+      "delta_table": "",
+      "vector_search_endpoint": "",
+      "vector_search_index": ""
+    },
+    "outcome": null,
+    "discarded": false,
+    "discard_reason": "",
+    "notes": ""
   }
 ]

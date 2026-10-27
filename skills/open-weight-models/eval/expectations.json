@@ -71,13 +71,6 @@
         "endpoint"
       ]
     },
-    "outcome_checks": [
-      "outcome/endpoint_ready",
-      "outcome/serves_recorded_version",
-      "outcome/one_embedding_per_cell",
-      "outcome/embeddings_finite",
-      "outcome/embedding_dim"
-    ],
     "checks": {
       "download_staging/uses_tmp": {
         "severity": "critical",
@@ -262,7 +255,7 @@
         "severity": "critical",
         "source": "references/models/teddy.md:562",
         "quote": "AutoCaptureConfigInput",
-        "why": "The legacy auto-capture API is rejected (recorded: previous_runs_2026-10/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
+        "why": "The legacy auto-capture API is rejected (recorded: runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {
@@ -436,17 +429,6 @@
         "index"
       ]
     },
-    "outcome_checks": [
-      "outcome/endpoint_ready",
-      "outcome/serves_recorded_version",
-      "outcome/one_embedding_per_cell",
-      "outcome/embeddings_finite",
-      "outcome/embedding_dim",
-      "outcome/vs_endpoint_online",
-      "outcome/index_ready",
-      "outcome/nn_query_returns_rows",
-      "outcome/nn_has_cell_type_column"
-    ],
     "checks": {
       "download_staging/uses_tmp": {
         "severity": "critical",
@@ -631,7 +613,7 @@
         "severity": "critical",
         "source": "references/models/teddy.md:562",
         "quote": "AutoCaptureConfigInput",
-        "why": "The legacy auto-capture API is rejected (recorded: previous_runs_2026-10/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
+        "why": "The legacy auto-capture API is rejected (recorded: runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {

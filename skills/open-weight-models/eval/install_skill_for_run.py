@@ -15,9 +15,10 @@ Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
        or any folder whose SKILL.md is named open-weight-models, in the user or the
        workspace skills folder). If the target already exists they stop, unless
        --replace-existing is given: then the target is first exported to
-       eval/outputs/<run-id>/backup/<task-id>-<timestamp>/, then deleted (and, for ON,
+       <records folder>/<run-id>/backup/<task-id>-<timestamp>/, then deleted (and, for ON,
        the staged copy imported; if the import fails, the restore command is printed).
-       Finally a record is appended to eval/outputs/run_records.json: the environment
+       Finally a record is appended to eval/models/<family>/runs_<date>/run_records.json
+       (default: family.json current_round; --family / --round / --records): the environment
        (both skills-folder listings, size + sha256 of each user-folder SKILL.md and of
        the user's .assistant_instructions.md, whether /Workspace/.assistant/skills and
        /Workspace/.assistant_workspace_instructions.md exist), the codes, the backup
@@ -46,7 +47,7 @@ Examples:
   python3 skills/open-weight-models/eval/install_skill_for_run.py --profile <profile> \\
       --user <workspace-user> --state off --run-id baseline --task-id teddy-001 --dry-run
   python3 skills/open-weight-models/eval/install_skill_for_run.py --run-id with_skill \\
-      --task-id teddy-001 --check-notebook skills/open-weight-models/eval/outputs/with_skill/teddy-001.py
+      --task-id teddy-001 --check-notebook skills/open-weight-models/eval/models/teddy/runs_20261026/with_skill/teddy-001.py
 """
 
 from __future__ import annotations
@@ -84,7 +85,27 @@ SELF_REPORT_IN_NOTEBOOK = "in-notebook answer (the replication prompt already as
 RESOURCE_KEYS = ("serving_endpoint", "uc_model", "uc_model_version", "delta_table",
                  "vector_search_endpoint", "vector_search_index")
 DEFAULT_SKILL_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_RECORDS = Path(__file__).resolve().parent / "outputs" / "run_records.json"
+EVAL_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(EVAL_DIR))
+import family_settings  # noqa: E402 — same folder
+
+NOT_AVAILABLE = "not available"   # allowed for a protocol field only together with a note
+
+
+def default_records(family: str = family_settings.DEFAULT_FAMILY, round_name: str | None = None) -> Path:
+    """models/<family>/<round>/run_records.json (round: family.json current_round)."""
+    return family_settings.round_dir(family, round_name) / "run_records.json"
+
+
+def expected_resources(run_id: str, task_id: str, family: str = family_settings.DEFAULT_FAMILY) -> dict:
+    """resources_created pre-filled with the names the run's prompt asks for (family.json);
+    uc_model_version and any name the task does not use are left empty."""
+    names = {}
+    try:
+        names = family_settings.resource_names(family_settings.load_family(family), run_id, task_id)
+    except KeyError:
+        pass
+    return {key: names.get(key, "") for key in RESOURCE_KEYS}
 
 
 def user_skills_dir(user: str) -> str:
@@ -227,7 +248,7 @@ def latest_record(records: list[dict], run_id: str, task_id: str) -> dict:
 
 
 def build_record(*, run_id, task_id, state, user, codes, environment, skill_commit, backup=None,
-                 backup_of=None, extra_skills=(), timestamp=None) -> dict:
+                 backup_of=None, extra_skills=(), timestamp=None, family=family_settings.DEFAULT_FAMILY) -> dict:
     """One run record. `skills_panel`, `visible_steps`, `skills_self_report`, `compute`,
     `resources_created`, `discarded`, `discard_reason` and `notes` are filled in by hand
     around the run; `outcome` by check_outcome.py."""
@@ -257,12 +278,30 @@ def build_record(*, run_id, task_id, state, user, codes, environment, skill_comm
             "text": "",
         },
         "compute": {"type": "", "runtime": ""},       # e.g. "serverless GPU (GPU_1xA10)", "AI Runtime v5"
-        "resources_created": {key: "" for key in RESOURCE_KEYS},
+        "resources_created": expected_resources(run_id, task_id, family),  # check against the notebook
         "outcome": None,                               # written by check_outcome.py
         "discarded": False,
         "discard_reason": "",
         "notes": "",
     }
+
+
+def protocol_gaps(record: dict) -> list:
+    """Hand-filled protocol fields still empty in a run record. A field may say "not
+    available" only if `notes` explains why. The scoring notebook refuses runs with gaps."""
+    fields = {
+        "skills_panel.screenshot": (record.get("skills_panel") or {}).get("screenshot", ""),
+        "visible_steps.text": (record.get("visible_steps") or {}).get("text", ""),
+        "skills_self_report.text": (record.get("skills_self_report") or {}).get("text", ""),
+    }
+    gaps = []
+    for name, value in fields.items():
+        value = str(value).strip()
+        if not value:
+            gaps.append(f"{name} is empty")
+        elif value.lower() == NOT_AVAILABLE and not str(record.get("notes", "")).strip():
+            gaps.append(f"{name} is '{NOT_AVAILABLE}' but notes do not say why")
+    return gaps
 
 
 def first_backup(records: list[dict]) -> str | None:
@@ -416,7 +455,7 @@ def conflicts_for(cli: Cli, listings: dict[str, list[dict] | None], user: str, e
 
 
 def backup_dir(records: Path, run_id: str, task_id: str, stamp: str) -> Path:
-    """Local folder for a backup of the installed skill: eval/outputs/<run-id>/backup/<task-id>-<stamp>."""
+    """Local folder for a backup of the installed skill: <records folder>/<run-id>/backup/<task-id>-<stamp>."""
     return Path(records).parent / run_id / "backup" / f"{task_id}-{stamp}"
 
 
@@ -507,6 +546,7 @@ def set_state(args, cli: Cli | None = None) -> int:
         run_id=args.run_id, task_id=args.task_id, state=args.state, user=args.user, codes=codes,
         environment=collect_environment(cli, args.user), skill_commit=skill_commit(Path(args.skill_dir)),
         backup=main_backup.relative_to(records_dir) if main_backup else None, backup_of=main_backup_of,
+        family=args.family,
         extra_skills=[{"name": n, "code": code,
                        "backup": str(backups[n][0].relative_to(records_dir)) if n in backups else None,
                        "backup_of": backups[n][1] if n in backups else None} for n, _, code in extras],
@@ -563,13 +603,15 @@ def parse_args(argv=None):
     parser.add_argument("--run-id", help="baseline | with_skill | old_prompt_baseline | old_prompt_with_skill")
     parser.add_argument("--task-id", help="e.g. teddy-001")
     parser.add_argument("--skill-dir", default=str(DEFAULT_SKILL_DIR))
-    parser.add_argument("--records", default=str(DEFAULT_RECORDS))
+    parser.add_argument("--family", default=family_settings.DEFAULT_FAMILY)
+    parser.add_argument("--round", help="runs_<date> folder (default: family.json current_round)")
+    parser.add_argument("--records", help="default: eval/models/<family>/<round>/run_records.json")
     parser.add_argument("--extra-skill-dir", action="append", default=[], metavar="SKILL_DIR",
                         help="also install this skill for the run (repeatable), with its own hidden code; "
                              "default: none")
     parser.add_argument("--replace-existing", action="store_true",
                         help="if the skill is already installed, back it up to "
-                             "eval/outputs/<run-id>/backup/ and delete it before continuing")
+                             "<records folder>/<run-id>/backup/ and delete it before continuing")
     parser.add_argument("--dry-run", action="store_true", help="print the CLI commands, run nothing")
     parser.add_argument("--check-notebook", metavar="EXPORTED_PY",
                         help="report which recorded codes appear in this exported notebook")
@@ -577,6 +619,7 @@ def parse_args(argv=None):
                         help="after all runs: delete the eval copy and restore the pre-eval install "
                              "from the first recorded backup (or leave the skill removed if there was none)")
     args = parser.parse_args(argv)
+    args.records = args.records or str(default_records(args.family, args.round))
     if args.check_notebook:
         needed = (("--run-id", args.run_id), ("--task-id", args.task_id))
     elif args.restore_original:

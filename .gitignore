@@ -21,7 +21,7 @@ build/
 **/tests/results/
 
 # Local backups of an installed skill made by an eval install script
-skills/*/eval/outputs/*/backup/
+skills/*/eval/models/*/runs_*/*/backup/
 
 # Local agent skill installs (project consumers)
 .claude/skills/

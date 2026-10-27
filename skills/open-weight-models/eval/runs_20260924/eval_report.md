@@ -1,6 +1,6 @@
-# Evaluation Report — open-weight-models skill, previous runs (2026-10), historical
+# Evaluation Report — open-weight-models skill, previous runs (Sep–Oct 2026), historical
 
-**Status: historical record.** These runs were made on 2026-10-01 against the skill
+**Status: historical record.** These runs were made between 2026-09-24 and 2026-10-07 against the skill
 before it was renamed from `oss-models` to `open-weight-models`. They are kept as
 recorded and are **not** the current evaluation; the retest is in [`../`](../README.md).
 
@@ -9,11 +9,23 @@ Scored with the deterministic phase checks in `scorers.py` (8 groups of text che
 the exported notebook; no LLM judge), compared with `compare_runs.py`. Score files:
 `baseline_scores.json`, `with_skill_scores.json`. Per-task reports: `reports/`.
 
+## When
+
+| Run | Notebook created |
+|---|---|
+| oss-001 baseline and with-skill | 2026-09-24 |
+| oss-002 baseline and first with-skill run | 2026-10-01 |
+| oss-002 second with-skill run ("v2") | 2026-10-01 to 2026-10-07 |
+| oss-005 with-skill (Geneformer, not scored) | 2026-10-03 |
+
+Dates are the recorded workspace creation dates of the run notebooks. The per-task
+reports were generated on 2026-10-01 (`reports/`).
+
 ## Task IDs
 
 The retest renames the tasks. Files in this folder keep the old IDs.
 
-| 2026-10 ID | Retest ID | Task |
+| Sep–Oct 2026 ID | Retest ID | Task |
 |---|---|---|
 | oss-001 | teddy-001 | TEDDY-70M deploy |
 | oss-002 | teddy-002 | TEDDY-70M deploy + nearest-neighbour cell search |
@@ -24,7 +36,7 @@ The retest renames the tasks. Files in this folder keep the old IDs.
 
 | Task | Skill version | Sub-checks | Baseline passed | With skill passed | Skill only | Baseline only | Both fail | Task outcome |
 |---|---|---|---|---|---|---|---|---|
-| oss-001 | as installed 2026-10-01 | 27 | 19 | 27 | 8 | 0 | 0 | win |
+| oss-001 | as installed 2026-09-24 | 27 | 19 | 27 | 8 | 0 | 0 | win |
 | oss-002, first skill run ("v1") | as installed 2026-10-01 | 30 | 26 | 27 | 2 | 1 | 2 | tie-fail |
 | oss-002, second skill run ("v2") | `teddy.md` patched after the v1 run | 30 | 26 | 30 | 4 | 0 | 0 | win |
 

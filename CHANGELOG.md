@@ -46,7 +46,7 @@ schema by hand.
 
 Other changes:
 
-- `open-weight-models` eval: moved from `tests/` to the standard `eval/` layout, with a TEDDY retest harness (teddy-001, teddy-002) and the 2026-10 runs kept in `eval/previous_runs_2026-10/`
+- `open-weight-models` eval: moved from `tests/` to the standard `eval/` layout — shared harness, per-family settings and run rounds under `eval/models/<family>/` (TEDDY: teddy-001, teddy-002), and the Sep 24 – Oct 7, 2026 runs kept in `eval/runs_20260924/`
 
 ### Notes
 

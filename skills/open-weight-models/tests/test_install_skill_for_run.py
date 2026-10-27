@@ -385,8 +385,8 @@ def test_record_protocol_fields():
     assert old["skills_panel"]["expected"] == ["open-weight-models"]
 
 
-def test_self_report_prompt_is_the_2026_10_line():
-    recorded = (SKILL_DIR / "eval" / "previous_runs_2026-10" / "results" / "with_skill" / "oss-001.txt").read_text()
+def test_self_report_prompt_is_the_sep_oct_2026_line():
+    recorded = (SKILL_DIR / "eval" / "runs_20260924" / "results" / "with_skill" / "oss-001.txt").read_text()
     line = recorded.splitlines()[22]
     assert line == "# MAGIC > At the end, l" + inst.SELF_REPORT_PROMPT[1:]
 
@@ -443,3 +443,47 @@ def test_restore_original_refuses_when_recorded_backup_is_missing(tmp_path, caps
     assert inst.restore_original(_restore_args(tmp_path), cli) == 1
     assert cli.mutations() == [] and cli.calls == []
     assert "missing locally" in capsys.readouterr().out
+
+
+# ---- family layout, pre-filled names, protocol preflight ------------------------------
+
+def test_default_records_follow_family_round():
+    assert inst.default_records() == SKILL_DIR / "eval" / "models" / "teddy" / "runs_20261026" / "run_records.json"
+    args = inst.parse_args(["--run-id", "baseline", "--task-id", "teddy-002", "--check-notebook", "nb.py"])
+    assert args.records == str(inst.default_records())
+    args = inst.parse_args(["--run-id", "baseline", "--task-id", "teddy-002", "--check-notebook", "nb.py",
+                            "--round", "runs_20991231"])
+    assert args.records.endswith("models/teddy/runs_20991231/run_records.json")
+
+
+def test_resources_prefilled_from_family_names():
+    two = inst.expected_resources("baseline", "teddy-002")
+    assert two == {
+        "serving_endpoint": "owm_teddy_ep_002_baseline",
+        "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline",
+        "uc_model_version": "",
+        "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline",
+        "vector_search_endpoint": "owm_teddy_vs_002_baseline",
+        "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_baseline",
+    }
+    one = inst.expected_resources("old_prompt_with_skill", "teddy-001")
+    assert one["serving_endpoint"] == "owm_teddy_ep_001_old_with_skill" and one["delta_table"] == ""
+    assert inst.expected_resources("baseline", "unknown-task") == {k: "" for k in inst.RESOURCE_KEYS}
+
+
+def _filled(**over):
+    record = {"skills_panel": {"screenshot": "a.png"}, "visible_steps": {"text": "Searched docs"},
+              "skills_self_report": {"text": "machine-learning"}, "notes": ""}
+    record.update(over)
+    return record
+
+
+def test_protocol_gaps():
+    assert inst.protocol_gaps(_filled()) == []
+    assert inst.protocol_gaps(_filled(visible_steps={"text": ""})) == ["visible_steps.text is empty"]
+    no_note = _filled(skills_self_report={"text": "not available"})
+    assert inst.protocol_gaps(no_note) == ["skills_self_report.text is 'not available' but notes do not say why"]
+    assert inst.protocol_gaps({**no_note, "notes": "chat closed before the follow-up"}) == []
+    fresh = inst.build_record(run_id="baseline", task_id="teddy-002", state="off", user="u",
+                              codes={}, environment={}, skill_commit="abc")
+    assert len(inst.protocol_gaps(fresh)) == 3

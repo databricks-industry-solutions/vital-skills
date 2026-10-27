@@ -10,31 +10,31 @@ frontmatter `version` is the source of truth for releases.
 - `references/models/midnight.md` for the `kaiko-ai/midnight` pathology tile
   encoder.
 - Evaluation prompt-template library (now
-  `eval/previous_runs_2026-10/02_eval_prompt_templates.py`) and
+  `eval/runs_20260924/02_eval_prompt_templates.py`) and
   runtime-environment reference (now `eval/README_environments.md`).
-- TEDDY retest harness in the standard skill-eval `eval/` layout: `evalset.json` and
-  `expectations.json` (teddy-001, teddy-002, queries identical to 2026-10), new
-  `scorers.py` (the 2026-10 checks unchanged, plus separately reported new checks:
-  AI Gateway inference table + usage tracking enabled on the endpoint and Unity Catalog
+- Evaluation harness in the standard skill-eval `eval/` layout, shared across model
+  families: `evalset.json` / `expectations.json` (teddy-001, teddy-002: the Sep–Oct 2026
+  queries with schema `skills_owm_202610` and one sentence naming the run's resources),
+  `scorers.py` (the Sep–Oct 2026 checks unchanged, plus separately reported new checks
+  — AI Gateway inference table + usage tracking on one attached config and Unity Catalog
   registration under a three-part name, both read by parsing the notebook's Python
-  cells; license + Hugging Face revision tags; checking for existing resources), `score_open_weight_models.py` (standard pair `baseline` vs `with_skill`;
-  replication pair `old_prompt_baseline` vs `old_prompt_with_skill`), run protocol
-  (`README.md`), `answer_sheet.md`, `old_prompt_baseline.md`,
-  `old_prompt_with_skill.md`, and `install_skill_for_run.py` (switches the skill
-  off/on, hides codes that show which skill files were read, backs up before replacing
-  an existing install, records each run's environment, restores the user's pre-eval
-  install at the end), `check_outcome.py` + `fixtures/teddy_request.json` (outcome
-  group, measured on the live deployment before teardown: endpoint ready and serving
-  the recorded version, one finite 512-dimension embedding per cell, working
-  nearest-neighbour search for teddy-002), per-check severity / source / environment
-  dependence in `expectations.json`, an optional guideline LLM judge, and a README list
-  of known false negatives in the replicated checks. Run protocol also records the
-  Customizations → Skills panel before each run, the chat's visible steps and Genie
-  Code's (unverified) skill self-report after it; `--extra-skill-dir` gives any
-  additional installed skill its own hidden code. Unit tests in
+  cells; license + Hugging Face revision tags; checking for existing resources — and an
+  outcome group), `score_open_weight_models.py` (standard pair `baseline` vs
+  `with_skill`; replication pair `old_prompt_baseline` vs `old_prompt_with_skill`),
+  `install_skill_for_run.py` (skill off/on, hidden codes per installed skill, backups,
+  run records with environment, pre-filled resource names and protocol fields),
+  `check_outcome.py` (outcome checks on the live deployment before teardown),
+  `family_settings.py` (per-family names, prompt rendering, outcome settings), per-check
+  severity / source / environment dependence, an optional guideline LLM judge, and a
+  README run protocol with known false negatives of the replicated checks.
+- `eval/models/teddy/`: TEDDY settings (`family.json`: names per run, embedding
+  dimension 512, which tasks have Vector Search), fixed request
+  (`fixtures/teddy_request.json`), `answer_sheet.md`, the Sep–Oct 2026 prompts with this
+  round's names (`old_prompt_baseline.md`, `old_prompt_with_skill.md`), and the
+  2026-10-26 round folder `runs_20261026/`. Unit tests in
   `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
   `tests/test_check_outcome.py`.
-- `eval/previous_runs_2026-10/`: the 2026-10 TEDDY evaluation kept as a frozen record
+- `eval/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a frozen record
   in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005
   with-skill output from a workspace backup (user name, project folder and catalog
   replaced by placeholders).
@@ -47,7 +47,7 @@ frontmatter `version` is the source of truth for releases.
 - Eval material moved out of `tests/` (which now holds only CI unit tests) into
   `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
-  2026-10 files keep the old IDs).
+  Sep–Oct 2026 files keep the old IDs).
 
 ## [0.0.1] — 2026-10-01
 

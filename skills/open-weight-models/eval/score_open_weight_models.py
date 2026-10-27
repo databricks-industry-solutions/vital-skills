@@ -7,16 +7,17 @@
 # MAGIC
 # MAGIC | Pair | Run | Skill | Prompt |
 # MAGIC |---|---|---|---|
-# MAGIC | standard | `baseline` | built-in skills only | `evalset.json` query |
-# MAGIC | standard | `with_skill` | built-in skills + open-weight-models | `evalset.json` query |
-# MAGIC | replication | `old_prompt_baseline` | built-in skills only | `old_prompt_baseline.md` (2026-10 baseline prompt) |
-# MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `old_prompt_with_skill.md` (2026-10 forced-read prompt) |
+# MAGIC | standard | `baseline` | built-in skills only | `evalset.json` query, names rendered for the run |
+# MAGIC | standard | `with_skill` | built-in skills + open-weight-models | `evalset.json` query, names rendered for the run |
+# MAGIC | replication | `old_prompt_baseline` | built-in skills only | `models/teddy/old_prompt_baseline.md` (Sep–Oct 2026 baseline prompt) |
+# MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `models/teddy/old_prompt_with_skill.md` (Sep–Oct 2026 forced-read prompt) |
 # MAGIC
 # MAGIC Scorers come from `scorers.py`; extraction and the paired comparison from
 # MAGIC `skills/skill-eval/scripts/compare_runs.py`. Groups are compared separately: the
-# MAGIC replicated 2026-10 checks, the new checks, the outcome checks (measured live by
+# MAGIC replicated Sep–Oct 2026 checks, the new checks, the outcome checks (measured live by
 # MAGIC `check_outcome.py` before teardown and read from the run records), and the optional
-# MAGIC guideline judge. Run only after every run is exported to `eval/outputs/<run>/<task>.py`,
+# MAGIC guideline judge. Run only after every run is exported to
+# MAGIC `eval/models/<family>/runs_<date>/<run>/<task>.py`,
 # MAGIC its outcome recorded, and the repo copied to the workspace (see `README.md`).
 # MAGIC
 # MAGIC Each task is evaluated on its own: the two tasks have different sub-checks
@@ -55,12 +56,16 @@ from scorers import (
 )
 from check_outcome import outcome_scores
 from compare_runs import extract_scores, main as compare_main
-from install_skill_for_run import all_codes, check_notebook, latest_record, load_records
+from family_settings import round_dir
+from install_skill_for_run import all_codes, check_notebook, latest_record, load_records, protocol_gaps
 
+FAMILY = "teddy"
+ROUND = None   # runs_<date> folder under models/<family>/; None = family.json current_round
+RUN_DIR = round_dir(FAMILY, ROUND, EVAL_DIR)
+# Score only the pairs that were run (the replication pair is optional).
 PAIRS = [("baseline", "with_skill"), ("old_prompt_baseline", "old_prompt_with_skill")]
 RUNS = [run for pair in PAIRS for run in pair]
-OUTPUTS_DIR = EVAL_DIR / "outputs"
-SCORES_DIR = OUTPUTS_DIR / "scores"
+SCORES_DIR = RUN_DIR / "scores"
 SCORES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Optional LLM judge over the task guidelines (reported as its own group). Off by default;
@@ -78,8 +83,9 @@ with open(EVAL_DIR / "expectations.json", encoding="utf-8") as handle:
 
 task_ids = [task["task_id"] for task in evalset]
 # The prompt actually pasted in each run: evalset query (standard pair) or the
-# 2026-10 prompt text from old_prompt_*.md (replication pair).
-prompts = run_prompts(EVAL_DIR)
+# Sep–Oct 2026 prompt text from models/<family>/old_prompt_*.md (replication pair), with
+# the run's names filled in; this is what each eval row logs as its query.
+prompts = run_prompts(FAMILY, EVAL_DIR)
 expectations_by_task = {}
 for task in expectations_list:
     merged = dict(task["expectations"])
@@ -87,7 +93,7 @@ for task in expectations_list:
     expectations_by_task[task["task_id"]] = merged
 
 sources = {
-    run: {task_id: (OUTPUTS_DIR / run / f"{task_id}.py").read_text(encoding="utf-8") for task_id in task_ids}
+    run: {task_id: (RUN_DIR / run / f"{task_id}.py").read_text(encoding="utf-8") for task_id in task_ids}
     for run in RUNS
 }
 
@@ -100,16 +106,20 @@ sources = {
 # MAGIC Baseline runs record no codes; with-skill runs should show them. A with-skill run
 # MAGIC that shows neither code did not pick the skill up — report it, do not drop it.
 # MAGIC A run marked `discarded` (README step 11) stops the notebook: redo it before scoring.
-# MAGIC So does a run without a recorded outcome (README step 9, `check_outcome.py`).
+# MAGIC So does a run without a recorded outcome (README step 9, `check_outcome.py`), and a run
+# MAGIC whose Skills panel screenshot, visible steps or self-report is empty (each may say
+# MAGIC "not available" only with a note explaining why).
 
 # COMMAND ----------
 
-records = load_records(OUTPUTS_DIR / "run_records.json")
+records = load_records(RUN_DIR / "run_records.json")
 outcomes = {}
 for run in RUNS:
     for task_id in task_ids:
         record = latest_record(records, run, task_id)
         assert not record.get("discarded"), f"{run}/{task_id} was discarded ({record['discard_reason']}): redo it first"
+        gaps = protocol_gaps(record)
+        assert not gaps, f"{run}/{task_id}: fill the run record first: {gaps}"
         outcomes[(run, task_id)] = outcome_scores(record)
         print(run, task_id, record["state"], record["compute"], check_notebook(sources[run][task_id], all_codes(record)))
 
@@ -132,7 +142,7 @@ for run in RUNS:
 # COMMAND ----------
 
 for run in RUNS:
-    with open(EVAL_DIR / f"{run}_scores.json", "w", encoding="utf-8") as handle:
+    with open(SCORES_DIR / f"{run}_scores.json", "w", encoding="utf-8") as handle:
         json.dump(scores[run], handle, indent=2)
     for group in GROUPS:
         group_scores = {
@@ -148,7 +158,7 @@ for run in RUNS:
 # MAGIC %md
 # MAGIC ## Paired comparisons
 # MAGIC Within each pair only: `baseline` vs `with_skill`, then `old_prompt_baseline` vs
-# MAGIC `old_prompt_with_skill` (the replication of 2026-10). One comparison per group:
+# MAGIC `old_prompt_with_skill` (the replication of Sep–Oct 2026). One comparison per group:
 # MAGIC replicated checks, new checks, outcome, and the judge if enabled.
 
 # COMMAND ----------

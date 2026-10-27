@@ -2,8 +2,8 @@
 
 Three groups, reported separately (plus an optional judge):
 
-  Replicated set — the 8 phase checks used for the 2026-10 runs, with the check
-  logic copied unchanged from previous_runs_2026-10/scorers.py so old and new
+  Replicated set — the 8 phase checks used for the Sep–Oct 2026 runs, with the check
+  logic copied unchanged from runs_20260924/scorers.py so old and new
   sub-check counts can be compared:
     1. download_staging      — temp paths, XET, deps
     2. pyfunc_quality        — class structure, imports, sys.modules, io.StringIO
@@ -13,7 +13,7 @@ Three groups, reported separately (plus an optional judge):
     6. ai_search             — index creation, embedding dim, graceful skip
     7. edge_handling         — template fallback (N/A for TEDDY tasks)
     8. forbidden_patterns    — anti-pattern safety net
-  Each sub-check is one metric, named "<phase>/<check>" as in the 2026-10 score
+  Each sub-check is one metric, named "<phase>/<check>" as in the Sep–Oct 2026 score
   files. MLflow metric names cannot contain characters such as '"' or '>=', so
   forbidden-pattern names are made safe by mlflow_metric_name(); apply the same
   function to an old score key to compare it.
@@ -31,7 +31,8 @@ Three groups, reported separately (plus an optional judge):
 
 Task metadata is read from evalset.json (task_id, dataset, query) and
 expectations.json (difficulty, model_family, variant, capability, checks) next to
-this file, keyed by task_id. Each
+this file, keyed by task_id; each task's outcome checks come from its family settings
+(models/<family>/family.json, via family_settings.py). Each
 eval row's outputs must carry the exported notebook text as "notebook_source".
 
   Outcome group — metric names start with "outcome/": what the run built actually works
@@ -52,6 +53,7 @@ import json
 import re
 from pathlib import Path
 
+import family_settings  # same folder: per-family names, prompts, outcome settings
 from mlflow.entities import Feedback
 from mlflow.genai.scorers import scorer as mlflow_scorer
 
@@ -63,10 +65,11 @@ SEARCH_CAPABILITY = "nearest_neighbor_search"
 
 
 def load_tasks(eval_dir: Path = EVAL_DIR) -> dict:
-    """{task_id: task} merged from evalset.json (request) + expectations.json (answer key).
+    """{task_id: task} merged from evalset.json (request) + expectations.json (answer key),
+    plus the task's outcome checks from its family settings (models/<family>/family.json).
 
-    `vs` is derived from the request's capability so the replicated ai_search
-    check reads the same flag it read in 2026-10.
+    `vs` is derived from the capability so the replicated ai_search check reads the same
+    flag it read in Sep–Oct 2026.
     """
     with open(eval_dir / "evalset.json", encoding="utf-8") as f:
         requests = {t["task_id"]: t for t in json.load(f)}
@@ -80,29 +83,16 @@ def load_tasks(eval_dir: Path = EVAL_DIR) -> dict:
     for tid, request in requests.items():
         task = {**request, **answers[tid]}
         task["vs"] = SEARCH_CAPABILITY in task.get("capability", "")
+        task["outcome_checks"] = family_settings.outcome_checks(
+            family_settings.load_family(task["model_family"], eval_dir), tid)
         tasks[tid] = task
     return tasks
 
 
 TASKS = load_tasks()
 
-RUN_IDS = ("baseline", "with_skill", "old_prompt_baseline", "old_prompt_with_skill")
-
-
-def run_prompts(eval_dir: Path = EVAL_DIR) -> dict:
-    """{run_id: {task_id: the prompt pasted in that run}}: the evalset query for the
-    standard pair, the ```text block under "## <task_id>" in old_prompt_<arm>.md for the
-    replication pair (placeholders such as <catalog> left as written)."""
-    with open(eval_dir / "evalset.json", encoding="utf-8") as f:
-        queries = {t["task_id"]: t["query"] for t in json.load(f)}
-    prompts = {"baseline": dict(queries), "with_skill": dict(queries)}
-    for run in ("old_prompt_baseline", "old_prompt_with_skill"):
-        text = (eval_dir / f"{run}.md").read_text(encoding="utf-8")
-        blocks = dict(re.findall(r"^## ([a-z]+-\d{3}) [^\n]*\n.*?^```text\n(.*?)\n```", text, re.M | re.S))
-        if set(blocks) != set(queries):
-            raise ValueError(f"{run}.md has prompts for {sorted(blocks)}, evalset has {sorted(queries)}")
-        prompts[run] = blocks
-    return prompts
+RUN_IDS = family_settings.RUN_IDS
+run_prompts = family_settings.run_prompts   # {run_id: {task_id: prompt pasted in that run}}
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -350,7 +340,7 @@ def _flatten(phase: str, result: dict) -> dict:
 
 
 def sub_check_scores(task: dict, response: str) -> dict:
-    """Replicated sub-check scores keyed exactly as the 2026-10 score files."""
+    """Replicated sub-check scores keyed exactly as the Sep–Oct 2026 score files."""
     out = {}
     for phase, result in score_task(task, response).items():
         out.update(_flatten(phase, result))
@@ -691,12 +681,15 @@ def _is_unresolved(name: str) -> bool:
     return not name.replace("{}", "").strip()
 
 
+KWARGS_UNKNOWN = "{**kwargs}"
+
+
 def _registered_names(nb: NotebookCode, call: ast.Call) -> list | None:
     """Model names passed at an MLflow registration call; None if the call is not one.
 
     `**kwargs` is followed when it resolves to a dict literal or dict(...) in the notebook;
-    a `**` that does not resolve (and no explicit name) counts as a name only known at run
-    time ("{}"), like a name read from a widget."""
+    a `**` that does not resolve (and no explicit name) gives KWARGS_UNKNOWN: the name cannot
+    be seen, so the check is indeterminate (scored as not passed)."""
     spec = _REGISTRATION_SITES.get(_call_name(call))
     if not spec:
         return None
@@ -711,7 +704,7 @@ def _registered_names(nb: NotebookCode, call: ast.Call) -> list | None:
         if node is not None:
             names += nb.strings(node) or ["{}"]
         elif "**" in kwargs:
-            names.append("{}")
+            names.append(KWARGS_UNKNOWN)
     return names
 
 
@@ -727,8 +720,11 @@ def _uc_registry(nb: NotebookCode) -> tuple:
             names += found
     if any(_is_three_part(n) for n in names):
         return True, "registration with a three-part catalog.schema.model name"
-    if uc_uri and any(_is_unresolved(n) for n in names):
+    if uc_uri and any(_is_unresolved(n) for n in names if n != KWARGS_UNKNOWN):
         return True, "databricks-uc registry URI + registration whose name is built at run time"
+    if KWARGS_UNKNOWN in names:
+        return False, ("indeterminate: the registered name is passed through **kwargs that are not "
+                       "visible in the notebook (scored as not passed; read the notebook by hand)")
     if not sites:
         return False, "no MLflow model registration call" + (" (databricks-uc registry URI alone is not a registration)" if uc_uri else "")
     return False, f"registered name(s) not three-part: {sorted(set(names))}"
@@ -866,7 +862,7 @@ def new_check_scores(task: dict, response: str, groups=None) -> dict:
 # One scorer per phase / new-check group; each returns one Feedback per
 # sub-check so every sub-check is its own boolean metric. A phase that is N/A
 # for the task returns one Feedback named after the phase (value True), as in
-# the 2026-10 score files.
+# the Sep–Oct 2026 score files.
 
 def _task(inputs) -> dict:
     return TASKS[inputs["task_id"]]

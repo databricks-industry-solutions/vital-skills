@@ -1,12 +1,25 @@
-# Previous runs (2026-10) — frozen record
+# Previous runs (Sep 24 – Oct 7, 2026) — frozen record
 
-The first evaluation of this skill, made on 2026-10-01 when it was still called
-`oss-models`. **Frozen: do not edit these files.** Recorded evidence keeps its old task
+Folder `runs_20260924/` (named for the first run date; it was `tests/`, then
+`previous_runs_2026-10/`). The current round is under `../models/teddy/runs_20261026/`.
+
+The first evaluation of this skill, made between 2026-09-24 and 2026-10-07 when it was
+still called `oss-models`. **Frozen: do not edit these files.** Recorded evidence keeps its old task
 IDs (`oss-001`, `oss-002`, …); the ID mapping and results are in
-[`eval_report.md`](eval_report.md). The current retest lives one level up, in
+[`eval_report.md`](eval_report.md). The harness for the current retest lives one level up, in
 [`../`](../README.md).
 
 ## What was run
+
+| Run | Notebook created |
+|---|---|
+| oss-001 baseline and with-skill | 2026-09-24 |
+| oss-002 baseline and first with-skill run | 2026-10-01 |
+| oss-002 second with-skill run ("v2") | 2026-10-01 to 2026-10-07 |
+| oss-005 with-skill (Geneformer, not scored) | 2026-10-03 |
+
+Dates are the recorded workspace creation dates of the run notebooks. The per-task
+reports were generated on 2026-10-01 (`reports/`).
 
 - **Tasks:** oss-001 (TEDDY-70M deploy) and oss-002 (TEDDY-70M deploy + cell search),
   one baseline and one with-skill run each, plus a second with-skill run of oss-002
@@ -18,7 +31,7 @@ IDs (`oss-001`, `oss-002`, …); the ID mapping and results are in
   The with-skill prompt told Genie Code to read `SKILL.md` and the model reference
   first ("forced read"); the baseline prompt did not. Both asked for named volumes,
   models and endpoints, a re-runnable notebook, and an export of the notebook source.
-- **Scoring:** `score_open_weight_models_2026-10.py` (then `03_eval_rubric_and_compare`)
+- **Scoring:** `score_open_weight_models_20260924.py` (then `03_eval_rubric_and_compare`)
   scored the exported notebooks with `scorers.py` and compared them with
   `compare_runs.py`.
 
@@ -35,9 +48,9 @@ original, moved or renamed only, except the four files marked *split*, *new* or
 |---|---|
 | `evalset.json`, `expectations.json` | *split*: the request and answer-key fields of oss-001, oss-002 and oss-005 from `evalset_combined_original.json`, values identical |
 | `evalset_combined_original.json` | the original combined evalset (v3.0.0, 9 tasks — also the task backlog) |
-| `scorers.py` | the 2026-10 scorers, unchanged |
-| `compare_runs.py` | the 2026-10 copy of the skill-eval comparison script, unchanged |
-| `score_open_weight_models_2026-10.py` | the 2026-10 scoring notebook (was `03_eval_rubric_and_compare.py`), unchanged |
+| `scorers.py` | the Sep–Oct 2026 scorers, unchanged |
+| `compare_runs.py` | the Sep–Oct 2026 copy of the skill-eval comparison script, unchanged |
+| `score_open_weight_models_20260924.py` | the Sep–Oct 2026 scoring notebook (was `03_eval_rubric_and_compare.py`), unchanged |
 | `baseline_scores.json`, `with_skill_scores.json` | recorded scores (were `results/baseline_scores.json`, `results/skill_scores.json`) |
 | `reports/oss-00{1,2}_report.md` | per-task reports written by the scoring notebook |
 | `eval_report.md`, `README.md` | *new*: summary and this file |
@@ -46,13 +59,13 @@ original, moved or renamed only, except the four files marked *split*, *new* or
 | `oss-005_*`, `oss-006_*`, `results/with_skill/oss-005.txt` | *scrubbed*: Geneformer notebooks and the oss-005 with-skill output, added from a workspace backup; only the user name, project folder and catalog were replaced by `<workspace-user>`, `<project-folder>`, `<catalog>` |
 | `00_oss_models_test_plan.py`, `02_eval_prompt_templates.py` | test plan and prompt library (the latter includes later prompt edits not used in the recorded runs) |
 | `_ground_truth/` | reference implementation notebooks |
-| `README_2026-10_protocol.md` | the original `tests/README.md` |
+| `README_20260924_protocol.md` | the original `tests/README.md` |
 
 ## The old scoring notebook no longer runs as is
 
-`score_open_weight_models_2026-10.py` resolves paths from the folder it runs in, so it
+`score_open_weight_models_20260924.py` resolves paths from the folder it runs in, so it
 still imports this folder's `scorers.py` and `compare_runs.py` and never points at
-`tests/`. But it expects the 2026-10 workspace layout, which this folder no longer has:
+`tests/`. But it expects the Sep–Oct 2026 workspace layout, which this folder no longer has:
 
 - `evalset.json` in the combined `{"tasks": [...]}` form (now `evalset_combined_original.json`; `evalset.json` is the split list);
 - `results/baseline_scores.json` and `results/skill_scores.json` (now `baseline_scores.json`, `with_skill_scores.json`);

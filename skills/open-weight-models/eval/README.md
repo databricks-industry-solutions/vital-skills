@@ -1,7 +1,21 @@
-# open-weight-models — TEDDY retest
+# open-weight-models — skill evaluation
 
-Paired evaluation of the `open-weight-models` skill on two TEDDY tasks (teddy-001,
-teddy-002). Geneformer tasks come later.
+Paired evaluation of the `open-weight-models` skill. The harness in this folder is
+shared and model-agnostic; each model family has its own settings and runs under
+`models/<family>/`. Current round: **TEDDY** (teddy-001, teddy-002) in
+`models/teddy/runs_20261026/`. Geneformer tasks come later.
+
+```text
+eval/
+  README.md, evalset.json, expectations.json, scorers.py, score_open_weight_models.py,
+  install_skill_for_run.py, check_outcome.py, family_settings.py   shared
+  eval_report.md                                                   one section per model family
+  models/teddy/
+    family.json            names per run, outcome settings (dim 512, which tasks have search)
+    fixtures/teddy_request.json, answer_sheet.md, old_prompt_baseline.md, old_prompt_with_skill.md
+    runs_20261026/         this round: run_records.json, exported notebooks, screenshots, scores
+  runs_20260924/           the frozen Sep 24 – Oct 7, 2026 sprint (old task IDs)
+```
 
 **What is compared:** Genie Code with its built-in skills **plus** this skill, against
 Genie Code with its built-in skills **only**. Built-in skills cannot be disabled, so the
@@ -10,54 +24,80 @@ result is the extra value of this skill on top of them.
 **Baseline environment:** Genie Code as shipped — built-in skills always on and not
 visible in the UI — with no personal or workspace skills, plus the user's instructions
 file (`.assistant_instructions.md`, fingerprinted in every run record). The June AI Dev
-Kit user skills that were installed during the 2026-10 runs were removed before the
+Kit user skills that were installed during the Sep–Oct 2026 runs were removed before the
 reruns, for both pairs.
 
 **Four runs per task, in two pairs.** Each pair is compared only within itself.
 
 | Pair | Run (`run_id`) | Skill | What is pasted into the chat |
 |---|---|---|---|
-| standard | `baseline` | off | the task's `query` from `evalset.json` |
-| standard | `with_skill` | on | the same `query`, nothing else |
-| replication | `old_prompt_baseline` | off | the task's block from `old_prompt_baseline.md` |
-| replication | `old_prompt_with_skill` | on | the task's block from `old_prompt_with_skill.md` |
+| standard | `baseline` | off | the task's `query` from `evalset.json`, names rendered for the run |
+| standard | `with_skill` | on | the same `query`, names rendered for the run, nothing else |
+| replication | `old_prompt_baseline` | off | the task's block from `models/teddy/old_prompt_baseline.md` |
+| replication | `old_prompt_with_skill` | on | the task's block from `models/teddy/old_prompt_with_skill.md` |
+
+**Every run creates its own resources** under schema `skills_owm_202610` (owm =
+open-weight-models; managed volume `owm_teddy_files`), named per run with `<run>` in
+{`baseline`, `with_skill`, `old_baseline`, `old_with_skill`}
+(`models/teddy/family.json` → `names`):
+
+| Resource | teddy-001 | teddy-002 |
+|---|---|---|
+| serving endpoint | `owm_teddy_ep_001_<run>` | `owm_teddy_ep_002_<run>` |
+| registered model | `<catalog>.skills_owm_202610.owm_teddy_model_001_<run>` | `<catalog>.skills_owm_202610.owm_teddy_model_002_<run>` |
+| Vector Search endpoint | — | `owm_teddy_vs_002_<run>` |
+| embeddings table | — | `<catalog>.skills_owm_202610.owm_teddy_cells_002_<run>` |
+| Vector Search index | — | `<catalog>.skills_owm_202610.owm_teddy_index_002_<run>` |
+| download folder | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_<run>/` | `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_<run>/` |
+
+`evalset.json` stores each query with a `{run}` placeholder in one added sentence
+("Use these names: …", right after the catalog/schema sentence; the rest is the
+Sep–Oct 2026 wording with the schema changed). Print the exact prompt for a run with
+
+```bash
+python3 skills/open-weight-models/eval/family_settings.py prompt --run-id <run_id> --task-id <task_id>
+```
+
+The scoring notebook logs this rendered prompt as each row's query.
 
 - The **standard pair** is the evaluation: does Genie Code find and use the skill on
   its own, from a plain request?
-- The **replication pair** is the replication of the 2026-10 results. It reuses the
-  2026-10 prompts, as recorded: the baseline prompt and the with-skill prompt that told
-  Genie Code to read `SKILL.md` and `teddy.md` first. Only the skill file paths and the
-  export path were changed (listed at the top of each file). The 2026-10 record is in
-  [`previous_runs_2026-10/`](previous_runs_2026-10/README.md).
+- The **replication pair** is the replication of the Sep–Oct 2026 results. It reuses the
+  Sep–Oct 2026 prompts, as recorded: the baseline prompt and the with-skill prompt that told
+  Genie Code to read `SKILL.md` and `teddy.md` first. Only the resource names and paths
+  (the per-run names above), the skill file paths and the export path were changed
+  (listed at the top of each file). The Sep 24 – Oct 7, 2026 record is in
+  [`runs_20260924/`](runs_20260924/README.md).
 
 **Environment per pair.** Both pairs run in the baseline environment above (the AI Dev
-Kit user skills from 2026-10 removed), so the replication pair is *not* the 2026-10
+Kit user skills from Sep–Oct 2026 removed), so the replication pair is *not* the Sep–Oct 2026
 environment. Every run record stores the environment Genie Code could see (step 1) and
 the Skills panel as observed (step 3), and each pair is compared only within itself —
 never a run of one pair against a run of the other.
 
-> [!WARNING]
-> **The replication prompts replace the 2026-10 resources.** They name the same volume,
-> Unity Catalog model and endpoint as the 2026-10 runs, and tell Genie Code to delete
-> any pre-existing endpoint and model versions on the first run. Running them in the
-> workspace and catalog used in 2026-10 deletes or overwrites those resources. Use
-> another catalog for `<catalog>`, or accept that before pasting.
+> [!NOTE]
+> The replication prompts still tell Genie Code to delete any pre-existing endpoint and
+> model versions on the first run (recorded wording), but they now name only this run's
+> own resources in `skills_owm_202610`, so they no longer touch anything from Sep–Oct 2026.
+> The user's instructions file has a similar "delete existing endpoint + model versions"
+> rule that applies to every run.
 
 ## Files
 
 | File | What it is | Who may read it during a run |
 |---|---|---|
-| `evalset.json` | task requests: `task_id`, `dataset`, `query` only | the person running the eval |
-| `answer_sheet.md` | fixed replies if Genie Code asks a question | the person running the eval |
-| `old_prompt_baseline.md`, `old_prompt_with_skill.md` | 2026-10 prompts (replication pair only) | the person running the eval |
+| `evalset.json` | task requests: `task_id`, `dataset`, `query` (with `{run}`) only | the person running the eval |
+| `family_settings.py`, `models/<family>/family.json` | per-family names, prompt rendering, outcome settings | the person running the eval |
+| `models/teddy/answer_sheet.md` | fixed replies if Genie Code asks a question | the person running the eval |
+| `models/teddy/old_prompt_baseline.md`, `old_prompt_with_skill.md` | Sep–Oct 2026 prompts with this round's names (replication pair only) | the person running the eval |
 | `install_skill_for_run.py` | laptop script: skill off/on + run record | the person running the eval |
-| `check_outcome.py`, `fixtures/teddy_request.json` | laptop script: outcome checks on what a run built, with a fixed TEDDY request | the person running the eval (never pasted into Genie Code) |
+| `check_outcome.py`, `models/teddy/fixtures/teddy_request.json` | laptop script: outcome checks on what a run built, with the family's fixed request | the person running the eval (never pasted into Genie Code) |
 | `expectations.json` | answer key: difficulty, model family, variant, capability, expected facts, checks, new checks, outcome checks, per-check severity / source / environment dependence | scoring only |
 | `scorers.py` | MLflow scorers (exports `scorers`) | scoring only |
 | `score_open_weight_models.py` | Databricks scoring notebook | scoring only |
-| `outputs/<run_id>/<task_id>.py` | exported notebooks (after the runs) | scoring only |
-| `outputs/run_records.json` | one record per run: skill state, environment, hidden codes (incl. extra skills), backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, discarded / reason, notes | scoring only |
-| `<run_id>_scores.json`, `outputs/scores/` | per-task scores (after scoring) | — |
+| `models/teddy/runs_20261026/<run_id>/<task_id>.py` | exported notebooks (after the runs) | scoring only |
+| `models/teddy/runs_20261026/run_records.json` | one record per run: skill state, environment, hidden codes (incl. extra skills), backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, discarded / reason, notes | scoring only |
+| `models/teddy/runs_20261026/scores/` | per-task scores (after scoring) | — |
 | `eval_report.md` | results | — |
 | `README_environments.md` | known Genie Code runtime snapshots | — |
 
@@ -68,10 +108,13 @@ runs are done (step 13).
 
 ## Run protocol
 
-Order: both skill-off runs first (`baseline`, then `old_prompt_baseline`), then
-`with_skill`, then `old_prompt_with_skill`, so nothing about the skill is in a chat or
-memory before the skill-off runs are done. One task at a time, one fresh chat per task
-per run.
+**Run order for this round** (MVP first): teddy-002 standard pair — `baseline`, then
+`with_skill`; then teddy-001 standard pair — `baseline`, then `with_skill`; then,
+optionally, the replication pair (`old_prompt_baseline`, then `old_prompt_with_skill`).
+A skill-off run never follows a with-skill run in the same pair, so nothing about the
+skill is in a chat or memory before its baseline. Between a with-skill run and the next
+skill-off run, step 1 (`--state off`) removes the skill and step 2 clears memory. One
+task at a time, one fresh chat per task per run.
 
 Each run's notebooks live in its own run folder:
 `/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/`
@@ -92,10 +135,10 @@ Checklist for **each** (run, task):
    - It stops if `.assistant/skills/open-weight-models` already exists — for example
      the copy from the previous with-skill task, or the user's own install before the
      eval. To replace it, add `--replace-existing`: the script exports the existing copy
-     to `outputs/<run_id>/backup/<task_id>-<timestamp>/` (not committed), then deletes
+     to `models/teddy/runs_20261026/<run_id>/backup/<task_id>-<timestamp>/` (not committed), then deletes
      it, then installs the new copy. If creating the folder or the import fails, it
      prints the commands that restore the backup.
-   - It appends a record to `outputs/run_records.json` with the environment Genie Code
+   - It appends a record to `models/teddy/runs_20261026/run_records.json` with the environment Genie Code
      will see: the user skills folder (each `SKILL.md` with size and sha256), the
      sha256 of `/Workspace/Users/<workspace-user>/.assistant_instructions.md` if present,
      and whether `/Workspace/.assistant/skills` and
@@ -110,7 +153,7 @@ Checklist for **each** (run, task):
    evaluation, TEDDY, or the open-weight-models skill. Close that chat.
 3. **Check the Skills panel — before pasting the prompt.** Hard refresh the browser
    (Cmd+Shift+R), open Genie Code → **Customizations → Skills**, and screenshot both the
-   **User** and the **All skills** tabs (save as `outputs/<run_id>/<task_id>_skills_panel.png`;
+   **User** and the **All skills** tabs (save as `models/teddy/runs_20261026/<run_id>/<task_id>_skills_panel.png`;
    add `_user` / `_all` if they need two images). Record the filename(s) and the skills
    listed on each tab in the record's `skills_panel` (`screenshot`,
    `observed_user_tab`, `observed_all_skills_tab`). Expected (`skills_panel.expected`,
@@ -121,53 +164,56 @@ Checklist for **each** (run, task):
 4. **Fresh notebook and chat.** Create a blank notebook `<task_id>` in the run folder
    and open a new Genie Code chat on it.
 5. **Run.** Paste the prompt verbatim — the `query` from `evalset.json` for the
-   standard pair, or the task's block from `old_prompt_baseline.md` /
-   `old_prompt_with_skill.md` for the replication pair (placeholders filled). Answer
-   questions **only** from `answer_sheet.md`. Do not steer, hint or correct. Let it run
+   standard pair, or the task's block from `models/teddy/old_prompt_baseline.md` /
+   `old_prompt_with_skill.md` for the replication pair (print it with
+   `family_settings.py prompt`; fill `<catalog>`/`<workspace-user>`). Answer questions
+   **only** from `models/teddy/answer_sheet.md`. Do not steer, hint or correct. Let it run
    to the end.
-6. **Export the notebook** as source to `outputs/<run_id>/<task_id>.py`:
+6. **Export the notebook** as source to `models/teddy/runs_20261026/<run_id>/<task_id>.py`:
    ```bash
    databricks workspace export \
        /Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/<task_id> \
-       --format SOURCE --file skills/open-weight-models/eval/outputs/<run_id>/<task_id>.py -p <profile>
+       --format SOURCE --file skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py -p <profile>
    ```
    Then check the hidden codes (every installed skill has one; they are the proof of
    which skill files Genie Code read):
    ```bash
    python3 skills/open-weight-models/eval/install_skill_for_run.py --run-id <run_id> \
-       --task-id <task_id> --check-notebook skills/open-weight-models/eval/outputs/<run_id>/<task_id>.py
+       --task-id <task_id> --check-notebook skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py
    ```
 7. **Visible steps and skill self-report — after the task is complete and exported.**
    - Copy the chat's visible step list (for example "Searched documentation", file
      reads) into the record's `visible_steps.text` and save a screenshot
-     (`outputs/<run_id>/<task_id>_steps.png`, filename in `visible_steps.screenshot`).
+     (`models/teddy/runs_20261026/<run_id>/<task_id>_steps.png`, filename in `visible_steps.screenshot`).
      Step 11 (leak check) reads this list.
    - **Standard pair only:** send this as a separate message, identical in both runs:
      "List every skill from the Skill Registry that you loaded or consulted while
      developing this notebook." Record the reply verbatim in
      `skills_self_report.text`. It is sent only after the task is done, so it cannot
      steer the work.
-   - **Replication pair:** skip the follow-up — the 2026-10 prompts already end with
+   - **Replication pair:** skip the follow-up — the Sep–Oct 2026 prompts already end with
      this request (for example
-     `previous_runs_2026-10/results/with_skill/oss-001.txt:23`). Record the answer
+     `runs_20260924/results/with_skill/oss-001.txt:23`). Record the answer
      Genie Code gave in the notebook or chat instead (`skills_self_report.source` is
      pre-filled accordingly).
    - The self-report is **Genie Code's own claim, not verified**. The hidden codes
      (step 6) remain the proof that open-weight-models was read.
-8. **Fill `resources_created` and `compute`** in the run's record in
-   `outputs/run_records.json`, from the notebook: `serving_endpoint`, `uc_model`
-   (three-part name), `uc_model_version`, and for teddy-002 `delta_table`,
-   `vector_search_endpoint`, `vector_search_index`; `compute.type` and
+8. **Check `resources_created`, fill `uc_model_version` and `compute`** in the run's
+   record in `models/teddy/runs_20261026/run_records.json`. Step 1 pre-fills
+   `resources_created` with the names the prompt asked for (`family.json`, `<catalog>`
+   left as a placeholder); correct any name the notebook actually used differently, and
+   add `uc_model_version` from the notebook. Fill `compute.type` and
    `compute.runtime` from the notebook's runtime cell or the compute it ran on (for
    example "serverless GPU (GPU_1xA10)", "AI Runtime v5").
 9. **Outcome checks — before any teardown.** From the laptop (needs
    `databricks-sdk`, verified with 0.157.0):
    ```bash
    python3 skills/open-weight-models/eval/check_outcome.py --profile <profile> \
-       --run-id <run_id> --task-id <task_id> [--reference-endpoint <name>]
+       --run-id <run_id> --task-id <task_id> --catalog <catalog> [--reference-endpoint <name>]
    ```
+   (`--catalog` fills the `<catalog>` placeholder at call time; the record keeps it.)
    It checks the endpoint is READY and serves the recorded model version, sends the
-   fixed request in `fixtures/teddy_request.json` (3 cells × 100 real 70M-vocab genes,
+   fixed request in `models/teddy/fixtures/teddy_request.json` (3 cells × 100 real 70M-vocab genes,
    built per the `teddy.md` serving contract) and checks one finite, non-zero,
    512-dimensional embedding per cell (512 = `d_model` in the 70M `config.json`); for
    teddy-002 it checks the Vector Search endpoint is ONLINE, the index is ready, and a
@@ -184,12 +230,13 @@ Checklist for **each** (run, task):
    databricks tables delete <delta_table> -p <profile>                                       # teddy-002
    databricks registered-models delete <uc_model> -p <profile>
    ```
-   Also drop the AI Gateway inference/usage tables the endpoint created, if any.
-   Tear down the replication pair's resources too: its prompts reuse the 2026-10 names
-   (see the warning above).
+   Also drop the AI Gateway inference/usage tables the endpoint created, if any, and
+   empty the run's download folder (`/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/00N_<run>/`).
+   Every name is unique to the run, so teardown cannot touch another run or the Sep–Oct
+   2026 resources.
 11. **Check for leaks.** Read the chat's visible steps (step 7). If Genie Code opened, searched
     or listed any file or folder whose path contains `oss-0`, `gt_`, `hls-skills-tests`,
-    `previous_runs_2026-10` or `/eval/`, the run saw earlier results or the answer key:
+    `runs_20260924` or `/eval/`, the run saw earlier results or the answer key:
     set `"discarded": true` and `"discard_reason"` (which path, which step) in its
     record, delete its exported notebook, and redo the run from step 1 in a fresh chat
     (`skills/skill-eval/references/combined-job.md:16-39`: a contaminated context is
@@ -229,8 +276,8 @@ sub-check is its own pass/fail metric. The replicated set and `provenance_tags` 
 `ast` module (`# MAGIC` cells and `%`/`!` lines removed); a cell that does not parse is
 checked with the older text patterns instead, and the result's rationale says so.
 
-**Replicated set** — the 2026-10 checks, logic unchanged, so the counts can be put next
-to the 2026-10 counts. 8 groups: `download_staging` (temp path, XET off, pinned
+**Replicated set** — the Sep–Oct 2026 checks, logic unchanged, so the counts can be put next
+to the Sep–Oct 2026 counts. 8 groups: `download_staging` (temp path, XET off, pinned
 `transformers`), `pyfunc_quality` (PyFunc class, imports, `load_context`, `sys.modules`
 purge, `io.StringIO`, `artifacts=`, real gene IDs from `vocab.txt`),
 `model_registration` (signature, input example, pip requirements, 70M variant),
@@ -241,7 +288,7 @@ run gate), `smoke_tests` (registration, endpoint query, output shape), `ai_searc
 `transformers>=`, fake gene IDs, deprecated `AutoCaptureConfigInput`, string
 workload type). teddy-001 has 27 sub-checks (+2 not-applicable groups), teddy-002 has
 30 (+1). `tests/test_eval_scorers.py` checks that these reproduce the recorded
-2026-10 scores from the recorded 2026-10 notebooks. Metric names match the 2026-10
+Sep–Oct 2026 scores from the recorded Sep–Oct 2026 notebooks. Metric names match the Sep–Oct 2026
 files except forbidden-pattern names, which MLflow does not allow as written: use
 `scorers.mlflow_metric_name()` on an old key to get the new name.
 
@@ -251,7 +298,7 @@ each result's rationale says why it passed or failed):
 | Check | Passes when the notebook code… | Tasks |
 |---|---|---|
 | `ai_gateway/inference_table`, `ai_gateway/usage_tracking` | attaches an AI Gateway config to a serving endpoint — `ai_gateway=` on `serving_endpoints.create` / `create_and_wait`, a `put_ai_gateway(...)` call, or an `"ai_gateway"` key in a REST body sent to a `serving-endpoints` URL (or the body of `PUT .../ai-gateway`) — in which the inference table config and the usage tracking config each have `enabled` set to `True`. Both must be enabled in **one** attached config — an inference table on one endpoint and usage tracking on another does not pass both. The `create` / `create_and_wait` / `put_ai_gateway` receiver must be a WorkspaceClient's `serving_endpoints` (`w.serving_endpoints`, `WorkspaceClient(...).serving_endpoints`, or a name assigned from one); `helper.put_ai_gateway(...)` does not count. The config may be built in variables (plain or annotated assignment, any cell), as SDK classes (keyword or positional), `from_dict`, dict literals or `dict(...)`; `enabled` may be a variable holding `True`. Imports alone, or a config never attached, do not count. | both |
-| `uc_provenance/uc_registry` | actually registers a model in Unity Catalog: an MLflow registration call — `mlflow.<flavor>.log_model(..., registered_model_name=...)`, `mlflow.register_model(...)`, or `create_registered_model` / `create_model_version` on an object from `MlflowClient(...)` (`mlflow.MlflowClient`, `mlflow.tracking.MlflowClient`; imports and assigned names are followed) — whose model name is three-part (`catalog.schema.model`, resolved through variables and f-strings), **or** `mlflow.set_registry_uri("databricks-uc")` plus a registration whose name is only known at run time (for example from a widget). Fails: the registry URI with no registration; a registration under a resolvable two-part name, even with the UC URI (Unity Catalog only accepts three-part names); look-alike calls on other objects (`custom.log_model`, `factory.create_registered_model`). Names passed through `**kwargs` are read when the dict is a literal or `dict(...)` in the notebook; a `**kwargs` built elsewhere counts as a name known only at run time (passes only with the UC URI). | both |
+| `uc_provenance/uc_registry` | actually registers a model in Unity Catalog: an MLflow registration call — `mlflow.<flavor>.log_model(..., registered_model_name=...)`, `mlflow.register_model(...)`, or `create_registered_model` / `create_model_version` on an object from `MlflowClient(...)` (`mlflow.MlflowClient`, `mlflow.tracking.MlflowClient`; imports and assigned names are followed) — whose model name is three-part (`catalog.schema.model`, resolved through variables and f-strings), **or** `mlflow.set_registry_uri("databricks-uc")` plus a registration whose name is only known at run time (for example from a widget). Fails: the registry URI with no registration; a registration under a resolvable two-part name, even with the UC URI (Unity Catalog only accepts three-part names); look-alike calls on other objects (`custom.log_model`, `factory.create_registered_model`). Names passed through `**kwargs` are read when the dict is a literal or `dict(...)` in the notebook; a `**kwargs` built elsewhere hides the name, so the check is **indeterminate** and scored as not passed (the rationale says "indeterminate"; read that notebook by hand). | both |
 | `uc_provenance/provenance_tags` | records the license **and** the Hugging Face revision as tags — run tags, logged-model tags or UC model tags all count (`teddy.md` asks for MLflow tags); the rationale names which kind was found | both |
 | `existing_resources/endpoint` (`/table`, `/index` for teddy-002) | looks for an existing endpoint / table / index before the first create or delete call | both |
 
@@ -297,7 +344,7 @@ score — so every failure can be read against whether the run actually worked.
 
 ### Known false negatives in the replicated set
 
-The replicated checks are kept unchanged so they stay comparable with 2026-10. These
+The replicated checks are kept unchanged so they stay comparable with Sep–Oct 2026. These
 valid alternatives fail them anyway; read such failures by hand.
 `tests/test_eval_scorers.py::test_known_false_negatives` keeps this list true.
 
@@ -306,7 +353,7 @@ valid alternatives fail them anyway; read such failures by hand.
 | `model_registration/pip_reqs_from_source` | copying the pins without naming `pyproject.toml` / requirements | `teddy.md:165-173` |
 | `pyfunc_quality/real_gene_ids` | a payload built from `GeneTokenizer.from_pretrained(model_dir)` without naming `vocab.txt` | `teddy.md:126` |
 | `download_staging/uses_tmp` | `tempfile.mkdtemp()` (writes under /tmp, no literal) | — |
-| `forbidden_patterns/local_disk0` | compute-adaptive code that tries `/local_disk0` and falls back to `/tmp` | 2026-10 ground-truth pattern (`previous_runs_2026-10/00_oss_models_test_plan.py`) |
+| `forbidden_patterns/local_disk0` | compute-adaptive code that tries `/local_disk0` and falls back to `/tmp` | Sep–Oct 2026 ground-truth pattern (`runs_20260924/00_oss_models_test_plan.py`) |
 | `endpoint_deployment/ai_gateway_config` | an inference table set in a REST body (`"inference_table_config": {...}`) | `SKILL.md:325` (the new `ai_gateway` checks accept it) |
 | `endpoint_deployment/sdk_enums` | REST deployment with `"workload_type": "GPU_SMALL"` (valid for the REST API) | — |
 | `ai_search/graceful_skip` | `try/except AnalysisException` around reading the table | — |
@@ -328,10 +375,10 @@ Checked and **not** false negatives:
 logging as the row's `query` the prompt actually pasted in that run (the evalset query,
 or the `old_prompt_*.md` text with placeholders as written); it stops if the latest
 record of any (run, task) is marked discarded or has no recorded outcome. It extracts
-scores with `compare_runs.extract_scores()`, writes `baseline_scores.json`,
-`with_skill_scores.json`, `old_prompt_baseline_scores.json` and
+scores with `compare_runs.extract_scores()`, writes `models/teddy/runs_20261026/scores/`
+`baseline_scores.json`, `with_skill_scores.json`, `old_prompt_baseline_scores.json` and
 `old_prompt_with_skill_scores.json` (all metrics) and
-`outputs/scores/<run_id>_<group>.json`, runs `compare_runs.main()` within each pair
+`models/teddy/runs_20261026/scores/<run_id>_<group>.json`, runs `compare_runs.main()` within each pair
 only — `baseline` vs `with_skill`, `old_prompt_baseline` vs `old_prompt_with_skill` —
 once per group (replicated, new checks, outcome, and the judge if enabled), and prints
 the severity table.
@@ -339,7 +386,7 @@ the severity table.
 A task passes a group only if every check in that group passes. Ship gate (skill-eval
 default): at least one task-level win and zero regressions, judged on the standard pair,
 for the replicated set, the new checks and the outcome group each. The replication pair
-is reported next to the 2026-10 results, not used for the gate. Two tasks show
+is reported next to the Sep–Oct 2026 results, not used for the gate. Two tasks show
 direction, not statistical significance; report raw counts, never percentages.
 
 ## Reproducing locally

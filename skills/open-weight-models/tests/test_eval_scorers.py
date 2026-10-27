@@ -1,7 +1,7 @@
-"""Offline tests for the TEDDY eval scorers (eval/scorers.py) and the frozen 2026-10 record.
+"""Offline tests for the TEDDY eval scorers (eval/scorers.py) and the frozen Sep–Oct 2026 record.
 
 The replicated checks in eval/scorers.py must reproduce, sub-check for sub-check,
-the scores recorded in 2026-10 from the notebooks recorded in 2026-10. Needs
+the scores recorded in Sep–Oct 2026 from the notebooks recorded in Sep–Oct 2026. Needs
 mlflow-skinny (tests/requirements.txt); no workspace, no network.
 """
 
@@ -10,18 +10,21 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
-PREVIOUS = EVAL_DIR / "previous_runs_2026-10"
+PREVIOUS = EVAL_DIR / "runs_20260924"
 OLD_TO_NEW = {"oss-001": "teddy-001", "oss-002": "teddy-002"}
 RECORDED = {"baseline": "baseline_scores.json", "with_skill": "with_skill_scores.json"}
 
 
 def _load(name: str, path: Path):
+    if str(EVAL_DIR) not in sys.path:
+        sys.path.insert(0, str(EVAL_DIR))  # eval/scorers.py imports family_settings from its folder
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -48,7 +51,7 @@ def _source(arm: str, old_id: str) -> str:
 
 @pytest.mark.parametrize("arm", RECORDED)
 @pytest.mark.parametrize("old_id", OLD_TO_NEW)
-def test_replicated_checks_reproduce_2026_10_scores(scorers, arm, old_id):
+def test_replicated_checks_reproduce_sep_oct_2026_scores(scorers, arm, old_id):
     task = scorers.TASKS[OLD_TO_NEW[old_id]]
     assert scorers.sub_check_scores(task, _source(arm, old_id)) == _recorded(arm)[old_id]
 
@@ -73,10 +76,35 @@ def test_previous_split_files_match_combined_original():
         assert {**request, **answers[request["task_id"]]} == combined[request["task_id"]]
 
 
-def test_retest_queries_identical_to_2026_10(scorers):
+FIRST_RUN_SENTENCE = (  # the exact sentence used for the first rerun (baseline, teddy-002)
+    "Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_002_baseline`, serving endpoint "
+    "`owm_teddy_ep_002_baseline`, Vector Search endpoint `owm_teddy_vs_002_baseline`, embeddings table "
+    "`<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline`, index "
+    "`<catalog>.skills_owm_202610.owm_teddy_index_002_baseline`, and store downloaded files under "
+    "`/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_baseline/`."
+)
+
+
+def test_retest_queries_are_sep_oct_2026_queries_plus_schema_and_names(scorers):
+    """Sep–Oct 2026 wording kept; only the schema changed and ONE names sentence added after it."""
+    import family_settings as fs
+
+    settings = fs.load_family("teddy")
     combined = {t["task_id"]: t for t in json.loads((PREVIOUS / "evalset_combined_original.json").read_text())["tasks"]}
     for old_id, new_id in OLD_TO_NEW.items():
-        assert scorers.TASKS[new_id]["query"] == combined[old_id]["query"]
+        query = scorers.TASKS[new_id]["query"]
+        old = combined[old_id]["query"]
+        head, tail = old.split("Use catalog <catalog>, schema skills.")
+        assert query.startswith(head + "Use catalog <catalog>, schema skills_owm_202610. Use these names: ")
+        assert query.endswith(". " + tail.lstrip()) or query.endswith("." + tail)
+        for run in ("baseline", "with_skill"):
+            rendered = fs.render_query(query, settings, run)
+            assert "{run}" not in rendered
+            for value in fs.resource_names(settings, run, new_id).values():
+                assert f"`{value}`" in rendered
+    first = fs.run_prompts("teddy")["baseline"]["teddy-002"]
+    assert FIRST_RUN_SENTENCE in first
+    assert first.index("schema skills_owm_202610.") < first.index(FIRST_RUN_SENTENCE)
 
 
 def test_evalset_is_canonical():
@@ -296,28 +324,36 @@ def _recorded_prompt(path: Path) -> str:
 
 
 @pytest.mark.parametrize("run, arm", [("old_prompt_baseline", "baseline"), ("old_prompt_with_skill", "with_skill")])
-def test_old_prompts_are_recorded_text_except_paths(scorers, run, arm):
+def test_old_prompts_are_recorded_text_plus_documented_substitutions(scorers, run, arm):
+    """Applying family.json's substitutions (names/paths), the skill-folder change and the
+    export-path change to the recorded Sep–Oct 2026 prompt gives exactly the block in the file."""
+    import family_settings as fs
+
+    settings = fs.load_family("teddy")
     blocks = scorers.run_prompts()[run]
     assert set(blocks) == set(OLD_TO_NEW.values())
     for old_id, new_id in OLD_TO_NEW.items():
-        restored = blocks[new_id].replace(
-            "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models/",
-            "/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/.assistant/skills/oss-models/",
-        )
-        restored = re.sub(
-            rf"/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/{run}/{new_id}\.txt",
-            "<export>", restored)
-        recorded = re.sub(
-            r"/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/results/\w+/oss-00\d\.txt",
-            "<export>", _recorded_prompt(PREVIOUS / "results" / arm / f"{old_id}.txt"))
-        assert restored == recorded
+        recorded = _recorded_prompt(PREVIOUS / "results" / arm / f"{old_id}.txt")
+        assert blocks[new_id] == fs.rewrite_old_prompt(recorded, settings, run, new_id)
+        names = fs.resource_names(settings, run, new_id)
+        for key in ("uc_model", "serving_endpoint", "files"):
+            assert f"`{names[key]}`" in blocks[new_id]
+        if new_id == "teddy-002":
+            for key in ("delta_table", "vector_search_index", "vector_search_endpoint"):
+                assert f"`{names[key]}`" in blocks[new_id]
+        assert "skills_owm_202610" in blocks[new_id] and "`skills`" not in blocks[new_id]
 
 
-def test_run_prompts_standard_pair_uses_evalset_query(scorers):
+def test_run_prompts_standard_pair_renders_evalset_query(scorers):
+    import family_settings as fs
+
+    settings = fs.load_family("teddy")
     prompts = scorers.run_prompts()
     assert set(prompts) == set(scorers.RUN_IDS)
     for run in ("baseline", "with_skill"):
-        assert prompts[run] == {tid: task["query"] for tid, task in scorers.TASKS.items()}
+        assert prompts[run] == {tid: fs.render_query(t["query"], settings, run) for tid, t in scorers.TASKS.items()}
+    assert prompts["baseline"]["teddy-002"] != prompts["with_skill"]["teddy-002"]
+    assert prompts["baseline"]["teddy-002"].replace("_baseline", "_with_skill") == prompts["with_skill"]["teddy-002"]
 
 
 # ---- severity, environment dependence, outcome scorer ----------------------------
@@ -494,8 +530,8 @@ def test_uc_registry_kwargs(scorers):
     assert _uc(scorers, resolved)[0] is True
     two_part = resolved.replace('f"{CATALOG}.skills.teddy_70m"', '"skills.teddy_70m"')
     assert _uc(scorers, two_part)[0] is False
-    # **kwargs built elsewhere: the name is only known at run time -> needs the UC URI
+    # **kwargs built elsewhere: the name cannot be seen -> indeterminate, not passed (even with the UC URI)
     opaque = 'mlflow.pyfunc.log_model(name="m", **build_kwargs())\n'
-    assert _uc(scorers, opaque)[0] is False
-    ok, reason = _uc(scorers, 'mlflow.set_registry_uri("databricks-uc")\n' + opaque)
-    assert ok is True and "run time" in reason
+    for source in (opaque, 'mlflow.set_registry_uri("databricks-uc")\n' + opaque):
+        ok, reason = _uc(scorers, source)
+        assert ok is False and reason.startswith("indeterminate")

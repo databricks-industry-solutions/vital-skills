@@ -1,31 +1,33 @@
 #!/usr/bin/env python3
-"""Outcome checks for one TEDDY eval run: does what the run built actually work?
+"""Outcome checks for one eval run: does what the run built actually work?
+
+Model-agnostic: the fixed request, the expected embedding dimension and which tasks have
+Vector Search come from the family settings, models/<family>/family.json ("outcome").
 
 Run after a run is exported and `resources_created` is filled in its record, and
 BEFORE tearing anything down (see eval/README.md). From a laptop:
 
   python3 skills/open-weight-models/eval/check_outcome.py --profile <profile> \\
-      --run-id <run_id> --task-id <task_id> [--reference-endpoint <name>]
+      --run-id <run_id> --task-id <task_id> --catalog <catalog> [--reference-endpoint <name>]
 
 or from a notebook (the repo's eval/ folder on sys.path):
 
   from check_outcome import run_outcome_checks
-  checks = next(t["outcome_checks"] for t in json.load(open("expectations.json"))
-                if t["task_id"] == "teddy-002")
-  results = run_outcome_checks(WorkspaceClient(), resources, checks)
+  from family_settings import load_family, outcome_checks
+  checks = outcome_checks(load_family("teddy"), "teddy-002")
+  results = run_outcome_checks(WorkspaceClient(), resources, checks, family="teddy")
 
-Checks (metric names start with "outcome/"; which apply comes from expectations.json):
+Checks (metric names start with "outcome/"):
   endpoint_ready              serving endpoint state is READY
   serves_recorded_version     it serves the recorded UC model + version
-  one_embedding_per_cell      the fixed request (fixtures/teddy_request.json) returns one
-                              prediction per cell
+  one_embedding_per_cell      the family's fixed request returns one prediction per cell
   embeddings_finite           every embedding value is a finite number, no all-zero vector
-  embedding_dim               every embedding has the expected dimension (512 for 70M)
-  vs_endpoint_online          teddy-002: the Vector Search endpoint is ONLINE
-  index_ready                 teddy-002: the index reports ready
-  nn_query_returns_rows       teddy-002: a nearest-neighbour query with a fixture
+  embedding_dim               every embedding has the family's dimension (TEDDY 70M: 512)
+  vs_endpoint_online          search tasks: the Vector Search endpoint is ONLINE
+  index_ready                 search tasks: the index reports ready
+  nn_query_returns_rows       search tasks: a nearest-neighbour query with a fixture
                               embedding returns at least one row
-  nn_has_cell_type_column     teddy-002: the returned columns include a cell-type column
+  nn_has_cell_type_column     search tasks: the returned columns include a cell-type column
 Optional, informational only (no pass/fail): reference_cosine — per-cell cosine similarity
 of the fixture embeddings against another endpoint (e.g. a reference TEDDY deployment).
 
@@ -45,8 +47,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 EVAL_DIR = Path(__file__).resolve().parent
-FIXTURE = EVAL_DIR / "fixtures" / "teddy_request.json"
-DEFAULT_RECORDS = EVAL_DIR / "outputs" / "run_records.json"
+sys.path.insert(0, str(EVAL_DIR))
+import family_settings  # noqa: E402 — same folder
+
 PREFIX = "outcome/"
 CELL_TYPE_COLUMN = re.compile(r"cell[_ ]?type", re.I)
 
@@ -73,9 +76,25 @@ def build_teddy_request(genes: list, expression: list, cell_ids: list) -> dict:
     }
 
 
-def load_fixture(path: Path = FIXTURE) -> dict:
+def load_fixture(family: str = family_settings.DEFAULT_FAMILY, eval_dir: Path = EVAL_DIR) -> dict:
+    """The family's fixed request (family.json outcome.fixture), with `expected.embedding_dim`
+    taken from the family settings so there is one source for it."""
+    settings = family_settings.load_family(family, eval_dir)
+    path = family_settings.family_dir(family, eval_dir) / settings["outcome"]["fixture"]
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+        fixture = json.load(handle)
+    if fixture["expected"]["embedding_dim"] != settings["outcome"]["embedding_dim"]:
+        raise ValueError(f"{path}: embedding_dim differs from {family}/family.json")
+    return fixture
+
+
+def fill_catalog(resources: dict, catalog: str | None) -> dict:
+    """Resource names with the "<catalog>" placeholder replaced (run records keep the placeholder)."""
+    if any("<catalog>" in str(v) for v in resources.values()):
+        if not catalog:
+            raise ValueError("resource names contain <catalog>: pass --catalog")
+        return {k: str(v).replace("<catalog>", catalog) for k, v in resources.items()}
+    return dict(resources)
 
 
 # ---- result validation (pure, unit-tested) ------------------------------------
@@ -178,13 +197,13 @@ def _failed(names, detail) -> dict:
 # ---- live checks (SDK calls; tested with a fake client) --------------------------
 
 def run_outcome_checks(w, resources: dict, checks: list, fixture: dict | None = None,
-                       reference_endpoint: str | None = None) -> dict:
+                       reference_endpoint: str | None = None, family: str = family_settings.DEFAULT_FAMILY) -> dict:
     """{"outcome/<check>": (passed | None, detail)} for the listed check names.
 
     `w` is a databricks.sdk.WorkspaceClient. Every SDK call is wrapped so one failing
     resource fails its own checks instead of stopping the rest.
     """
-    fixture = fixture or load_fixture()
+    fixture = fixture or load_fixture(family)
     want = set(checks)
     out = {}
     name = resources.get("serving_endpoint")
@@ -255,29 +274,32 @@ def outcome_scores(record: dict) -> dict:
 # ---- CLI ----------------------------------------------------------------------------
 
 def main(argv=None) -> int:
-    sys.path.insert(0, str(EVAL_DIR))
     from install_skill_for_run import load_records  # noqa: E402 — same folder
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--profile", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--task-id", required=True)
-    parser.add_argument("--records", default=str(DEFAULT_RECORDS))
+    parser.add_argument("--family", default=family_settings.DEFAULT_FAMILY)
+    parser.add_argument("--round", help="runs_<date> folder (default: family.json current_round)")
+    parser.add_argument("--records", help="default: models/<family>/<round>/run_records.json")
+    parser.add_argument("--catalog", help="real catalog name, substituted for <catalog> in the recorded names")
     parser.add_argument("--reference-endpoint", help="optional: report cosine similarity against this endpoint")
     args = parser.parse_args(argv)
+    args.records = args.records or str(family_settings.round_dir(args.family, args.round) / "run_records.json")
 
-    with open(EVAL_DIR / "expectations.json", encoding="utf-8") as handle:
-        checks = next(t["outcome_checks"] for t in json.load(handle) if t["task_id"] == args.task_id)
+    checks = family_settings.outcome_checks(family_settings.load_family(args.family), args.task_id)
     records = load_records(Path(args.records))
     index = max(i for i, r in enumerate(records) if r["run_id"] == args.run_id and r["task_id"] == args.task_id)
     resources = records[index].get("resources_created") or {}
-    if not resources.get("serving_endpoint"):
-        parser.error("fill resources_created in the run record first (README step 8)")
+    if not resources.get("serving_endpoint") or not resources.get("uc_model_version"):
+        parser.error("fill resources_created (incl. uc_model_version) in the run record first (README step 8)")
+    resources = fill_catalog(resources, args.catalog)
 
     from databricks.sdk import WorkspaceClient
 
     results = run_outcome_checks(WorkspaceClient(profile=args.profile), resources, checks,
-                                 reference_endpoint=args.reference_endpoint)
+                                 reference_endpoint=args.reference_endpoint, family=args.family)
     records[index]["outcome"] = {k: {"passed": ok, "detail": detail} for k, (ok, detail) in results.items()}
     records[index]["outcome_checked_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with open(args.records, "w", encoding="utf-8") as handle:

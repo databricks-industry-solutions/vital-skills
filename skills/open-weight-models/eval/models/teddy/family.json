@@ -1,0 +1,157 @@
+{
+  "family": "teddy",
+  "description": "TEDDY (Merck/TEDDY, 70M variant) eval settings: resource names per run, outcome settings, old-prompt substitutions.",
+  "current_round": "runs_20261026",
+  "catalog_placeholder": "<catalog>",
+  "schema": "skills_owm_202610",
+  "volume": "owm_teddy_files",
+  "workspace_run_folder": "/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10",
+  "recorded_skill_folder": "/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/.assistant/skills/oss-models/",
+  "installed_skill_folder": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models/",
+  "run_suffix": {
+    "baseline": "baseline",
+    "with_skill": "with_skill",
+    "old_prompt_baseline": "old_baseline",
+    "old_prompt_with_skill": "old_with_skill"
+  },
+  "names": {
+    "teddy-001": {
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_{run}",
+      "serving_endpoint": "owm_teddy_ep_001_{run}",
+      "files": "/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_{run}/"
+    },
+    "teddy-002": {
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_{run}",
+      "serving_endpoint": "owm_teddy_ep_002_{run}",
+      "vector_search_endpoint": "owm_teddy_vs_002_{run}",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_{run}",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_{run}",
+      "files": "/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_{run}/"
+    }
+  },
+  "outcome": {
+    "fixture": "fixtures/teddy_request.json",
+    "embedding_dim": 512,
+    "embedding_dim_source": "70M config.json d_model=512 (fixtures/teddy_request.json source); references/models/teddy.md:48",
+    "vector_search_tasks": [
+      "teddy-002"
+    ],
+    "checks_all_tasks": [
+      "outcome/endpoint_ready",
+      "outcome/serves_recorded_version",
+      "outcome/one_embedding_per_cell",
+      "outcome/embeddings_finite",
+      "outcome/embedding_dim"
+    ],
+    "checks_vector_search": [
+      "outcome/vs_endpoint_online",
+      "outcome/index_ready",
+      "outcome/nn_query_returns_rows",
+      "outcome/nn_has_cell_type_column"
+    ]
+  },
+  "old_prompts": {
+    "old_prompt_baseline": {
+      "file": "old_prompt_baseline.md",
+      "recorded_arm": "baseline"
+    },
+    "old_prompt_with_skill": {
+      "file": "old_prompt_with_skill.md",
+      "recorded_arm": "with_skill"
+    }
+  },
+  "old_prompt_substitutions": {
+    "old_prompt_baseline": {
+      "teddy-001": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_without/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_baseline`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy_70m_baseline`",
+          "`{serving_endpoint}`"
+        ]
+      ],
+      "teddy-002": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_without/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_vs_baseline`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy-70m-vs-baseline`",
+          "`{serving_endpoint}`"
+        ],
+        [
+          "Create a Delta table of reference cell embeddings and a Vector Search index for nearest-neighbor lookup.",
+          "Create a Delta table `{delta_table}` of reference cell embeddings and a Vector Search index `{vector_search_index}` on endpoint `{vector_search_endpoint}` for nearest-neighbor lookup."
+        ]
+      ]
+    },
+    "old_prompt_with_skill": {
+      "teddy-001": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_with/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy_70m`",
+          "`{serving_endpoint}`"
+        ]
+      ],
+      "teddy-002": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_with/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_v2`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy-70m-v2-embedder`",
+          "`{serving_endpoint}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_cells_70m_v2`",
+          "`{delta_table}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_cell_index_70m_v2`",
+          "`{vector_search_index}`"
+        ],
+        [
+          "`teddy-70m-v2-search-endpoint`",
+          "`{vector_search_endpoint}`"
+        ]
+      ]
+    }
+  }
+}
