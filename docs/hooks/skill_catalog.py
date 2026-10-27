@@ -26,8 +26,7 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 # Display order of landing-page filter chips and README groups.
 CATEGORIES = [
     ("Bioinformatics", "var(--t-bio)"),
-    ("Clinical RWE", "var(--t-rwe)"),
-    ("Payer and provider", "var(--t-pp)"),
+    ("Clinical", "var(--t-clin)"),
     ("Others", "var(--t-oth)"),
 ]
 CATEGORY_NAMES = tuple(name for name, _ in CATEGORIES)
@@ -169,14 +168,20 @@ def inject_landing_page(text: str, skills: list[dict] | None = None) -> str:
     return replace_block(text, JS_START, JS_END, js_catalog(skills))
 
 
-def sync(write: bool = True) -> tuple[Path, ...]:
+def sync(write: bool = True) -> list[Path]:
+    """Regenerate README.md and docs/index.html; return the files that were stale."""
     skills = load_skills()
-    readme = inject_readme(README.read_text(encoding="utf-8"), skills)
-    landing = inject_landing_page(LANDING.read_text(encoding="utf-8"), skills)
+    # Generate both before writing either, so a bad marker never leaves a half-updated tree.
+    pending = {}
+    for path, inject in ((README, inject_readme), (LANDING, inject_landing_page)):
+        current = path.read_text(encoding="utf-8")
+        generated = inject(current, skills)
+        if generated != current:
+            pending[path] = generated
     if write:
-        README.write_text(readme, encoding="utf-8")
-        LANDING.write_text(landing, encoding="utf-8")
-    return README, LANDING
+        for path, generated in pending.items():
+            path.write_text(generated, encoding="utf-8")
+    return list(pending)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -187,30 +192,23 @@ def main(argv: list[str] | None = None) -> int:
         help="exit 1 if README.md or docs/index.html are out of date",
     )
     args = parser.parse_args(argv)
-    skills = load_skills()
-    readme_ok = README.read_text(encoding="utf-8") == inject_readme(
-        README.read_text(encoding="utf-8"), skills
-    )
-    landing_ok = LANDING.read_text(encoding="utf-8") == inject_landing_page(
-        LANDING.read_text(encoding="utf-8"), skills
-    )
+    try:
+        stale = sync(write=not args.check)
+    except CatalogError as exc:
+        print(f"Skill catalog error: {exc}", file=sys.stderr)
+        return 1
+    names = ", ".join(p.relative_to(REPO_ROOT).as_posix() for p in stale)
     if args.check:
-        if readme_ok and landing_ok:
+        if not stale:
             return 0
-        stale = [
-            path
-            for path, ok in ((README, readme_ok), (LANDING, landing_ok))
-            if not ok
-        ]
         print(
             "Skill catalog is stale. Run:\n"
             "  python docs/hooks/skill_catalog.py\n"
-            "Out of date: " + ", ".join(p.as_posix() for p in stale),
+            f"Out of date: {names}",
             file=sys.stderr,
         )
         return 1
-    sync(write=True)
-    print(f"Updated {README.relative_to(REPO_ROOT)} and {LANDING.relative_to(REPO_ROOT)}")
+    print(f"Updated {names}" if stale else "Skill catalog already up to date")
     return 0
 
 
