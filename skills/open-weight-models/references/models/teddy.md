@@ -8,8 +8,8 @@
 * Paper: arXiv:2503.03485
 * Reviewed date: 2026-09-05
 * Upstream revision: pinned via `snapshot_download` — record the commit SHA from `.gitattributes` after download
-* Code license: Apache-2.0
-* Weight terms: Apache-2.0 (verify on model card before distribution)
+* License (checked read-only at HF revision `8c880aa67674042ccdc254bccb5de081092a48bf`): the model card (`README.md` front matter) declares `license: apache-2.0`; the bundled Python package's `pyproject.toml` declares `license = "MIT"`; the repo has no `LICENSE` file. Both are permissive.
+* License handling: record **both** declarations plus the revision in the provenance manifest and MLflow tags, and ask the user to confirm with the model owner before redistribution — do not state which one governs.
 * Variants: 70M, 160M, 400M (parameter count)
 
 ## What this model does
@@ -28,12 +28,12 @@ The model does not accept a raw AnnData object. Transport as three DataFrame col
 | `adata_obs` | `str` — JSON orient=`split` | Cell metadata DataFrame. Required by the signature; not consumed by `predict`. Include at minimum a `cell_id` column. |
 | `adata_var` | `str` — JSON orient=`split` | Gene metadata DataFrame. Must have an `index` column containing Ensembl gene IDs (`ENSGXXXXXXXXXXX`) that match `vocab.txt`. |
 
-Inference controls are passed as `extra_params` (Databricks Python SDK) or the `params` field (MLflow local):
+Inference controls go in the REST request body's `"params"` field (endpoint) or `params=` (MLflow local `predict`). Do **not** use the SDK's `serving_endpoints.query(extra_params=...)`: the endpoint silently ignores it (see [Sending inference controls](#sending-inference-controls) and SKILL.md Troubleshooting #13).
 
 | Parameter | Type | Default | Notes |
 |-----------|------|---------|-------|
-| `max_seq_len` | int (pass as `str` via SDK) | 2048 | Top-K genes selected per cell. |
-| `pooling` | str | `"mean"` | `"mean"` pools over all token positions; `"cls"` uses the CLS token (only valid when `config.add_cls=True`). |
+| `max_seq_len` | int (sent as `str`; declare a `str` default in the signature, cast in `predict`) | 2048 | Top-K genes selected per cell. |
+| `pooling` | str | `"mean"` | `"mean"` pools over all token positions; `"cls"` uses the CLS token (only valid when `config.add_cls=True`). The 70M forward pass returns an already-pooled `cell_emb`, so the wrapper below skips pooling and this control has no effect there (see [Wrapper boundary](#wrapper-boundary)). |
 
 ### Output
 
@@ -84,19 +84,19 @@ input_example = pd.DataFrame({
 
 ### HTTP payload (Databricks SDK)
 
+Send inference controls under the request-body key `"params"`, **not** with `w.serving_endpoints.query(extra_params=...)`: the SDK writes `extra_params` to a body key `"extra_params"` that the MLflow scoring server drops, so the call succeeds but `predict()` runs with defaults (measured 2026-10-27 on a TEDDY endpoint: `extra_params` gave embeddings identical to the default, cosine 1.0; body `"params"` changed them, cosine 0.53–0.64).
+
 ```python
-response = w.serving_endpoints.query(
-    name=ENDPOINT_NAME,
-    dataframe_records=[{
-        "adata_sparsematrix": expr.tolist(),
-        "adata_obs":          obs_df.to_json(orient="split"),
-        "adata_var":          var_df.to_json(orient="split"),
-    }],
-    extra_params={"max_seq_len": "2048", "pooling": "mean"},  # values MUST be strings
-)
+records = [{
+    "adata_sparsematrix": expr.tolist(),
+    "adata_obs":          obs_df.to_json(orient="split"),
+    "adata_var":          var_df.to_json(orient="split"),
+}]
+response = invoke(w, ENDPOINT_NAME, records, params={"max_seq_len": "2048", "pooling": "mean"})  # w = WorkspaceClient(); invoke() is defined in "Sending inference controls"
+embeddings = [p["embedding"] for p in response["predictions"]]
 ```
 
-Note: the SDK's `serving_endpoints.query()` uses `extra_params: Dict[str, str]`, **not** `params`. Values must be strings; the PyFunc wrapper should cast them: `int(params.get("max_seq_len", 2048))`, `str(params.get("pooling", "mean"))`.
+`invoke()`, the equivalent HTTP request, and the type rules are in [Sending inference controls](#sending-inference-controls). Values are strings; the PyFunc wrapper casts them: `int(params.get("max_seq_len", 2048))`, `str(params.get("pooling", "mean"))`.
 
 ## Artifacts and runtime
 
@@ -107,7 +107,7 @@ Path: `<VOLUME_PATH>/snapshot/teddy/models/teddy_g/<VARIANT>/`
 | File | Size (70M) | Purpose |
 |------|------------|----------|
 | `model.safetensors` | ~285 MB | Model weights |
-| `vocab.txt` | ~756 KB | ~60 K Ensembl gene IDs (one per line); used by `GeneTokenizer.from_pretrained()` |
+| `vocab.txt` | ~756 KB | 43,808 lines (70M, HF revision `8c880aa`): 25,424 Ensembl gene IDs plus special tokens, one per line; used by `GeneTokenizer.from_pretrained()` |
 | `config.json` | — | Architecture config (`d_model`, `add_cls`, `cls_token_id`, …) |
 | `tokenizer_config.json` | — | Tokenizer init config |
 | `added_tokens.json` | — | Special tokens (`<pad>`, `<mask>`, `<unk>`) |
@@ -245,7 +245,7 @@ Embeddings are NOT interchangeable between variants (different dimensionality), 
    adata.var_names_make_unique()
    ```
 5. Intersect with TEDDY vocab: ~22K overlap out of 25K Ensembl IDs (86.6%)
-6. **Filter AnnData to TEDDY vocab genes** before embedding: `adata = adata[:, mask]`. Census delivers ~60k genes per cell; sending all of them to the serving endpoint exceeds the 16 MB request-size limit. Filtering to the ~22k TEDDY vocab genes cuts the payload by >50% and stays within limits.
+6. **Filter AnnData to TEDDY vocab genes** before embedding: `adata = adata[:, mask]`. Census delivers ~60k genes per cell; sending all of them to the serving endpoint exceeds the 16 MB request-size limit. Filtering to the ~22k Census genes that are in the TEDDY vocab cuts the payload by >50% and stays within limits.
 7. Embed in batches via the serving endpoint. **Batch size depends on GPU tier**: 10 cells for `GPU_SMALL` (T4, 16 GB); 50 for `GPU_MEDIUM` (A10G, 24 GB). Larger batches on T4 cause `CUDA out of memory` — the 70M model's activations at 2048 seq_len × 512 hidden dim saturate 14.5 GB of available VRAM with >10 concurrent cells.
 8. Write `(cell_id, embedding, cell_type, tissue_general, disease)` to Delta
 9. Enable CDF for Delta Sync AI Search index
@@ -278,13 +278,13 @@ ImportError: cannot import name 'EC' from 'botocore.compat'
 
 After the `teddy_cells_{variant}` table is written, Cell 24 creates a Delta Sync AI Search index:
 
-1. **Endpoint**: reuse `gwb_teddy_vs_endpoint` if it exists, otherwise create a `STANDARD` endpoint and wait for ONLINE status.
+1. **Endpoint**: confirm the AI Search endpoint name with the user and hold it in a variable (`VS_ENDPOINT = "<vector-search-endpoint>"`). Reuse an existing endpoint only if the user confirms it; otherwise create a `STANDARD` endpoint under the agreed name and wait for ONLINE status. Never assume another project's endpoint (for example one created by a Genesis Workbench deployment) exists or may be shared.
 2. **Dimension check**: if an existing index has a different dimension (e.g. 1024 from 400M vs 512 from 70M after a variant switch), drop and recreate. Embeddings are not interchangeable between variants.
 3. **Index creation**:
    ```python
    w.vector_search_indexes.create_index(
        name=f"{CATALOG}.{SCHEMA}.teddy_cell_index",
-       endpoint_name="gwb_teddy_vs_endpoint",
+       endpoint_name=VS_ENDPOINT,  # name confirmed with the user
        primary_key="cell_id",
        index_type=VectorIndexType.DELTA_SYNC,
        delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
@@ -530,7 +530,7 @@ served_entity = ServedEntityInput(
 
 ## Registration and observability
 
-Register to Unity Catalog as `<catalog>.<schema>.teddy_<variant>` (e.g. `<catalog>.skills.teddy_70m`). Log Apache-2.0 license, paper DOI, HF source URL, and variant as MLflow tags. The Census table follows the same convention: `teddy_cells_<variant>` (e.g. `teddy_cells_70m`), and the endpoint: `teddy-<variant>-embedder` (e.g. `teddy-70m-embedder`).
+Register to Unity Catalog as `<catalog>.<schema>.teddy_<variant>` (e.g. `<catalog>.skills.teddy_70m`). Log both declared licenses (model card Apache-2.0, package `pyproject.toml` MIT — see [Identity](#identity)), the HF revision, paper DOI, HF source URL, and variant as MLflow tags. The Census table follows the same convention: `teddy_cells_<variant>` (e.g. `teddy_cells_70m`), and the endpoint: `teddy-<variant>-embedder` (e.g. `teddy-70m-embedder`).
 
 **Inference tables** are a best-practice default (see SKILL.md §AI Gateway and inference tables). Enable them in the `serving_endpoints.create()` call. The `adata_sparsematrix` and `adata_var` payloads contain gene expression profiles — classify before logging; prefer logging only `cell_id`, embedding dimension, and variant tag. Confirm the inference-table catalog is backed by external storage.
 
@@ -554,7 +554,7 @@ ai_gateway = AiGatewayConfig(
 
 w.serving_endpoints.create(
     name=ENDPOINT_NAME,
-    config=EndpointCoreConfigInput(served_entities=[served_entity]),
+    config=EndpointCoreConfigInput(name=ENDPOINT_NAME, served_entities=[served_entity]),  # name: Optional in databricks-sdk <=0.70.0, required from 0.71.0; passing it works on both
     ai_gateway=ai_gateway,
 )
 ```
@@ -563,19 +563,63 @@ w.serving_endpoints.create(
 
 ## Validation checklist
 
-1. **Vocabulary smoke test**: load `vocab.txt`, verify ~60 K lines, check that `ENSG00000000003` is present.
+1. **Vocabulary smoke test**: load `vocab.txt`, verify the line count (70M at HF revision `8c880aa`: 43,808 lines, of which 25,424 are Ensembl IDs), check that `ENSG00000000003` is present.
 2. **Import test**: in the serving container environment, `from teddy.models.model_directory import get_architecture, model_dict` and `from teddy.tokenizer.gene_tokenizer import GeneTokenizer` succeed.
 3. **Dry-load test**: `load_context` completes, prints `TEDDY-G 70M loaded on cuda, d_model=…`.
-4. **Signature test**: `infer_signature` on `input_example` produces schema with all three columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required fields.
+4. **Signature test**: build the signature with `infer_signature(input_example, output_example, params=default_params)` using string defaults (see [Sending inference controls](#sending-inference-controls)); check the input schema has all three columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required fields and that `{p.name: p.dtype for p in signature.params.params}` lists every control as `DataType.string`.
 5. **Real-gene payload test**: test payload uses Ensembl IDs from `vocab.txt`; embeddings are non-degenerate (not all the same value, norm > 0).
 6. **All-OOV payload test**: all gene names set to random strings → all map to `<unk>` → model still returns an embedding without raising an exception.
 7. **Missing-field test**: omit `adata_obs` from the request → endpoint returns a schema-validation error (confirming the signature enforces all three fields).
-8. **SDK query test**: `w.serving_endpoints.query(extra_params={"max_seq_len": "2048", "pooling": "mean"})` succeeds (values as strings, not ints).
+8. **Inference-control test**: call the endpoint twice through `invoke()` ([Sending inference controls](#sending-inference-controls)) on the same real-gene payload — once with defaults, once with a non-default `{"max_seq_len": "32"}` (values as strings; each cell must have more than 32 expressed genes, or truncation changes nothing) — and assert the embeddings differ (cosine clearly below 1.0). Before the calls, confirm the registered version's params schema (`mlflow.models.get_model_info(model_uri).signature.params`) lists `max_seq_len` and `pooling` as strings — an undeclared control is dropped. Identical output means the control never reached `predict()`; a successful call alone proves nothing. Use `max_seq_len`, not `pooling`, for 70M: its pre-pooled output makes `pooling` a no-op in this wrapper.
 9. **Embedding sanity**: for 70M, embedding dimension should match `config.d_model` (read from `config.json`).
 
 10. **AI Search self-retrieval test**: query the index with a known cell's embedding; top-1 result must be the same cell (score ~1.0). Results must be monotonically ordered by similarity.
 11. **Census gene ID test**: verify `adata.var_names` are Ensembl IDs (start with `ENSG`), not numeric indices, before intersecting with TEDDY vocab. Overlap should be ≥80% (22K+).
 12. **AI Search dimension match test**: if switching variants, the index dimension must match `EMB_DIM` for the current variant. A dim mismatch (e.g. 1024 from 400M vs 512 from 70M) requires dropping and recreating the index.
+
+## Sending inference controls
+
+Custom PyFunc inference controls must arrive under the request-body key `"params"`, which the MLflow scoring server passes to `predict(..., params=...)`. `w.serving_endpoints.query()` has no `params` argument; its `extra_params` argument is written to a body key `"extra_params"`, which the server drops without an error (SKILL.md Troubleshooting #13). Post the body yourself:
+
+```python
+def invoke(w, endpoint_name, records, params=None):
+    """POST to the endpoint with inference controls under the body "params" key."""
+    body = {"dataframe_records": records}
+    if params:
+        body["params"] = params
+    return w.api_client.do("POST", f"/serving-endpoints/{endpoint_name}/invocations", body=body)
+```
+
+Equivalent HTTP request:
+
+```http
+POST /serving-endpoints/<endpoint-name>/invocations
+{
+  "dataframe_records": [{"adata_sparsematrix": [[...]], "adata_obs": "<json split>", "adata_var": "<json split>"}],
+  "params": {"max_seq_len": "2048", "pooling": "mean"}
+}
+```
+
+Type rules: log the signature with string defaults, because MLflow rejects a string sent for an integer-typed param; cast in the wrapper:
+
+```python
+import json
+from mlflow.models import infer_signature
+from mlflow.types import DataType
+
+# input_example, model_dir and n_cells come from "Input example" above.
+# output_example mirrors the documented response: one `embedding` of d_model floats per cell.
+with open(f"{model_dir}/config.json") as f:
+    d_model = int(json.load(f)["d_model"])  # 512 for 70M
+output_example = pd.DataFrame({"embedding": [[0.0] * d_model for _ in range(n_cells)]})
+
+default_params = {"max_seq_len": "2048", "pooling": "mean"}  # strings, matching what invoke() sends
+signature = infer_signature(input_example, output_example, params=default_params)
+assert {p.name: p.dtype for p in signature.params.params} == {
+    "max_seq_len": DataType.string, "pooling": DataType.string}
+```
+
+A control missing from the signature's params schema is dropped with only a log warning. A successful call does not prove a control was applied — run Validation checklist item 8.
 
 ## Open questions
 

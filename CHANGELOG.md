@@ -48,6 +48,10 @@ Other changes:
 
 - `open-weight-models` eval: moved from `tests/` to the standard `eval/` layout — shared harness, per-family settings and run rounds under `eval/models/<family>/` (TEDDY: teddy-001, teddy-002), and the Sep 24 – Oct 7, 2026 runs kept in `eval/runs_20260924/`
 
+### Fixed
+
+- `open-weight-models`: custom PyFunc inference controls now go in the REST body `"params"` field; the SDK's `serving_endpoints.query(extra_params=...)` is silently ignored by these endpoints (measured on TEDDY 2026-10-27). TEDDY guidance also drops a hardcoded Genesis Workbench Vector Search endpoint, corrects the vocabulary size, records both declared licenses, and passes the now-required `name=` to `EndpointCoreConfigInput`. See `skills/open-weight-models/CHANGELOG.md`.
+
 ### Notes
 
 - Site publish is `mkdocs gh-deploy` to `gh-pages` (GitHub-hosted runners cannot deploy Pages on this org). PRs still run `mkdocs build --strict`.
