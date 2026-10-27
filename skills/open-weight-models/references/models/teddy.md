@@ -92,7 +92,7 @@ records = [{
     "adata_obs":          obs_df.to_json(orient="split"),
     "adata_var":          var_df.to_json(orient="split"),
 }]
-response = invoke(w, ENDPOINT_NAME, records, params={"max_seq_len": "2048", "pooling": "mean"})
+response = invoke(w, ENDPOINT_NAME, records, params={"max_seq_len": "2048", "pooling": "mean"})  # w = WorkspaceClient(); invoke() is defined in "Sending inference controls"
 embeddings = [p["embedding"] for p in response["predictions"]]
 ```
 
@@ -603,8 +603,15 @@ POST /serving-endpoints/<endpoint-name>/invocations
 Type rules: log the signature with string defaults, because MLflow rejects a string sent for an integer-typed param; cast in the wrapper:
 
 ```python
+import json
 from mlflow.models import infer_signature
 from mlflow.types import DataType
+
+# input_example, model_dir and n_cells come from "Input example" above.
+# output_example mirrors the documented response: one `embedding` of d_model floats per cell.
+with open(f"{model_dir}/config.json") as f:
+    d_model = int(json.load(f)["d_model"])  # 512 for 70M
+output_example = pd.DataFrame({"embedding": [[0.0] * d_model for _ in range(n_cells)]})
 
 default_params = {"max_seq_len": "2048", "pooling": "mean"}  # strings, matching what invoke() sends
 signature = infer_signature(input_example, output_example, params=default_params)
@@ -612,7 +619,7 @@ assert {p.name: p.dtype for p in signature.params.params} == {
     "max_seq_len": DataType.string, "pooling": DataType.string}
 ```
 
- A control missing from the signature's params schema is dropped with only a log warning. A successful call does not prove a control was applied — run Validation checklist item 8.
+A control missing from the signature's params schema is dropped with only a log warning. A successful call does not prove a control was applied — run Validation checklist item 8.
 
 ## Open questions
 
