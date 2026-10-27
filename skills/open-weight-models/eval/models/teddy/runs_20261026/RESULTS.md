@@ -1,11 +1,15 @@
-# TEDDY retest, 2026-10-27 — results (draft for review)
+# TEDDY retest, 2026-10-27 — results
 
 Genie Code with its built-in skills **plus** the open-weight-models skill (`with_skill`)
 against Genie Code with its built-in skills **only** (`baseline`), on two tasks:
 **teddy-001** (deploy TEDDY-70M as a serving endpoint) and **teddy-002** (deploy it and
 build a nearest-neighbour cell search). Raw counts only — no percentages, no single score.
 
-**Words used here.** UC = Unity Catalog (where models are registered). VS = Vector Search
+**Words used here.** CPU = central processing unit and GPU = graphics processing unit
+(the two kinds of serving hardware; `GPU_SMALL` is Model Serving's smallest GPU size, A10 is
+the GPU model). SDK = software development kit (here the Databricks Python SDK). REST = the
+plain web interface of an endpoint; "REST body" = the request text sent to it. ID =
+identifier. UTC = coordinated universal time. UC = Unity Catalog (where models are registered). VS = Vector Search
 (the index used for nearest-neighbour cell lookup). AI Gateway = the serving endpoint
 setting that logs requests to an inference table and tracks usage. HF = Hugging Face (where
 TEDDY's weights live). Sub-check = one pass/fail line of a scorer. Severity: **critical** =
@@ -122,7 +126,7 @@ carries the provenance "measured by orchestrator 2026-10-27, before teardown" in
 |---|---|---|---|---|---|
 | Endpoint ready | pass | pass | pass | pass | pass |
 | Serves the recorded model version | pass | pass | pass | pass | pass |
-| Valid embeddings in its own declared format (one finite 512-dimension vector per cell) | **fail** — equal-length batches work; mixed lengths fail ("index out of range": the padding value −100 is used as a token ID) | pass (equal and mixed lengths) | pass (gene IDs + counts) | pass | pass |
+| Valid embeddings in its own declared format (one finite 512-dimension vector per cell) | **fail** — equal-length batches work; mixed lengths fail ("index out of range": the padding value −100 is used as a token ID) | pass (equal and mixed lengths) | pass (gene IDs + counts; checked by hand on 2 of the 3 fixture cells, not with mixed lengths) | pass | pass |
 | Takes cell expression + gene IDs (not pre-tokenized token IDs) | **fail** (token IDs; tokenization left to the client) | **fail** (same) | pass | pass | pass |
 | VS endpoint online | — | — | pass | pass | — |
 | Index ready | — | — | pass (3,538 rows) | pass (1,000 rows) | — |
@@ -178,8 +182,13 @@ licence mismatch upstream (model card Apache-2.0, `pyproject` MIT).
 - Genie Code as shipped: built-in skills always on (not visible or switchable). No
   personal or workspace skills (Skills panel: "No skills found" for baselines; only
   open-weight-models for with-skill runs).
-- A temporary 3-line instructions file (179 bytes, fingerprinted in each record) for four
-  runs — see "Things that look off" for baseline/teddy-002.
+- A temporary 3-line instructions file (179 bytes, sha256 `1630f63a…`) in all five runs.
+  baseline/teddy-002's record shows the user's full file (11,229 bytes) because it was
+  fingerprinted at setup (03:55 UTC), before the file was replaced; the temporary file
+  was active during that run — every later record fingerprints it, the notebook was
+  created at 05:56 UTC, and Genie Code's pre-run memory-check reply quoted a line found
+  only in the temporary file ("check with you before deleting anything"). Recorded under
+  `instructions_at_run` in that record; the setup fingerprint is kept unchanged.
 - Notebooks on serverless GPU (A10), serverless environment v6 (the Sep–Oct 2026 runs used
   AI Runtime v5).
 - Genie Code memories cleared before each run.
@@ -223,6 +232,11 @@ licence mismatch upstream (model card Apache-2.0, `pyproject` MIT).
      pyproject" but not the literal `pyproject.toml`.
    - `pyfunc_quality/sys_modules_purge` and `endpoint_deployment/run_go_gate` are
      `teddy.md` / `SKILL.md` conventions (minor); a notebook can work without them.
+   Not false negatives: the AI Gateway (inference table + usage tracking) and provenance
+   (license + Hugging Face revision tags) checks are valid, recorded criteria. They come
+   from the skill (`SKILL.md:325`, `teddy.md:533`) and the answer key, not from the
+   prompts — neither task prompt asks for them — so they measure whether Genie Code
+   applies these practices unprompted, which is part of what the skill is meant to add.
    Fixed in the new checks during scoring: a config written as
    `AiGatewayConfig(...) if FLAG else None` was not followed, so with_skill/teddy-002
    first failed both `ai_gateway` checks although its endpoint had both enabled.
@@ -232,10 +246,7 @@ licence mismatch upstream (model card Apache-2.0, `pyproject` MIT).
 
 ## Things that look off
 
-- **baseline/teddy-002's record fingerprints the user's full instructions file**
-  (11,229 bytes) at setup time, not the 179-byte temporary file of the other four runs.
-  If the temporary file was put in place after setup, this is only a stale fingerprint;
-  if not, that run saw the full instructions (which ask to delete existing endpoints and
-  model versions). Worth confirming before the results are shared.
+- **Resolved:** baseline/teddy-002's setup-time instructions fingerprint (11,229 bytes) is
+  stale; the 179-byte temporary file was active during the run (see "Environment").
 - The baselines chose CPU serving; the task guidelines say GPU_SMALL. No check scores the
   workload type directly (only the endpoint-settings table above shows it).

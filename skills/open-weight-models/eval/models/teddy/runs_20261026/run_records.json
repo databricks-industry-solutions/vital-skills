@@ -206,6 +206,12 @@
       "ai_gateway_inference_table": false,
       "ai_gateway_usage_tracking": false,
       "provenance": "measured by orchestrator 2026-10-27, before teardown"
+    },
+    "instructions_at_run": {
+      "bytes": 179,
+      "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e",
+      "note": "The temporary 3-line instructions file was active during this run. environment.user_instructions (11,229 bytes) is a stale setup-time fingerprint: this record was written 2026-10-27T03:55Z, before the user replaced the file. Evidence: every later record (05:14, 07:05, 07:54, 08:27 UTC) fingerprints 179 bytes, sha256 1630f63a...; the teddy-002 notebook was created 05:56Z (workspace get-status); and Genie Code's pre-run memory-check reply said 'your instructions say to check with you before deleting anything', a line only in the temporary file.",
+      "provenance": "orchestrator 2026-10-27, confirmed in Codex review of 217363b; the setup-time fingerprint is kept unchanged"
     }
   },
   {

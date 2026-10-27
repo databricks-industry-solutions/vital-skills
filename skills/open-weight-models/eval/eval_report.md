@@ -9,7 +9,7 @@ the Sep 24 – Oct 7, 2026 runs were removed before the reruns, for both pairs.
 
 ## TEDDY
 
-**Status: standard pair run on 2026-10-27 — results draft for review:**
+**Status: standard pair run on 2026-10-27 — results:**
 [`models/teddy/runs_20261026/RESULTS.md`](models/teddy/runs_20261026/RESULTS.md).
 Built-ins + this skill against built-ins only, one fresh chat per task per run, the skill
 installed without `eval/`, a recorded Skills panel, self-report and visible steps. Every
@@ -58,7 +58,7 @@ first run's failures; all on the pre-rename skill.
 
 ### Verdict
 
-None yet — the 2026-10-27 results are a draft pending review (`RESULTS.md`).
+None yet — the 2026-10-27 results (`RESULTS.md`) are under review.
 
 ### Limitations
 

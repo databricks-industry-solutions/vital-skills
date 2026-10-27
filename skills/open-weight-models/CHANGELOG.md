@@ -37,8 +37,8 @@ frontmatter `version` is the source of truth for releases.
   `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
   `tests/test_check_outcome.py`.
 - `eval/models/teddy/runs_20261026/`: the 2026-10-27 TEDDY runs (five exported notebooks,
-  catalog name replaced by `<catalog>`), filled run records, score files and a results
-  draft (`RESULTS.md`); `eval_report.md` points to it. The first baseline/teddy-001 attempt
+  catalog name replaced by `<catalog>`), filled run records, score files and the results
+  (`RESULTS.md`); `eval_report.md` points to it. The first baseline/teddy-001 attempt
   is kept as a second sample: the run guide supplied the wrong prompt (the planned
   with-skill teddy-001 prompt, with `_001_with_skill` names); wording is otherwise
   identical to the teddy-001 request.
@@ -63,6 +63,7 @@ frontmatter `version` is the source of truth for releases.
   cells in that declared format (mixed lengths), POSTs inference controls under `params`
   (the SDK's `extra_params` are dropped by the scoring server), asks the index only for
   columns it holds, and records the endpoint's workload type and AI Gateway flags.
+  `expectations.json` metadata now asks for REST body `params` instead of `extra_params`.
 - Eval: the scoring notebook scores repeat attempts as extra samples, skips discarded
   records and pairs that were not run; the protocol preflight accepts "not available:
   <reason>".
