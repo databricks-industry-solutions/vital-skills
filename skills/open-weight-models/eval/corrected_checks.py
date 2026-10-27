@@ -640,9 +640,10 @@ def _top_level(nb) -> set:
 
 
 def _gate_for(nb, site, top: set):
-    """(flag, if node, side) of a gate that the deploy `site` needs: side "body" / "orelse" when the
+    """(flag, if/assert node, side) of a gate that the deploy `site` needs: side "body" / "orelse" when the
     site is inside that branch of a flag `if`, "exit-body" / "exit-orelse" for a top-level flag `if`
-    BEFORE the site whose branch stops the notebook (dbutils.notebook.exit / sys.exit / raise).
+    BEFORE the site whose branch stops the notebook (dbutils.notebook.exit / sys.exit / raise), and
+    "assert" for a top-level `assert FLAG` before the site (it stops the notebook while the flag is off).
     The innermost enclosing gate wins; None when nothing gates the site."""
     enclosing = []
     for node in nb.nodes(ast.If):
@@ -656,12 +657,14 @@ def _gate_for(nb, site, top: set):
     if enclosing:
         node, flag, side = max(enclosing, key=lambda e: e[0].lineno)
         return flag, node, side
-    for node in sorted(nb.nodes(ast.If), key=lambda n: n.lineno):
+    for node in sorted(nb.nodes(ast.If) + nb.nodes(ast.Assert), key=lambda n: n.lineno):
         if id(node) not in top or node.end_lineno >= site.lineno:
             continue
         flag = _is_flag(nb, node.test)
         if not flag:
             continue
+        if isinstance(node, ast.Assert):
+            return flag, node, "assert"
         for side in ("body", "orelse"):
             if any(_stops(nb, n) for stmt in getattr(node, side) for n in ast.walk(stmt)):
                 return flag, node, f"exit-{side}"
@@ -692,19 +695,20 @@ def run_go_gate(nb, response, record, task):
             problems.append(f"{where} is not behind a widget or flag")
             continue
         flag, node, side = gate
+        kind = "assert" if side == "assert" else "if"
         default = _default_value(nb, node.test, node.lineno)
         if default is _UNKNOWN:
-            problems.append(f"{where} is gated by {flag} (if at line {node.lineno}), but the gate's default "
+            problems.append(f"{where} is gated by {flag} ({kind} at line {node.lineno}), but the gate's default "
                             f"cannot be determined from the code")
             continue
         test = bool(default)
         # does the deploy run at the defaults?
-        runs = {"body": test, "orelse": not test, "exit-body": not test, "exit-orelse": test}[side]
+        runs = {"body": test, "orelse": not test, "exit-body": not test, "exit-orelse": test, "assert": test}[side]
         if runs:
-            problems.append(f"{where} is gated by {flag} (if at line {node.lineno}), but the gate defaults to on "
+            problems.append(f"{where} is gated by {flag} ({kind} at line {node.lineno}), but the gate defaults to on "
                             f"(the deploy runs with the defaults)")
         else:
-            ok.append(f"{where} runs only when {flag} is turned on (if at line {node.lineno}; off by default)")
+            ok.append(f"{where} runs only when {flag} is turned on ({kind} at line {node.lineno}; off by default)")
     if problems:
         return False, "; ".join(problems)
     return True, "; ".join(ok)

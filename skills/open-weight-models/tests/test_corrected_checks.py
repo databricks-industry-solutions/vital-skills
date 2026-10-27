@@ -307,6 +307,11 @@ DEPLOY = "w.serving_endpoints.create(name=N, config=c)"
       f"if not SKIP_DEPLOY:\n    {DEPLOY}"), False),
     (("# run_go gate\n" + DEPLOY,), False),
     (("NAME = 'ep'", "if NAME in existing:\n    w.serving_endpoints.update_config(name=NAME, served_entities=e)"), False),
+    # round 2: a top-level `assert FLAG` before the deploy stops the notebook while the flag is off
+    (("CONFIRM = False", "assert CONFIRM, 'set CONFIRM = True'", DEPLOY), True),
+    (("CONFIRM = True", "assert CONFIRM, 'set CONFIRM = True'", DEPLOY), False),
+    (("import os", "assert os.path.exists('/tmp')", DEPLOY), False),                # not a user flag
+    (("CONFIRM = False", DEPLOY, "assert CONFIRM, 'set CONFIRM = True'"), False),    # after the deploy
 ])
 def test_run_go_gate(cc, cells, ok):
     assert _check(cc, "endpoint_deployment/run_go_gate", _nb(*cells))[0] is ok
@@ -319,6 +324,8 @@ def test_run_go_gate_reasons(cc):
     unknown = _nb("RUN_GO = dbutils.widgets.get('run_go') == 'true'", f"if RUN_GO:\n    {DEPLOY}")
     assert "cannot be determined" in _check(cc, "endpoint_deployment/run_go_gate", unknown)[1]
     assert "no serving-endpoint deploy call" in _check(cc, "endpoint_deployment/run_go_gate", _nb("GO = False"))[1]
+    saved_on = _nb("CONFIRM = True", "assert CONFIRM, 'set CONFIRM = True'", DEPLOY)
+    assert "assert at line" in _check(cc, "endpoint_deployment/run_go_gate", saved_on)[1]
 
 
 # ---- verbatim logic and recorded files unchanged; committed corrected files reproduce ---------
