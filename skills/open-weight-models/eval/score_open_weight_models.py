@@ -48,7 +48,7 @@ for directory in (EVAL_DIR, SCRIPTS_DIR):
     if str(directory) not in sys.path:
         sys.path.insert(0, str(directory))
 
-from scorers import scorers as all_scorers, NEW_CHECK_PREFIX
+from scorers import scorers as all_scorers, NEW_CHECK_PREFIX, run_prompts
 from compare_runs import extract_scores, main as compare_main
 from install_skill_for_run import check_notebook, latest_record, load_records
 
@@ -65,8 +65,10 @@ with open(EVAL_DIR / "evalset.json", encoding="utf-8") as handle:
 with open(EVAL_DIR / "expectations.json", encoding="utf-8") as handle:
     expectations_list = json.load(handle)
 
-queries = {task["task_id"]: task["query"] for task in evalset}
 task_ids = [task["task_id"] for task in evalset]
+# The prompt actually pasted in each run: evalset query (standard pair) or the
+# 2026-10 prompt text from old_prompt_*.md (replication pair).
+prompts = run_prompts(EVAL_DIR)
 expectations_by_task = {}
 for task in expectations_list:
     merged = dict(task["expectations"])
@@ -86,6 +88,7 @@ sources = {
 # MAGIC `references/models/teddy.md`. A code in a notebook means Genie Code read that file.
 # MAGIC Baseline runs record no codes; with-skill runs should show them. A with-skill run
 # MAGIC that shows neither code did not pick the skill up — report it, do not drop it.
+# MAGIC A run marked `discarded` (README step 7) stops the notebook: redo it before scoring.
 
 # COMMAND ----------
 
@@ -93,6 +96,7 @@ records = load_records(OUTPUTS_DIR / "run_records.json")
 for run in RUNS:
     for task_id in task_ids:
         record = latest_record(records, run, task_id)
+        assert not record.get("discarded"), f"{run}/{task_id} was discarded ({record['discard_reason']}): redo it first"
         print(run, task_id, record["state"], check_notebook(sources[run][task_id], record["codes"]))
 
 # COMMAND ----------
@@ -102,7 +106,7 @@ for run in RUNS:
     for task_id in task_ids:
         rows = [
             {
-                "inputs": {"task_id": task_id, "query": queries[task_id]},
+                "inputs": {"task_id": task_id, "run_id": run, "query": prompts[run][task_id]},
                 "outputs": {"notebook_source": sources[run][task_id]},
                 "expectations": expectations_by_task[task_id],
             }

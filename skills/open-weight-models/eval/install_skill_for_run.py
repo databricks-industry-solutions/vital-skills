@@ -17,9 +17,17 @@ Target: /Workspace/Users/<user>/.assistant/skills/open-weight-models.
        --replace-existing is given: then the target is first exported to
        eval/outputs/<run-id>/backup/<task-id>-<timestamp>/, then deleted (and, for ON,
        the staged copy imported; if the import fails, the restore command is printed).
-       Finally a record is appended to eval/outputs/run_records.json: both
-       skills-folder listings, the codes, the skill's git commit, a UTC timestamp and an
-       empty "notes" field for the person running the eval.
+       Finally a record is appended to eval/outputs/run_records.json: the environment
+       (both skills-folder listings, size + sha256 of each user-folder SKILL.md and of
+       the user's .assistant_instructions.md, whether /Workspace/.assistant/skills and
+       /Workspace/.assistant_workspace_instructions.md exist), the codes, the backup
+       path and whether it holds the user's "pre-eval install" or an "eval copy" (an
+       installed SKILL.md with a marker line), the skill's git commit, a UTC timestamp,
+       and the fields filled in by hand after the run: "discarded", "discard_reason",
+       "notes".
+
+  --restore-original (after all runs) deletes the eval copy and re-imports the earliest
+  backup of the user's pre-eval install, or, if there is none, leaves the skill removed.
 
   --check-notebook <exported .py> reports which codes from the latest record for
   --run-id/--task-id appear in that notebook. Nothing is sent to the workspace.
@@ -37,6 +45,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import secrets
@@ -50,6 +59,7 @@ from pathlib import Path
 SKILL_NAME = "open-weight-models"
 OLD_SKILL_NAME = "oss-models"
 WORKSPACE_SKILLS = "/Workspace/.assistant/skills"
+WORKSPACE_INSTRUCTIONS = "/Workspace/.assistant_workspace_instructions.md"
 USER_PLACEHOLDER = "<workspace-user>"
 INSTALLED_PARTS = ("SKILL.md", "references", "assets", "scripts")
 SKIPPED_NAMES = {"__pycache__", ".DS_Store"}
@@ -58,12 +68,17 @@ MARKED_FILES = {
     "SKILL.md": "skill-proof",
     "references/models/teddy.md": "skill-proof-teddy",
 }
+PRE_EVAL, EVAL_COPY = "pre-eval install", "eval copy"
 DEFAULT_SKILL_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_RECORDS = Path(__file__).resolve().parent / "outputs" / "run_records.json"
 
 
 def user_skills_dir(user: str) -> str:
     return f"/Workspace/Users/{user}/.assistant/skills"
+
+
+def user_instructions(user: str) -> str:
+    return f"/Workspace/Users/{user}/.assistant_instructions.md"
 
 
 def target_dir(user: str) -> str:
@@ -159,7 +174,9 @@ def latest_record(records: list[dict], run_id: str, task_id: str) -> dict:
     return matches[-1]
 
 
-def build_record(*, run_id, task_id, state, user, codes, listings, skill_commit, timestamp=None) -> dict:
+def build_record(*, run_id, task_id, state, user, codes, environment, skill_commit, backup=None,
+                 backup_of=None, timestamp=None) -> dict:
+    """One run record. `discarded` / `discard_reason` / `notes` are filled in by hand after the run."""
     return {
         "run_id": run_id,
         "task_id": task_id,
@@ -168,9 +185,28 @@ def build_record(*, run_id, task_id, state, user, codes, listings, skill_commit,
         "skill_commit": skill_commit,
         "target": redact_user(target_dir(user), user),
         "codes": codes,
-        "listings": {redact_user(path, user): entries for path, entries in listings.items()},
+        "backup": str(backup) if backup else None,
+        "backup_of": backup_of,
+        "environment": json.loads(redact_user(json.dumps(environment), user)),
+        "discarded": False,
+        "discard_reason": "",
         "notes": "",
     }
+
+
+def first_backup(records: list[dict]) -> str | None:
+    """The earliest backup of the user's own pre-eval install (relative to the records
+    folder), if there was one. Backups of the eval's own copies are skipped."""
+    return next((r["backup"] for r in records if r.get("backup") and r.get("backup_of") == PRE_EVAL), None)
+
+
+def is_eval_copy(skill_md: bytes | None) -> bool:
+    """True if an installed SKILL.md is one this script installed (it carries a marker)."""
+    return skill_md is not None and f"# {MARKED_FILES['SKILL.md']}: ".encode() in skill_md
+
+
+def fingerprint(data: bytes | None) -> dict | None:
+    return None if data is None else {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 # ---- listings + conflicts (pure, unit-tested) --------------------------------
@@ -243,14 +279,23 @@ class Cli:
             raise RuntimeError(f"listing {path} failed:\n{result.stderr}")
         return parse_listing(result.stdout)
 
-    def read_skill_name(self, folder: str) -> str | None:
+    def export_bytes(self, path: str) -> bytes | None:
+        """Content of a workspace file; None if it does not exist (or in dry run)."""
         with tempfile.TemporaryDirectory() as tmp:
-            local = Path(tmp) / "SKILL.md"
-            result = self.run("workspace", "export", f"{folder}/SKILL.md", "--format", "AUTO",
-                              "--file", str(local), check=False)
+            local = Path(tmp) / "file"
+            result = self.run("workspace", "export", path, "--format", "AUTO", "--file", str(local), check=False)
             if result is None or result.returncode != 0 or not local.exists():
                 return None
-            return skill_md_name(local.read_text(encoding="utf-8"))
+            return local.read_bytes()
+
+    def exists(self, path: str) -> bool | None:
+        """Whether a workspace object exists; None in dry run."""
+        result = self.run("workspace", "get-status", path, check=False)
+        return None if result is None else result.returncode == 0
+
+    def read_skill_name(self, folder: str) -> str | None:
+        data = self.export_bytes(f"{folder}/SKILL.md")
+        return None if data is None else skill_md_name(data.decode("utf-8", errors="replace"))
 
 
 def skill_commit(skill_dir: Path) -> str:
@@ -266,6 +311,25 @@ def skill_commit(skill_dir: Path) -> str:
 
 def collect_listings(cli: Cli, user: str) -> dict[str, list[dict] | None]:
     return {WORKSPACE_SKILLS: cli.list_dir(WORKSPACE_SKILLS), user_skills_dir(user): cli.list_dir(user_skills_dir(user))}
+
+
+def collect_environment(cli: Cli, user: str) -> dict:
+    """What Genie Code could see at run time: both skills folders (user-folder SKILL.md files
+    fingerprinted), the user's .assistant_instructions.md, and the workspace-level files."""
+    listings = collect_listings(cli, user)
+    user_entries = []
+    for entry in listings[user_skills_dir(user)] or []:
+        item = dict(entry)
+        if entry["object_type"] == "DIRECTORY":
+            item["skill_md"] = fingerprint(cli.export_bytes(f"{user_skills_dir(user)}/{entry['name']}/SKILL.md"))
+        user_entries.append(item)
+    return {
+        "user_skills": user_entries if listings[user_skills_dir(user)] is not None else None,
+        "user_instructions": fingerprint(cli.export_bytes(user_instructions(user))),
+        "workspace_skills_exists": listings[WORKSPACE_SKILLS] is not None,
+        "workspace_skills": listings[WORKSPACE_SKILLS],
+        "workspace_instructions_exists": cli.exists(WORKSPACE_INSTRUCTIONS),
+    }
 
 
 def conflicts_for(cli: Cli, listings: dict[str, list[dict] | None], user: str) -> list[str]:
@@ -313,7 +377,7 @@ def set_state(args, cli: Cli | None = None) -> int:
 
         # 3. An existing install is only replaced with --replace-existing, after a local backup.
         exists = any(e["name"] == SKILL_NAME for e in listings[user_skills_dir(args.user)] or [])
-        backup = None
+        backup = backup_of = None
         if exists and not args.replace_existing:
             print(f"Refusing to continue: {target} already exists.")
             print("Re-run with --replace-existing to back it up locally, delete it, and continue.")
@@ -322,21 +386,23 @@ def set_state(args, cli: Cli | None = None) -> int:
             backup = backup_dir(Path(args.records), args.run_id, args.task_id,
                                 datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
             if args.dry_run:
-                print("(dry run: the next two commands run only if the target exists)")
+                print("(dry run: the next commands run only if the target exists)")
             else:
                 backup.parent.mkdir(parents=True, exist_ok=True)
+            backup_of = EVAL_COPY if is_eval_copy(cli.export_bytes(f"{target}/SKILL.md")) else PRE_EVAL
             cli.run("workspace", "export-dir", target, str(backup))
             cli.run("workspace", "delete", target, "--recursive")
 
         # 4. Install the staged copy.
         if args.state == "on":
-            cli.run("workspace", "mkdirs", user_skills_dir(args.user))
             try:
+                cli.run("workspace", "mkdirs", user_skills_dir(args.user))
                 cli.run("workspace", "import-dir", str(staged), target, "--overwrite")
             except RuntimeError as err:
-                print(f"Import failed: {err}")
+                print(f"Install failed: {err}")
                 if backup:
                     print("To restore the previous install:")
+                    print(f"  databricks workspace mkdirs {user_skills_dir(args.user)} -p {args.profile}")
                     print(f"  databricks workspace import-dir {backup} {target} --overwrite -p {args.profile}")
                 return 1
             for rel, code in codes.items():
@@ -347,10 +413,33 @@ def set_state(args, cli: Cli | None = None) -> int:
         return 0
     record = build_record(
         run_id=args.run_id, task_id=args.task_id, state=args.state, user=args.user, codes=codes,
-        listings=collect_listings(cli, args.user), skill_commit=skill_commit(Path(args.skill_dir)),
+        environment=collect_environment(cli, args.user), skill_commit=skill_commit(Path(args.skill_dir)),
+        backup=backup.relative_to(Path(args.records).parent) if backup else None, backup_of=backup_of,
     )
     append_record(Path(args.records), record)
     print(f"record appended to {args.records}")
+    return 0
+
+
+def restore_original(args, cli: Cli | None = None) -> int:
+    """After all runs: put back the install that existed before the eval, or leave the skill removed."""
+    cli = cli or Cli(args.profile, args.dry_run)
+    target = target_dir(args.user)
+    recorded = first_backup(load_records(Path(args.records)))
+    backup = str(Path(args.records).parent / recorded) if recorded else None
+    entries = cli.list_dir(user_skills_dir(args.user)) or []
+    installed = args.dry_run or any(e["name"] == SKILL_NAME for e in entries)
+    if installed:
+        cli.run("workspace", "delete", target, "--recursive")    # the eval copy, with hidden codes
+    if recorded is None:
+        print("No install existed before the eval (no backup recorded): the skill is left removed.")
+        return 0
+    if not Path(backup).is_dir() and not args.dry_run:
+        print(f"Recorded backup {backup} is missing locally; nothing restored.")
+        return 1
+    cli.run("workspace", "mkdirs", user_skills_dir(args.user))
+    cli.run("workspace", "import-dir", backup, target, "--overwrite")
+    print(f"Restored the pre-eval install from {backup}.")
     return 0
 
 
@@ -370,9 +459,8 @@ def parse_args(argv=None):
     parser.add_argument("--profile", help="Databricks CLI profile")
     parser.add_argument("--user", help="workspace user name, e.g. someone@example.com")
     parser.add_argument("--state", choices=("on", "off"))
-    parser.add_argument("--run-id", required=True,
-                        help="baseline | with_skill | old_prompt_baseline | old_prompt_with_skill")
-    parser.add_argument("--task-id", required=True, help="e.g. teddy-001")
+    parser.add_argument("--run-id", help="baseline | with_skill | old_prompt_baseline | old_prompt_with_skill")
+    parser.add_argument("--task-id", help="e.g. teddy-001")
     parser.add_argument("--skill-dir", default=str(DEFAULT_SKILL_DIR))
     parser.add_argument("--records", default=str(DEFAULT_RECORDS))
     parser.add_argument("--replace-existing", action="store_true",
@@ -381,18 +469,30 @@ def parse_args(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="print the CLI commands, run nothing")
     parser.add_argument("--check-notebook", metavar="EXPORTED_PY",
                         help="report which recorded codes appear in this exported notebook")
+    parser.add_argument("--restore-original", action="store_true",
+                        help="after all runs: delete the eval copy and restore the pre-eval install "
+                             "from the first recorded backup (or leave the skill removed if there was none)")
     args = parser.parse_args(argv)
-    if not args.check_notebook:
-        missing = [flag for flag, value in (("--profile", args.profile), ("--user", args.user),
-                                            ("--state", args.state)) if not value]
-        if missing:
-            parser.error(f"{', '.join(missing)} required unless --check-notebook is given")
+    if args.check_notebook:
+        needed = (("--run-id", args.run_id), ("--task-id", args.task_id))
+    elif args.restore_original:
+        needed = (("--profile", args.profile), ("--user", args.user))
+    else:
+        needed = (("--profile", args.profile), ("--user", args.user), ("--state", args.state),
+                  ("--run-id", args.run_id), ("--task-id", args.task_id))
+    missing = [flag for flag, value in needed if not value]
+    if missing:
+        parser.error(f"{', '.join(missing)} required for this mode")
     return args
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
-    return check_mode(args) if args.check_notebook else set_state(args)
+    if args.check_notebook:
+        return check_mode(args)
+    if args.restore_original:
+        return restore_original(args)
+    return set_state(args)
 
 
 if __name__ == "__main__":

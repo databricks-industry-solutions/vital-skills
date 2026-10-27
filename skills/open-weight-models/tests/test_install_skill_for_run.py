@@ -81,8 +81,7 @@ def test_records_append_and_latest(tmp_path):
     path = tmp_path / "outputs" / "run_records.json"
     assert inst.load_records(path) == []
     first = inst.build_record(run_id="baseline", task_id="teddy-001", state="off", user="someone@example.com",
-                              codes={}, listings={"/Workspace/Users/someone@example.com/.assistant/skills": None},
-                              skill_commit="abc", timestamp="t1")
+                              codes={}, environment={}, skill_commit="abc", timestamp="t1")
     second = dict(first, timestamp="t2")
     inst.append_record(path, first)
     inst.append_record(path, second)
@@ -97,8 +96,7 @@ def test_record_holds_no_user_name():
     record = inst.build_record(
         run_id="with_skill", task_id="teddy-002", state="on", user="someone@example.com",
         codes={"SKILL.md": "c"}, skill_commit="abc",
-        listings={inst.WORKSPACE_SKILLS: [], inst.user_skills_dir("someone@example.com"): [
-            {"name": "open-weight-models", "object_type": "DIRECTORY"}]},
+        environment={"note": f"{inst.user_skills_dir('someone@example.com')}/open-weight-models"},
     )
     assert "someone@example.com" not in json.dumps(record)
     assert record["target"] == "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models"
@@ -132,6 +130,8 @@ def test_find_conflicts():
 def test_args_require_profile_user_state_unless_checking():
     with pytest.raises(SystemExit):
         inst.parse_args(["--run-id", "baseline", "--task-id", "teddy-001"])
+    with pytest.raises(SystemExit):
+        inst.parse_args(["--profile", "P", "--user", "u", "--state", "on"])  # run/task ids missing
     args = inst.parse_args(["--run-id", "with_skill", "--task-id", "teddy-001", "--check-notebook", "nb.py"])
     assert args.check_notebook == "nb.py"
 
@@ -151,10 +151,23 @@ def test_validate_staged_rejects_leaks_and_missing_markers(fake_skill, tmp_path)
         inst.validate_staged(dest, codes)
 
 
-def test_record_has_empty_notes():
+def test_record_has_hand_filled_fields():
     record = inst.build_record(run_id="baseline", task_id="teddy-001", state="off", user="u",
-                               codes={}, listings={}, skill_commit="abc")
-    assert record["notes"] == ""
+                               codes={}, environment={}, skill_commit="abc")
+    assert (record["notes"], record["discarded"], record["discard_reason"], record["backup"], record["backup_of"]) == (
+        "", False, "", None, None)
+
+
+def test_first_backup_and_fingerprint():
+    records = [{"backup": None}, {"backup": "with_skill/backup/a", "backup_of": inst.EVAL_COPY},
+               {"backup": "baseline/backup/teddy-001-x", "backup_of": inst.PRE_EVAL}]
+    assert inst.first_backup(records) == "baseline/backup/teddy-001-x"
+    assert inst.first_backup(records[:2]) is None  # only eval copies were backed up
+    assert inst.is_eval_copy(b"---\nname: x\n---\n## Notebook marker\n`# skill-proof: ab12`\n")
+    assert not inst.is_eval_copy(b"---\nname: open-weight-models\n---\n") and not inst.is_eval_copy(None)
+    assert inst.fingerprint(b"abc") == {
+        "bytes": 3, "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}
+    assert inst.fingerprint(None) is None
 
 
 # ---- set_state ordering, CLI mocked -------------------------------------------
@@ -164,28 +177,37 @@ TARGET = inst.target_dir(USER)
 
 
 class FakeCli(inst.Cli):
-    """Records every command; serves canned listings; can fail the import."""
+    """Records every command; serves canned listings and files; can fail a step."""
 
-    def __init__(self, installed: bool, fail_import: bool = False):
+    def __init__(self, installed: bool, fail: str | None = None, files: dict | None = None):
         super().__init__("PROFILE", dry_run=False)
         self.installed = installed
-        self.fail_import = fail_import
+        self.fail = fail
+        self.files = files or {}
         self.calls = []
 
     def run(self, *args, check=True):
         import subprocess
 
         self.calls.append(args)
+        done = subprocess.CompletedProcess(args, 0, "", "")
+        missing = subprocess.CompletedProcess(args, 1, "", "RESOURCE_DOES_NOT_EXIST")
+        if args[1] == self.fail:
+            raise RuntimeError(f"{self.fail} failed")
         if args[:2] == ("workspace", "list"):
-            entries = []
-            if args[2] == inst.user_skills_dir(USER) and self.installed:
-                entries = [{"path": TARGET, "object_type": "DIRECTORY"}]
+            if args[2] == inst.WORKSPACE_SKILLS:
+                return missing
+            entries = [{"path": TARGET, "object_type": "DIRECTORY"}] if self.installed else []
+            entries.append({"path": f"{inst.user_skills_dir(USER)}/bulk-rnaseq", "object_type": "DIRECTORY"})
             return subprocess.CompletedProcess(args, 0, json.dumps(entries), "")
-        if args[:2] == ("workspace", "export") and args[2].endswith("/SKILL.md"):
-            return subprocess.CompletedProcess(args, 1, "", "not exported in tests")
-        if args[:2] == ("workspace", "import-dir") and self.fail_import:
-            raise RuntimeError("import failed")
-        return subprocess.CompletedProcess(args, 0, "", "")
+        if args[:2] == ("workspace", "export"):
+            if args[2] not in self.files:
+                return missing
+            Path(args[args.index("--file") + 1]).write_bytes(self.files[args[2]])
+            return done
+        if args[:2] == ("workspace", "get-status"):
+            return done if args[2] in self.files else missing
+        return done
 
     def mutations(self):
         return [c[1] for c in self.calls if c[1] in ("export-dir", "delete", "mkdirs", "import-dir")]
@@ -240,9 +262,64 @@ def test_staging_failure_touches_nothing(tmp_path, no_git):
     assert cli.calls == []
 
 
-def test_import_failure_prints_restore(fake_skill, tmp_path, no_git, capsys):
-    cli = FakeCli(installed=True, fail_import=True)
+@pytest.mark.parametrize("step", ["mkdirs", "import-dir"])
+def test_install_failure_prints_restore(fake_skill, tmp_path, no_git, capsys, step):
+    cli = FakeCli(installed=True, fail=step)
     assert inst.set_state(_args(fake_skill, tmp_path, replace=True), cli) == 1
     out = capsys.readouterr().out
     assert "To restore the previous install" in out and "import-dir" in out and TARGET in out
     assert not (tmp_path / "outputs" / "run_records.json").exists()
+
+
+def test_record_holds_environment_and_relative_backup(fake_skill, tmp_path, no_git):
+    files = {
+        f"{inst.user_skills_dir(USER)}/bulk-rnaseq/SKILL.md": b"---\nname: bulk-rnaseq\n---\n",
+        inst.user_instructions(USER): b"be nice",
+    }
+    cli = FakeCli(installed=True, files=files)
+    assert inst.set_state(_args(fake_skill, tmp_path, replace=True), cli) == 0
+    record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
+    env = record["environment"]
+    bulk = next(e for e in env["user_skills"] if e["name"] == "bulk-rnaseq")
+    assert bulk["skill_md"] == inst.fingerprint(files[f"{inst.user_skills_dir(USER)}/bulk-rnaseq/SKILL.md"])
+    assert env["user_instructions"] == inst.fingerprint(b"be nice")
+    assert env["workspace_skills_exists"] is False and env["workspace_instructions_exists"] is False
+    assert record["backup"].startswith("with_skill/backup/teddy-001-")  # relative: no local paths
+    assert record["backup_of"] == inst.PRE_EVAL  # the installed SKILL.md had no marker
+    assert USER not in json.dumps(record) and str(tmp_path) not in json.dumps(record)
+
+
+def _restore_args(tmp_path):
+    return inst.parse_args(["--profile", "PROFILE", "--user", USER, "--restore-original",
+                            "--records", str(tmp_path / "outputs" / "run_records.json")])
+
+
+def test_restore_original_reimports_first_backup(tmp_path):
+    records = tmp_path / "outputs" / "run_records.json"
+    (tmp_path / "outputs" / "baseline" / "backup" / "teddy-001-x").mkdir(parents=True)
+    inst.append_record(records, {"run_id": "baseline", "task_id": "teddy-001",
+                                 "backup": "baseline/backup/teddy-001-x", "backup_of": inst.PRE_EVAL})
+    inst.append_record(records, {"run_id": "with_skill", "task_id": "teddy-002",
+                                 "backup": "with_skill/backup/y", "backup_of": inst.EVAL_COPY})
+    cli = FakeCli(installed=True)
+    assert inst.restore_original(_restore_args(tmp_path), cli) == 0
+    assert cli.mutations() == ["delete", "mkdirs", "import-dir"]
+    imported = next(c for c in cli.calls if c[1] == "import-dir")
+    assert imported[2] == str(tmp_path / "outputs" / "baseline" / "backup" / "teddy-001-x") and imported[3] == TARGET
+
+
+def test_restore_original_without_backup_leaves_removed(tmp_path, capsys):
+    inst.append_record(tmp_path / "outputs" / "run_records.json", {"run_id": "baseline", "backup": None})
+    cli = FakeCli(installed=True)
+    assert inst.restore_original(_restore_args(tmp_path), cli) == 0
+    assert cli.mutations() == ["delete"]
+    assert "left removed" in capsys.readouterr().out
+
+
+def test_backup_of_eval_copy_is_labelled(fake_skill, tmp_path, no_git):
+    files = {f"{TARGET}/SKILL.md": b"---\nname: open-weight-models\n---\n\n## Notebook marker\n\n`# skill-proof: ab12cd34`\n"}
+    cli = FakeCli(installed=True, files=files)
+    assert inst.set_state(_args(fake_skill, tmp_path, replace=True), cli) == 0
+    record = inst.load_records(tmp_path / "outputs" / "run_records.json")[-1]
+    assert record["backup_of"] == inst.EVAL_COPY
+    assert inst.first_backup([record]) is None

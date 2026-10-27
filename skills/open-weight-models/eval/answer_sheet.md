@@ -26,6 +26,7 @@ the two standard runs do not collide).
 | Reference cell data for search (teddy-002) | "Use any public reference data you think is suitable." |
 | Permission to run cells / install packages | "Yes." |
 | One notebook or several | "One notebook." |
+| Whether it may look at earlier notebooks, results or eval files | "No — start from scratch." |
 | Anything else | "Use your judgement." |
 
 For the replication pair (`old_prompt_baseline`, `old_prompt_with_skill`) the prompts

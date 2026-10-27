@@ -20,8 +20,9 @@ Two groups, reported separately:
 
   New checks — added for the retest, metric names start with "new_checks/":
     ai_gateway           — inference table AND usage tracking enabled in an AI Gateway
-                           config attached to the serving endpoint
-    uc_provenance        — uc_registry (registered in Unity Catalog) and provenance_tags
+                           config attached to the serving endpoint (parsed with `ast`)
+    uc_provenance        — uc_registry (an actual Unity Catalog registration with a
+                           three-part name, parsed with `ast`) and provenance_tags
                            (license + Hugging Face revision recorded as tags; the
                            rationale says whether run, logged-model or UC model tags)
     existing_resources   — looks for an existing endpoint/table/index before
@@ -34,8 +35,9 @@ this file, keyed by task_id. Each
 eval row's outputs must carry the exported notebook text as "notebook_source".
 
 Exports: `scorers` (both groups), `replicated_scorers`, `new_check_scorers`,
-NEW_CHECK_PREFIX.
+NEW_CHECK_PREFIX, and run_prompts() (the prompt pasted in each run, for the eval rows).
 """
+import ast
 import json
 import re
 from pathlib import Path
@@ -71,6 +73,24 @@ def load_tasks(eval_dir: Path = EVAL_DIR) -> dict:
 
 
 TASKS = load_tasks()
+
+RUN_IDS = ("baseline", "with_skill", "old_prompt_baseline", "old_prompt_with_skill")
+
+
+def run_prompts(eval_dir: Path = EVAL_DIR) -> dict:
+    """{run_id: {task_id: the prompt pasted in that run}}: the evalset query for the
+    standard pair, the ```text block under "## <task_id>" in old_prompt_<arm>.md for the
+    replication pair (placeholders such as <catalog> left as written)."""
+    with open(eval_dir / "evalset.json", encoding="utf-8") as f:
+        queries = {t["task_id"]: t["query"] for t in json.load(f)}
+    prompts = {"baseline": dict(queries), "with_skill": dict(queries)}
+    for run in ("old_prompt_baseline", "old_prompt_with_skill"):
+        text = (eval_dir / f"{run}.md").read_text(encoding="utf-8")
+        blocks = dict(re.findall(r"^## ([a-z]+-\d{3}) [^\n]*\n.*?^```text\n(.*?)\n```", text, re.M | re.S))
+        if set(blocks) != set(queries):
+            raise ValueError(f"{run}.md has prompts for {sorted(blocks)}, evalset has {sorted(queries)}")
+        prompts[run] = blocks
+    return prompts
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -392,22 +412,155 @@ def _with_names(code: str, args: str) -> str:
 _ENABLED_TRUE = r"enabled\s*=\s*True|[\"']enabled[\"']\s*:\s*True"
 
 
-def ai_gateway_logging(response: str, task: dict) -> dict:
-    """Inference table AND usage tracking enabled in an AI Gateway config that is
-    attached to the endpoint (`ai_gateway=` on serving_endpoints.create /
-    create_and_wait, a `put_ai_gateway(...)` call, or an "ai_gateway" REST body)."""
-    code = _strip_comments(response)
+# ---- Python-code view of a notebook (for the AI Gateway and UC registry checks)
+#
+# Each Python cell is parsed with `ast`; names are followed through plain and
+# annotated assignments anywhere in the notebook, so a config built in one cell
+# and attached in another is found. A cell that does not parse is checked with
+# the regex fallback instead (`_regex_*`).
+
+def code_cells(response: str) -> list:
+    """Python code of each notebook cell: `# MAGIC` lines (markdown, %pip, %sql, %sh cells),
+    the notebook header and line magics (`%...`, `!...`) removed; empty cells dropped."""
+    cells = []
+    for cell in re.split(r"^# COMMAND -+[ \t]*$", response, flags=re.M):
+        lines = [line for line in cell.splitlines()
+                 if not line.lstrip().startswith(("# MAGIC", "# Databricks notebook source", "%", "!"))]
+        text = "\n".join(lines)
+        if text.strip():
+            cells.append(text)
+    return cells
+
+
+def _call_name(call: ast.Call) -> str:
+    f = call.func
+    return f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else ""
+
+
+# Dataclass field order in databricks-sdk 0.157.0, for positional constructor arguments.
+_POSITIONAL_FIELDS = {
+    "AiGatewayConfig": ["fallback_config", "guardrails", "inference_table_config", "rate_limits",
+                        "usage_tracking_config"],
+    "AiGatewayInferenceTableConfig": ["catalog_name", "enabled", "schema_name", "table_name_prefix"],
+    "AiGatewayUsageTrackingConfig": ["enabled"],
+}
+
+
+class NotebookCode:
+    """Parsed Python cells of one notebook, with a name -> assigned-values table."""
+
+    def __init__(self, response: str):
+        self.trees, self.unparsed = [], []
+        for cell in code_cells(response):
+            try:
+                self.trees.append(ast.parse(cell))
+            except SyntaxError:
+                self.unparsed.append(cell)
+        self.assigned = {}
+        self.calls = []
+        for tree in self.trees:
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            self.assigned.setdefault(target.id, []).append(node.value)
+                elif isinstance(node, ast.AnnAssign) and node.value is not None and isinstance(node.target, ast.Name):
+                    self.assigned.setdefault(node.target.id, []).append(node.value)
+                elif isinstance(node, ast.Call):
+                    self.calls.append(node)
+
+    def values(self, node, depth: int = 0) -> list:
+        """Candidate values of `node`: a simple name is followed through its assignments."""
+        if isinstance(node, ast.Name) and depth < 8 and node.id in self.assigned:
+            return [v for value in self.assigned[node.id] for v in self.values(value, depth + 1)]
+        return [node]
+
+    def is_true(self, node) -> bool:
+        return node is not None and any(isinstance(v, ast.Constant) and v.value is True for v in self.values(node))
+
+    def members(self, node) -> list:
+        """Field -> value maps `node` can stand for: a dict literal, dict(...), an SDK
+        constructor (keyword or positional), Cls.from_dict({...}) or json.dumps({...})."""
+        out = []
+        for v in self.values(node):
+            if isinstance(v, ast.Dict):
+                out.append({k.value: val for k, val in zip(v.keys, v.values)
+                            if isinstance(k, ast.Constant) and isinstance(k.value, str)})
+            elif isinstance(v, ast.Call):
+                name = _call_name(v)
+                if name in ("from_dict", "dumps") and v.args:
+                    out += self.members(v.args[0])
+                    continue
+                fields = dict(zip(_POSITIONAL_FIELDS.get(name, []), v.args))
+                if name == "dict" and v.args:
+                    for m in self.members(v.args[0]):
+                        fields.update(m)
+                fields.update({k.arg: k.value for k in v.keywords if k.arg})
+                out.append(fields)
+        return out
+
+    def strings(self, node) -> list:
+        """Possible string values of `node`; an unresolved f-string part becomes '{}'."""
+        out = []
+        for v in self.values(node):
+            if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                out.append(v.value)
+            elif isinstance(v, ast.JoinedStr):
+                parts = [""]
+                for piece in v.values:
+                    if isinstance(piece, ast.Constant):
+                        options = [str(piece.value)]
+                    else:
+                        options = self.strings(piece.value) or ["{}"]
+                    parts = [p + o for p in parts for o in options]
+                out += parts
+            elif isinstance(v, ast.BinOp) and isinstance(v.op, ast.Add):
+                out += [a + b for a in self.strings(v.left) or ["{}"] for b in self.strings(v.right) or ["{}"]]
+        return out
+
+
+def _gateway_flags(nb: NotebookCode, gateway_maps: list) -> tuple:
+    """(inference table enabled, usage tracking enabled) over AI Gateway field maps."""
+    def enabled(field: str) -> bool:
+        return any(nb.is_true(m.get("enabled"))
+                   for g in gateway_maps if g.get(field) is not None for m in nb.members(g[field]))
+    return enabled("inference_table_config"), enabled("usage_tracking_config")
+
+
+def _gateway_attachments(nb: NotebookCode) -> list:
+    """AI Gateway field maps attached to a serving endpoint, from every attachment site."""
+    sites = []
+    for call in nb.calls:
+        name = _call_name(call)
+        kwargs = {k.arg: k.value for k in call.keywords if k.arg}
+        receiver = ast.unparse(call.func.value) if isinstance(call.func, ast.Attribute) else ""
+        receiver += " ".join(ast.unparse(v) for v in nb.values(call.func.value)) if isinstance(call.func, ast.Attribute) else ""
+        if name in ("create", "create_and_wait") and "serving_endpoints" in receiver and "ai_gateway" in kwargs:
+            sites += nb.members(kwargs["ai_gateway"])          # ai_gateway is keyword-only in the SDK
+        elif name == "put_ai_gateway":
+            sites.append(kwargs)                                # the call's keywords are the gateway fields
+        else:
+            # REST: any call that mentions a serving-endpoints URL and sends a body
+            args = list(call.args) + list(kwargs.values())
+            urls = [s for a in args for s in nb.strings(a) if "serving-endpoints" in s]
+            if not urls:
+                continue
+            bodies = [m for a in args for m in nb.members(a)]
+            if any("ai-gateway" in u for u in urls):
+                sites += bodies                                 # PUT .../ai-gateway: the body is the gateway
+            sites += [g for b in bodies if b.get("ai_gateway") is not None for g in nb.members(b["ai_gateway"])]
+    return sites
+
+
+def _regex_ai_gateway(code: str) -> tuple:
+    """Regex fallback for cells that do not parse: (inference enabled, usage enabled, attached)."""
     sdk_attach = [_with_names(code, a) for a in _call_args(code, r"serving_endpoints\.create(?:_and_wait)?")
                   if re.search(r"\bai_gateway\s*=", a)]
     put_attach = [_with_names(code, a) for a in _call_args(code, r"\.put_ai_gateway")]
     rest_attach = [_balanced(code, m.end() - 1) for m in re.finditer(r"[\"']ai_gateway[\"']\s*:\s*\{", code)]
     attached = sdk_attach + put_attach + rest_attach
-    if not attached:
-        reason = "no AI Gateway config attached to a serving endpoint"
-        return {"inference_table": (False, reason), "usage_tracking": (False, reason)}
 
     def enabled(cls: str, field: str) -> bool:
-        # Two levels of name lookup: ai_gateway=cfg -> cfg = AiGatewayConfig(x=itc) -> itc = ...
         for site in (_with_names(code, s) for s in attached):
             configs = _call_args(site, cls) + [
                 _balanced(site, m.end() - 1) for m in re.finditer(rf"[\"']{field}[\"']\s*:\s*\{{", site)
@@ -416,17 +569,92 @@ def ai_gateway_logging(response: str, task: dict) -> dict:
                 return True
         return False
 
-    inference = enabled("AiGatewayInferenceTableConfig", "inference_table_config")
-    usage = enabled("AiGatewayUsageTrackingConfig", "usage_tracking_config")
+    return (enabled("AiGatewayInferenceTableConfig", "inference_table_config"),
+            enabled("AiGatewayUsageTrackingConfig", "usage_tracking_config"), bool(attached))
+
+
+def ai_gateway_logging(response: str, task: dict) -> dict:
+    """Inference table AND usage tracking enabled in an AI Gateway config that is attached to
+    a serving endpoint: `ai_gateway=` on serving_endpoints.create / create_and_wait, a
+    put_ai_gateway(...) call, or an "ai_gateway" key in a REST body sent to a
+    serving-endpoints URL (or the body of PUT .../ai-gateway). Imports alone never count."""
+    nb = NotebookCode(response)
+    sites = _gateway_attachments(nb)
+    inference, usage = _gateway_flags(nb, sites)
+    attached = bool(sites)
+    how = "parsed code"
+    if nb.unparsed and not (inference and usage):
+        r_inf, r_use, r_att = _regex_ai_gateway(_strip_comments("\n".join(nb.unparsed)))
+        inference, usage, attached = inference or r_inf, usage or r_use, attached or r_att
+        how = f"parsed code + regex on {len(nb.unparsed)} unparsable cell(s)"
+    if not attached:
+        reason = f"no AI Gateway config attached to a serving endpoint ({how})"
+        return {"inference_table": (False, reason), "usage_tracking": (False, reason)}
     return {
-        "inference_table": (inference, "enabled" if inference else "attached config does not enable the inference table"),
-        "usage_tracking":  (usage, "enabled" if usage else "attached config does not enable usage tracking"),
+        "inference_table": (inference, f"{'enabled' if inference else 'attached config does not enable the inference table'} ({how})"),
+        "usage_tracking":  (usage, f"{'enabled' if usage else 'attached config does not enable usage tracking'} ({how})"),
     }
+
+
+# Registration sites: call name -> (keyword, position) of the model-name argument.
+# create_registered_model and create_model_version are MlflowClient methods only
+# (there is no mlflow.create_registered_model); register_model is mlflow.register_model.
+_REGISTRATION_NAME_ARG = {
+    "log_model": ("registered_model_name", None),
+    "register_model": ("name", 1),
+    "create_registered_model": ("name", 0),
+    "create_model_version": ("name", 0),
+}
+
+
+def _is_three_part(name: str) -> bool:
+    parts = name.split(".")
+    return len(parts) == 3 and all(parts)
+
+
+def _is_unresolved(name: str) -> bool:
+    return not name.replace("{}", "").strip()
+
+
+def _uc_registry(nb: NotebookCode) -> tuple:
+    """(passed, reason) from parsed code."""
+    uc_uri = any(_call_name(c) == "set_registry_uri" and c.args and "databricks-uc" in nb.strings(c.args[0])
+                 for c in nb.calls)
+    names, sites = [], 0
+    for call in nb.calls:
+        spec = _REGISTRATION_NAME_ARG.get(_call_name(call))
+        if not spec:
+            continue
+        keyword, position = spec
+        node = next((k.value for k in call.keywords if k.arg == keyword), None)
+        if node is None and position is not None and len(call.args) > position:
+            node = call.args[position]
+        if node is None:
+            continue
+        sites += 1
+        names += nb.strings(node) or ["{}"]
+    if any(_is_three_part(n) for n in names):
+        return True, "registration with a three-part catalog.schema.model name"
+    if uc_uri and any(_is_unresolved(n) for n in names):
+        return True, "databricks-uc registry URI + registration whose name is built at run time"
+    if not sites:
+        return False, "no model registration call" + (" (databricks-uc registry URI alone is not a registration)" if uc_uri else "")
+    return False, f"registered name(s) not three-part: {sorted(set(names))}"
+
+
+def _regex_uc_registry(code: str) -> bool:
+    """Regex fallback for cells that do not parse."""
+    uc_uri = bool(re.search(r"set_registry_uri\(\s*[\"']databricks-uc[\"']\s*\)", code))
+    name_sites = [_with_names(code, a) for a in _call_args(code, r"\b(?:register_model|create_registered_model|create_model_version)")]
+    name_sites += [_with_names(code, m.group(1)) for m in re.finditer(r"registered_model_name\s*=\s*([^,\n)]+)", code)]
+    three_part = any(re.search(_THREE_PART, s) for s in name_sites)
+    return three_part or (uc_uri and bool(name_sites))
 
 
 _THREE_PART = r"[\"'](?=[^\"'\s]*\.[^\"'\s]*\.)[^\"'\s.]+\.[^\"'\s.]+\.[^\"'\s.]+[\"']"
 
 # Where a tag can be recorded: (kind, call name regex, look only at its tags= argument?)
+# create_registered_model is an MlflowClient method only.
 _TAG_SITES = [
     ("run tags", r"\bmlflow\.set_tags?", False),
     ("run tags", r"\bstart_run", True),
@@ -459,24 +687,19 @@ def provenance_tag_sources(code: str) -> dict:
 
 
 def uc_provenance(response: str, task: dict) -> dict:
-    """(a) uc_registry: registered in Unity Catalog — `mlflow.set_registry_uri("databricks-uc")`
-    or a three-part name passed to registered_model_name= / register_model(...).
+    """(a) uc_registry: an actual registration — log_model(registered_model_name=...),
+    mlflow.register_model(...), or MlflowClient().create_registered_model / create_model_version —
+    whose model name is three-part (catalog.schema.model); or the databricks-uc registry URI
+    plus a registration whose name is only known at run time. The URI alone, or a
+    registration under a two-part name, fails (Unity Catalog requires three-part names).
     (b) provenance_tags: license AND Hugging Face revision recorded as tags (run tags,
     logged-model tags or UC model tags all count; the reason names which)."""
-    code = _strip_comments(response)
-    uc_uri = bool(re.search(r"set_registry_uri\(\s*[\"']databricks-uc[\"']\s*\)", code))
-    name_sites = [_with_names(code, a) for a in _call_args(code, r"\bregister_model")]
-    name_sites += [_with_names(code, m.group(1)) for m in
-                   re.finditer(r"registered_model_name\s*=\s*([^,\n)]+)", code)]
-    name_sites += [_with_names(code, m.group(1)) for m in
-                   re.finditer(r"[\"']registered_model_name[\"']\s*:\s*([^,\n}]+)", code)]
-    three_part = any(re.search(_THREE_PART, s) for s in name_sites)
-    registry = uc_uri or three_part
-    registry_reason = ("set_registry_uri('databricks-uc')" if uc_uri else
-                       "three-part registered model name" if three_part else
-                       "no databricks-uc registry URI and no three-part registered model name")
+    nb = NotebookCode(response)
+    registry, registry_reason = _uc_registry(nb)
+    if not registry and nb.unparsed and _regex_uc_registry(_strip_comments("\n".join(nb.unparsed))):
+        registry, registry_reason = True, f"regex on {len(nb.unparsed)} unparsable cell(s)"
 
-    sources = provenance_tag_sources(code)
+    sources = provenance_tag_sources(_strip_comments(response))
     tags_ok = all(sources.values())
     tags_reason = "; ".join(f"{k}: {', '.join(v) if v else 'not recorded as a tag'}" for k, v in sources.items())
     return {
