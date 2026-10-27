@@ -95,7 +95,7 @@ response = w.serving_endpoints.query(
 )
 ```
 
-Note: Scimilarity serving does not use `extra_params` — no tunable inference controls.
+Note: Scimilarity serving takes no tunable inference controls, so requests carry no `params` field.
 
 ## Artifacts and runtime
 

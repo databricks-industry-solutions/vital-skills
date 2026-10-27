@@ -50,6 +50,33 @@ frontmatter `version` is the source of truth for releases.
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
   Sep–Oct 2026 files keep the old IDs).
 
+### Fixed
+- Inference controls for custom PyFunc endpoints: the guidance to pass them as
+  `w.serving_endpoints.query(extra_params=...)` (added 2026-09-08 in `f9cecf5`) was
+  wrong — the SDK writes them to a body key `"extra_params"` that the MLflow scoring
+  server drops, so `predict()` silently ran with defaults. Measured 2026-10-27 on a
+  TEDDY endpoint (identical embeddings vs. changed embeddings under body `"params"`).
+  The Sep–Oct 2026 with-skill notebooks followed the old advice and only checked that
+  the call succeeded; the TEDDY ground-truth notebook already sent body `"params"`.
+  `SKILL.md` (Troubleshooting #13, Best Practices §1, pitfall #3, Guardrail 5),
+  `teddy.md` and `scgpt.md` now send controls in the REST body `"params"` field
+  (`api_client.do` helper + HTTP JSON), require string defaults in the signature when
+  sending strings, and make the smoke test prove a non-default value changes the
+  output. scGPT is marked inferred, not live-tested.
+- `teddy.md`: the AI Search step no longer hardcodes a Genesis Workbench endpoint
+  name; the agent confirms the endpoint name with the user and reuses an existing
+  endpoint only if the user confirms.
+- `teddy.md`: `vocab.txt` size corrected from ~60 K to 43,808 lines (25,424 Ensembl
+  IDs plus special tokens) for 70M at HF revision `8c880aa`.
+- `teddy.md`: license note records both declarations (model card Apache-2.0,
+  package `pyproject.toml` MIT, no `LICENSE` file) and asks the user to confirm with
+  the model owner before redistribution.
+- `teddy.md` endpoint-creation example passes `name=` to `EndpointCoreConfigInput`
+  (required since databricks-sdk 0.71.0; all four 2026-10-27 runs hit the
+  `missing ... 'name'` `TypeError`); `SKILL.md` Troubleshooting #27 notes it.
+- `scgpt.md`: wrapper example casts string params (`int(...)`, explicit boolean
+  parse), handles `params=None`, and wraps `pd.read_json` input in `io.StringIO`.
+
 ## [0.0.1] — 2026-10-01
 
 Initial contribution — a Health & Life Sciences (HLS) guide for packaging,
