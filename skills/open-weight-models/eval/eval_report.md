@@ -34,10 +34,10 @@ Every check, with its severity and why it matters: [`CHECKS.md`](CHECKS.md).
 
 | Family | Latest round | Tasks | Failed checks with the skill (each task) | Failed checks without the skill (each task) | Endpoint worked? | Verdict |
 |---|---|---|---|---|---|---|
-| TEDDY | round 2 (`runs_20261027`) | teddy-001, teddy-002 | none | 🟠 4 · 🟡 3 | yes, with and without | ship with follow-ups |
+| TEDDY | round 2 (2026-10-27/28) | teddy-001, teddy-002 | none | 🟠 4 · 🟡 3 | yes, with and without | ship with follow-ups |
 | Geneformer | — | geneformer-001, -002 planned | — | — | — | pending (not yet evaluated) |
 
-**What the TEDDY runs without the skill failed** (round 2, the same 7 on both tasks):
+**What the TEDDY runs without the skill failed** (latest round, the same 7 on both tasks):
 
 | | Check | Why it matters |
 |---|---|---|
@@ -65,10 +65,17 @@ Sub-checks per task are listed in [`CHECKS.md`](CHECKS.md) (the outcome check ne
 ### How it was run
 
 One fresh chat per run on serverless GPU notebooks, memories checked before each run, the skill
-installed only for the with-skill runs. Detail:
-[round 2 `RESULTS.md`](models/teddy/runs_20261027/RESULTS.md) (current),
-[round 1 `RESULTS.md`](models/teddy/runs_20261026/RESULTS.md) (before the skill fixes),
-[Sep–Oct 2026](runs_20260924/eval_report.md) (historical, pre-rename skill).
+installed only for the with-skill runs.
+
+**Rounds**, newest first:
+
+| Round | When | What it is | Detail |
+|---|---|---|---|
+| **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) | [`runs_20261027/RESULTS.md`](models/teddy/runs_20261027/RESULTS.md) |
+| Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists | [`runs_20261026/RESULTS.md`](models/teddy/runs_20261026/RESULTS.md) |
+| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md) |
+
+"Latest round" below means round 2.
 
 ### What the skill changed, beyond the numbers
 
@@ -99,8 +106,8 @@ have more sub-checks than Sep–Oct. Primary samples only.
 
 | Round | Task | Sub-checks | Baseline passed | With skill passed | Passed only with the skill | Passed only without | Failed in both | Task result |
 |---|---|---|---|---|---|---|---|---|
-| Round 2 | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | skill wins |
-| Round 2 | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | skill wins |
+| Round 2 (latest) | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | skill wins |
+| Round 2 (latest) | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | skill wins |
 | Round 1 | teddy-001 | 38 | 30 | 37 | 7 | 0 | 1 (`run_go_gate`) | neither passes every check |
 | Round 1 | teddy-002 | 45 | 36 | 45 | 9 | 0 | 0 | skill wins |
 | Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | neither passes every check |
@@ -111,9 +118,9 @@ the row in [`CHECKS.md`](CHECKS.md)):
 
 | Round, task | Passed only with the skill |
 |---|---|
-| Round 2, teddy-001 and teddy-002 (7 each, the same 7) | request logging configured (`ai_gateway_config`), inference table on (`inference_table`), usage tracking on (`usage_tracking`), source / revision / licence tags on the model (`provenance_tags`), deploy switch saved off (`run_go_gate`, minor), serving pins from the model's own dependency file (`pip_reqs_from_source`, minor), cached code modules cleaned up on re-run (`sys_modules_purge`, minor) |
+| Latest round, teddy-001 and teddy-002 (7 each, the same 7) | request logging configured (`ai_gateway_config`), inference table on (`inference_table`), usage tracking on (`usage_tracking`), source / revision / licence tags on the model (`provenance_tags`), deploy switch saved off (`run_go_gate`, minor), serving pins from the model's own dependency file (`pip_reqs_from_source`, minor), cached code modules cleaned up on re-run (`sys_modules_purge`, minor) |
 | Round 1, teddy-001 (7) | request logging configured, inference table, usage tracking, provenance tags, serving pins from the dependency file, module clean-up — and the endpoint takes a cell's expression, not token IDs (`accepts_expression_input`) |
-| Round 1, teddy-002 (9) | the 7 of round 2, plus a guard if the cell table is missing (`graceful_skip`, minor) and looking before writing to an existing table (`existing_resources/table`) |
+| Round 1, teddy-002 (9) | the 7 of the latest round, plus a guard if the cell table is missing (`graceful_skip`, minor) and looking before writing to an existing table (`existing_resources/table`) |
 | Sep–Oct, teddy-001 (10) | files saved where serverless can write (`uses_tmp`), the Xet download setting handled (`hf_xet_disabled`), `transformers` pinned below 5 (`deps_pinned`), no open-ended `transformers>=` pin (`transformers`), weights and code declared as model artifacts (`artifacts_declared`), real gene IDs in the test input (`real_gene_ids`), registered model called before serving (`registration_smoke`), request logging configured, serving pins from the dependency file, module clean-up |
 | Sep–Oct, teddy-002 (7) | the Xet setting, the `transformers` pin, no open-ended pin, real gene IDs, registered model called before serving, request logging configured, serving pins from the dependency file |
 
@@ -125,7 +132,7 @@ skill): [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
 
 Both tasks together. "Skill only" = passed with the skill, failed without it.
 
-| Category | Sub-checks | Round 2, baseline → with skill | Skill only in round 2 | Skill only in earlier rounds |
+| Category | Sub-checks | Latest round, baseline → with skill | Skill only, latest round | Skill only, earlier rounds |
 |---|---|---|---|---|
 | Download and staging | 6 | 6 → 6 | — | Sep–Oct: download location, Xet setting, `transformers` pin |
 | Model wrapper | 14 | 12 → 14 | clean-up of cached code modules on re-run (minor) | round 1: same; Sep–Oct: also artifacts declared, real gene IDs in the test input |
@@ -148,7 +155,7 @@ Not counted, but also with the skill only: GPU serving and the shared request fo
 
 ### Problems found in the skill, and where they are fixed
 
-| Problem | Found | Fixed in | Round 2 |
+| Problem | Found | Fixed in | Seen in the latest round |
 |---|---|---|---|
 | Inference controls sent with the SDK's `extra_params`, which a custom model silently ignores | with skill, round 1 | `SKILL.md` Troubleshooting #13; `teddy.md` "Sending inference controls" | both with-skill runs sent them in the REST body and showed a changed value changes the output |
 | Wrapper compared only with itself, not with upstream TEDDY | with skill, round 1 | `teddy.md` "Upstream-parity test" | both matched upstream (cosine ≥ 0.99999) |
@@ -164,7 +171,7 @@ while scoring round 2; earlier rounds' results are unchanged (round 2 `RESULTS.m
 
 ### Verdict
 
-**Ship with follow-ups.** In round 2, with the skill both tasks passed every sub-check and
+**Ship with follow-ups.** In the latest round, with the skill both tasks passed every sub-check and
 without it neither did, and no sub-check got worse with the skill (in any round). That meets the
 repo's ship rule (`skill-eval`: the skill must win at least one task and make none worse). The
 endpoints worked with and without the skill, so the gain is in how they are built, not whether
