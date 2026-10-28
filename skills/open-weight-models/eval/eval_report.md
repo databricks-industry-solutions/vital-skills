@@ -147,11 +147,16 @@ Both tasks together. "Skill only" = passed with the skill, failed without it.
 | Safety: look before creating or deleting | 4 | 4 → 4 | — | round 1: no overwrite of an existing table |
 | Outcome | 11 | 11 → 11 | — | round 1: endpoint takes a cell's expression, not token IDs |
 
-**Reading it:** without the skill, Genie Code passed the download, test and known-bad-pattern
-checks in rounds 1 and 2 that it failed in Sep–Oct (the Sep–Oct setup also differed). The
-skill's lasting help is in **governance** (request logging, provenance), **deployment safety**
-(a deploy switch saved off) and **reproducibility** (pins from the model's own dependency file).
-Not counted, but also with the skill only: GPU serving and the shared request format.
+**Why some earlier "skill only" checks are gone:** none of them was dropped; they are still
+scored every round. The runs without the skill now pass them too, in their own way: they saved
+the download to a Volume or a temporary folder; the download completed, which the run records
+show (Sep–Oct had no run records, so only its code could be judged for the Xet setting); in round 2
+they served their own plain-PyTorch copy of TEDDY, which needs no `transformers` pin; they used
+real gene data in the test input and called the registered model before serving. Why they do
+better now is not measured: Genie Code itself may have improved since September, and the
+Sep–Oct setup also differed. The skill's lasting help is in **governance** (request logging,
+provenance), **deployment safety** (a deploy switch saved off) and **reproducibility** (pins from
+the model's own dependency file). Not counted, but also with the skill only: GPU serving and the shared request format.
 
 ### Problems found in the skill, and where they are fixed
 
