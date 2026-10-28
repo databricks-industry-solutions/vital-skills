@@ -67,17 +67,19 @@ and rejected requests whose genes TEDDY does not know.
 
 Every sub-check judged with the corrected logic (`corrected_checks.py`; what each one is:
 [`CHECKS.md`](CHECKS.md)). A task passes only if every sub-check passes, so one minor failure
-makes it fail. Rounds 1 and 2 add the governance, safety and outcome checks, so they have more
-sub-checks than Sep–Oct. Primary samples only.
+makes it fail. "Skill wins" = the task passes every sub-check with the skill and not without it;
+"neither passes every check" = both runs fail at least one sub-check (named in "Failed in both"
+when it is the same one). Rounds 1 and 2 add the governance, safety and outcome checks, so they
+have more sub-checks than Sep–Oct. Primary samples only.
 
-| Round | Task | Sub-checks | Baseline passed | With skill passed | Skill only | Baseline only | Both fail | Outcome |
+| Round | Task | Sub-checks | Baseline passed | With skill passed | Passed only with the skill | Passed only without | Failed in both | Task result |
 |---|---|---|---|---|---|---|---|---|
-| Round 2 | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | win |
-| Round 2 | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | win |
-| Round 1 | teddy-001 | 38 | 30 | 37 | 7 | 0 | 1 (`run_go_gate`) | tie-fail |
-| Round 1 | teddy-002 | 45 | 36 | 45 | 9 | 0 | 0 | win |
-| Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | tie-fail |
-| Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 31 | 22 | 29 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | tie-fail |
+| Round 2 | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | skill wins |
+| Round 2 | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | skill wins |
+| Round 1 | teddy-001 | 38 | 30 | 37 | 7 | 0 | 1 (`run_go_gate`) | neither passes every check |
+| Round 1 | teddy-002 | 45 | 36 | 45 | 9 | 0 | 0 | skill wins |
+| Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | neither passes every check |
+| Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 31 | 22 | 29 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | neither passes every check |
 
 No sub-check passed without the skill and failed with it, in any round. Sep–Oct as originally
 reported (the old literal-text logic, and a with-skill prompt that told Genie Code to read the
