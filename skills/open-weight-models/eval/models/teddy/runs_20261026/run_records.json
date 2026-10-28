@@ -147,7 +147,7 @@
     },
     "discarded": false,
     "discard_reason": "",
-    "notes": "Notebook created as baseline/teddy-02, renamed by user to teddy-002 (same notebook id). Memory check before run: none found. Genie reported: TeddyGModel fails on current transformers ('all_tied_weights_keys'); it re-implemented the encoder in plain PyTorch with the same weights (strict load, MLM decoder dropped). Input = raw counts + Ensembl IDs, normalised by TEDDY gene medians, top-2048 ranked. Mean pooling chosen (held-out-donor kNN subtype accuracy 98.3% vs 92.4% first-token, 41.5% majority) on TEDDY sample data (3,538 interneurons, 7 subtypes). Endpoint on CPU Small, scale-to-zero; ~15 s per cell; demo 7/8 correct. One code-execution step was blocked by a product safety guardrail (HTTP GET to an external URL). User answered 'Yes, go ahead.' to the endpoint-creation question. | Outcome (check_outcome.py, teddy.md contract): endpoint READY + serves v1 PASS; VS endpoint ONLINE + index ready (3,538 rows) PASS; fixture request FAILS only because this endpoint uses its own input format {gene_ids: Ensembl strings, counts: raw counts} instead of adata_sparsematrix/obs/var. Own-format check (polly, same 3 fixture cells x 100 genes): 2 cells -> 2 x 512-dim finite cell_emb (+cell_emb_first, n_tokens); VS query with that embedding returns 5 rows incl. cell_subtype + cell_type. => functionally works end to end on real expression input; the contract-specific outcome checks are a check-design bias to fix.",
+    "notes": "Notebook created as baseline/teddy-02, renamed by user to teddy-002 (same notebook id). Memory check before run: none found. Genie reported: TeddyGModel fails on current transformers ('all_tied_weights_keys'); it re-implemented the encoder in plain PyTorch with the same weights (strict load, MLM decoder dropped). Input = raw counts + Ensembl IDs, normalised by TEDDY gene medians, top-2048 ranked. Mean pooling chosen (held-out-donor kNN subtype accuracy 98.3% vs 92.4% first-token, 41.5% majority) on TEDDY sample data (3,538 interneurons, 7 subtypes). Endpoint on CPU Small, scale-to-zero; ~15 s per cell; demo 7/8 correct. One code-execution step was blocked by a product safety guardrail (HTTP GET to an external URL). User answered 'Yes, go ahead.' to the endpoint-creation question. | Outcome (check_outcome.py, teddy.md contract): endpoint READY + serves v1 PASS; VS endpoint ONLINE + index ready (3,538 rows) PASS; fixture request FAILS only because this endpoint uses its own input format {gene_ids: Ensembl strings, counts: raw counts} instead of adata_sparsematrix/obs/var. Own-format check (polly, same 3 fixture cells x 100 genes): 2 cells -> 2 x 512-dim finite cell_emb (+cell_emb_first, n_tokens); VS query with that embedding returns 5 rows incl. cell_subtype + cell_type. => functionally works end to end on real expression input; the contract-specific outcome checks are a check-design bias to fix. | Workspace notebook later renamed by user to baseline/teddy-002-01 (same notebook).",
     "prompt_used": null,
     "outcome_checked_at": "2026-10-27T06:59:03+00:00",
     "hidden_codes": false,
@@ -754,5 +754,122 @@
       "ai_gateway_usage_tracking": true,
       "provenance": "measured by orchestrator 2026-10-27, before teardown"
     }
+  },
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-002",
+    "state": "off",
+    "timestamp": "2026-10-27T18:56:17+00:00",
+    "skill_commit": "117ac563425dba8ee768182247cd2ac543d7e0e7+uncommitted",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": "baseline/backup/teddy-002-20261027T185603Z",
+    "backup_of": "eval copy",
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [],
+      "user_instructions": {
+        "bytes": 11229,
+        "sha256": "8862eb2380c2ff96fa91c1c879a12ff6d76b904ac1b7def46a226f94236f44ca"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshot 2026-10-27 (All skills tab: 'Your skills folder is empty')",
+      "expected": [],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": [
+        "empty"
+      ]
+    },
+    "visible_steps": {
+      "text": "",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": ""
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_002_baseline_a2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_a2",
+      "uc_model_version": "",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline_a2",
+      "vector_search_endpoint": "owm_teddy_vs_002_baseline_a2",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_baseline_a2"
+    },
+    "prompt_used": null,
+    "outcome": null,
+    "discarded": true,
+    "discard_reason": "Restarted before anything was built: the chat started while the ORIGINAL instructions file was live (other runs used the temporary 3-line file). User chose to restart testing from scratch (2026-10-27).",
+    "notes": "Attempt 2 (second baseline sample for teddy-002), names suffixed _a2; notebook baseline/teddy-002-02. Skill copy removed (backed up). | Memory check before run (2026-10-27): no TEDDY/eval memories, none created/updated today (42 files, latest change 2026-10-26). Compute: Serverless GPU, AI env v6, 1xA10. Instructions: ORIGINAL file live at run start (not the temporary 3-line version) - environment differs from attempt 1. | First chat started with the ORIGINAL instructions file and was stopped before creating anything (0 cells, no model, no volume folder); temporary file uploaded; run restarted in a new chat in the same notebook.",
+    "attempt": 2,
+    "instructions_at_run": {
+      "bytes": 179,
+      "sha256_prefix": "1630f63aa1380f18",
+      "note": "Temporary 3-line file re-uploaded 2026-10-27 before the restarted chat (first chat stopped before any cell, model, endpoint or file was created). Same as the earlier five runs."
+    }
+  },
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-002",
+    "state": "off",
+    "timestamp": "2026-10-27T19:54:25+00:00",
+    "skill_commit": "055c4560317823db3c81a71501d9038096b83446+uncommitted",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "",
+      "expected": [],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": []
+    },
+    "visible_steps": {
+      "text": "",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": ""
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_002_baseline_a2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_a2",
+      "uc_model_version": "",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline_a2",
+      "vector_search_endpoint": "owm_teddy_vs_002_baseline_a2",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_baseline_a2"
+    },
+    "prompt_used": null,
+    "outcome": null,
+    "discarded": true,
+    "discard_reason": "Never run: superseded by round 2 (runs_20261027), user chose a clean rerun of all four runs (2026-10-27).",
+    "notes": "Restart of baseline teddy-002 attempt 2 (previous attempt-2 record discarded; nothing was built). Temporary 3-line instructions file live (179 bytes) at setup. Notebook baseline/teddy-002-02 reused with a NEW chat.",
+    "attempt": 2
   }
 ]

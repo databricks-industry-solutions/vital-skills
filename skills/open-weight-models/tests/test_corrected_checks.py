@@ -50,6 +50,22 @@ LOG = ("import mlflow\nmlflow.pyfunc.log_model(name='m', python_model=W(), signa
 
 # ---- registry ------------------------------------------------------------------------------
 
+EP_POST = 'w.api_client.do("POST", f"/serving-endpoints/{EP}/invocations", body=b)'
+
+
+@pytest.mark.parametrize("cell, ok", [
+    ("r = w.serving_endpoints.query(name=EP, dataframe_records=rows)", True),
+    (EP_POST, True),
+    # round 2 (with-skill teddy-001): the REST call inside a helper the notebook calls
+    (f"def invoke(w, b):\n    return {EP_POST}\nout = invoke(w, {{'dataframe_records': rows}})", True),
+    (f"def invoke(w, b):\n    return {EP_POST}", False),                   # helper never called
+    ("# test the endpoint later\nprint('verify the endpoint in the UI')", False),   # text only
+    ('print("/serving-endpoints/x/invocations")', False),                  # a print is not a request
+])
+def test_endpoint_query(cc, cell, ok):
+    assert _check(cc, "smoke_tests/endpoint_query", _nb(cell))[0] is ok
+
+
 def test_every_correction_states_flaw_and_rule(cc):
     expected = cc.scorers.TASKS["teddy-002"]["checks"]
     for key, meta in cc.CORRECTIONS.items():
@@ -84,6 +100,16 @@ def test_edge_task_phase_without_sub_checks_is_left_alone(cc):
     ("from huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir='/Volumes/c/s/v/t')", True),
     ("from huggingface_hub import snapshot_download\nprint('/tmp is used')\nsnapshot_download('Merck/TEDDY')", False),
     ("from huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')", False),
+    # round 2 (with-skill teddy-001): probe /local_disk0, fall back to /tmp, download in a subprocess
+    # script whose local_dir is formatted from that variable, then stage a copy under the same variable
+    ("import os, subprocess, sys\ntry:\n    os.makedirs('/local_disk0/tmp')\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'\nd = f'{TMP}/snap'\n"
+     "script = f'''\nfrom huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir=\"{d}\")\n'''\n"
+     "subprocess.check_call([sys.executable, '-c', script])" + "\nimport shutil\nshutil.copytree(d, f'{TMP}/code')", True),
+    ("import subprocess, sys\nd = '/local_disk0/snap'\n"
+     "script = f'''\nfrom huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir=\"{d}\")\n'''\n"
+     "subprocess.check_call([sys.executable, '-c', script])", False),                                      # /local_disk0 with no fallback
+    ("import shutil\nshutil.copytree('/tmp/t', '/local_disk0/t')\n" + "from huggingface_hub import snapshot_download\n"
+     "snapshot_download('Merck/TEDDY', local_dir='/tmp/t')", False),    # staging to /local_disk0, no fallback
 ])
 def test_uses_tmp(cc, cell, ok):
     assert _check(cc, "download_staging/uses_tmp", _nb(cell))[0] is ok
@@ -110,6 +136,21 @@ def test_hf_xet_disabled(cc):
     assert _check(cc, "download_staging/hf_xet_disabled", joined, READY)[0] is True
     other = {**cc.scorers.TASKS["teddy-001"], "model_family": "scgpt"}
     assert cc.hf_xet_disabled(cc.pc.PracticalCode(""), "", None, other)[0] is True
+    # round 2 (baseline teddy-002): download to a temp folder, copy file by file into a Volume via
+    # os.walk, then load from the Volume; a per-file copy from the download folder carries the evidence
+    walked = _nb("import os, shutil, tempfile\nfrom huggingface_hub import snapshot_download\nV = '/Volumes/c/s/v/teddy'\n"
+                 "tmp = tempfile.mkdtemp()\nsnapshot_download('Merck/TEDDY', local_dir=tmp)\n"
+                 "for root, _, files in os.walk(tmp):\n    for fn in files:\n        src = os.path.join(root, fn)\n"
+                 "        shutil.copyfile(src, os.path.join(V, os.path.relpath(src, tmp)))",
+                 "from safetensors.torch import load_file\nw = load_file(f'{V}/70M/model.safetensors')")
+    assert _check(cc, "download_staging/hf_xet_disabled", walked, READY)[0] is True
+    # the same copy loop, but walking a folder that is not the download destination
+    elsewhere = _nb("import os, shutil, tempfile\nfrom huggingface_hub import snapshot_download\nV = '/Volumes/c/s/v/teddy'\n"
+                    "tmp = tempfile.mkdtemp()\nsnapshot_download('Merck/TEDDY', local_dir=tmp)\nother = '/tmp/x'\n"
+                    "for root, _, files in os.walk(other):\n    for fn in files:\n        src = os.path.join(root, fn)\n"
+                    "        shutil.copyfile(src, os.path.join(V, fn))",
+                    "from safetensors.torch import load_file\nw = load_file(f'{V}/70M/model.safetensors')")
+    assert _check(cc, "download_staging/hf_xet_disabled", elsewhere, READY)[0] is False
 
 
 @pytest.mark.parametrize("cells, ok", [
@@ -118,6 +159,22 @@ def test_hf_xet_disabled(cc):
     (("import torch\nREQS = ['torch==2.5.1', 'safetensors==0.4.5']", LOG), True),   # no transformers at all
     (("REQS = ['transformers>=4.40']", LOG), False),
     (("%pip install transformers", "import transformers"), False),
+    # round 2 baselines: the served model is plain PyTorch; the upstream package is imported only to
+    # compare against upstream, so no transformers pin is needed
+    (("import torch, mlflow\nclass Enc(torch.nn.Module):\n    pass\n"
+      "class W(mlflow.pyfunc.PythonModel):\n    def load_context(self, c):\n        self.m = Enc()",
+      "from teddy.models.teddy_g.model import TeddyGModel\nref = TeddyGModel",
+      "REQS = ['torch==2.5.1']", LOG), True),
+    # the served class uses an upstream / transformers import made at notebook level -> pin needed
+    (("import mlflow\nfrom transformers import AutoModel\n"
+      "class W(mlflow.pyfunc.PythonModel):\n    def load_context(self, c):\n        self.m = AutoModel.from_pretrained(c)",
+      "REQS = ['torch==2.5.1']", LOG), False),
+    (("import mlflow\nclass W(mlflow.pyfunc.PythonModel):\n    def load_context(self, c):\n"
+      "        from teddy.models.teddy_g.model import TeddyGModel\n        self.m = TeddyGModel",
+      "REQS = ['torch==2.5.1']", LOG), False),
+    # the upstream package shipped with the model via code_paths -> pin needed
+    (("import mlflow\nclass W(mlflow.pyfunc.PythonModel):\n    pass",
+      "mlflow.pyfunc.log_model(name='m', python_model=W(), code_paths=['/tmp/code/teddy'], pip_requirements=['torch'])"), False),
 ])
 def test_deps_pinned(cc, cells, ok):
     assert _check(cc, "download_staging/deps_pinned", _nb(*cells))[0] is ok
@@ -214,6 +271,13 @@ HF = "from huggingface_hub import snapshot_download\n"
     # a fallback is assigned, but the download does not use it
     ("try:\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'\n"
      + HF + "snapshot_download('Merck/TEDDY', local_dir='/local_disk0/t')", False),
+    # round 2: a subprocess download whose script formats in the fallback variable
+    ("import os, subprocess, sys\ntry:\n    os.makedirs('/local_disk0/tmp')\n    TMP = '/local_disk0/tmp'\nexcept OSError:\n    TMP = '/tmp'\nd = f'{TMP}/snap'\n"
+     "script = f'''\nfrom huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir=\"{d}\")\n'''\n"
+     "subprocess.check_call([sys.executable, '-c', script])", True),
+    ("import subprocess, sys\nd = '/local_disk0/snap'\n"
+     "script = f'''\nfrom huggingface_hub import snapshot_download\nsnapshot_download('Merck/TEDDY', local_dir=\"{d}\")\n'''\n"
+     "subprocess.check_call([sys.executable, '-c', script])", False),
 ])
 def test_local_disk0(cc, cell, ok):
     assert _check(cc, "forbidden_patterns//local_disk0", _nb(cell))[0] is ok

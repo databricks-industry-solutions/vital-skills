@@ -1,0 +1,17 @@
+{
+  "teddy-001": {
+    "outcome/endpoint_ready": true,
+    "outcome/serves_recorded_version": true,
+    "outcome/returns_valid_embeddings": true,
+    "outcome/accepts_expression_input": true
+  },
+  "teddy-002": {
+    "outcome/endpoint_ready": true,
+    "outcome/serves_recorded_version": true,
+    "outcome/returns_valid_embeddings": true,
+    "outcome/accepts_expression_input": true,
+    "outcome/vs_endpoint_online": true,
+    "outcome/index_ready": true,
+    "outcome/nn_returns_cell_type": true
+  }
+}

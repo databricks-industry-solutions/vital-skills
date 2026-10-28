@@ -31,6 +31,17 @@ frontmatter `version` is the source of truth for releases.
   path that is actually used, a REST body actually sent, the guard on the index's source
   table, and (also in `practical_checks.py`) a weight load that reads the download's
   destination.
+- Round 2 of the TEDDY runs (`eval/models/teddy/runs_20261027/`): a clean rerun of all
+  four runs with the updated skill — run records, exported notebooks (and the notebook as it
+  stood before each go-ahead), scores, `RESULTS.md` and a round README. Run records now name
+  their export (`export_file`). While scoring it, six checks were fixed, each with tests and
+  none changing a round-1 or Sep–Oct result: an `assert FLAG` counts as a deploy gate; a
+  download run in a subprocess script is followed back to the notebook's path variables, and
+  a `/local_disk0` path with a used fallback is accepted by both `uses_tmp` and `local_disk0`
+  (the fallback helpers now live once, in `practical_checks.py`); a corrected
+  `smoke_tests/endpoint_query` (a request actually sent, SDK or REST POST to `/invocations`;
+  thirteen corrected sub-checks); `deps_pinned` judged on the served model's code only; and the
+  completed-download evidence follows a per-file copy from the download folder.
 - TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
   accept any valid way of reaching each goal (parsed code + recorded outcome), with
   tests in `tests/test_practical_checks.py`, and

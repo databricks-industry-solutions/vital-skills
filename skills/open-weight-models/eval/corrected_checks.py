@@ -273,39 +273,6 @@ def pip_reqs_from_source(nb, response, record, task):
 # Calls that write to a path: (call name, position of the path argument).
 _WRITE_CALLS = {"makedirs": 0, "mkdir": None, "copytree": 1, "copy": 1, "copy2": 1, "copyfile": 1,
                 "move": 1, "write_text": None, "write_bytes": None, "save_model": 1}
-_ACCEPTED = pc.ACCEPTED_LOCATIONS
-
-
-def _assigns(stmts: list) -> dict:
-    """{name: [value nodes]} for plain assignments anywhere inside `stmts`."""
-    out = {}
-    for stmt in stmts:
-        for n in ast.walk(stmt):
-            if isinstance(n, ast.Assign):
-                for t in n.targets:
-                    if isinstance(t, ast.Name):
-                        out.setdefault(t.id, []).append(n.value)
-    return out
-
-
-def _fallbacks(nb) -> dict:
-    """{name: (line of the try / if)} for a path variable set to /local_disk0 on one side and to an
-    accepted location (/tmp, tempfile, Volume) on the other: try body vs a handler, or if vs else.
-    These are the compute-adaptive paths: the alternative is assigned to the same name."""
-    out = {}
-    pairs = [(t.body, [s for h in t.handlers for s in h.body] + t.orelse, t.lineno) for t in nb.nodes(ast.Try)]
-    pairs += [(i.body, i.orelse, i.lineno) for i in nb.nodes(ast.If)] + [(i.orelse, i.body, i.lineno) for i in nb.nodes(ast.If)]
-    for first, other, line in pairs:
-        a, b = _assigns(first), _assigns(other)
-        for name in set(a) & set(b):
-            if (any("local_disk0" in pc._path_kinds(nb, v) for v in a[name])
-                    and any(pc._path_kinds(nb, v) & _ACCEPTED for v in b[name])):
-                out[name] = line
-    return out
-
-
-def _uses_fallback(nb, node, fallbacks: dict) -> bool:
-    return any(isinstance(n, ast.Name) and n.id in fallbacks for n in pc.flow_nodes(nb, node))
 
 
 def _probe(nb, call, fallbacks: dict):
@@ -313,7 +280,7 @@ def _probe(nb, call, fallbacks: dict):
     notebook then uses (the README's makedirs probe); the try's line, or None."""
     for t in nb.nodes(ast.Try):
         if _contains(t.body, call) and t.handlers:
-            handled = _assigns([s for h in t.handlers for s in h.body])
+            handled = pc.assigned_values([s for h in t.handlers for s in h.body])
             if any(name in fallbacks for name in handled):
                 return t.lineno
     return None
@@ -325,14 +292,10 @@ def local_disk0(nb, response, record, task):
     tempfile, Volume) assigned in the try handler or the other if branch, and that same
     variable is what the download / write uses; or the write is the probe inside such a try.
     A try with any handler (even `except: pass`) is not enough. Other strings do not count."""
-    fallbacks = _fallbacks(nb)
+    fallbacks = pc.local_disk0_fallbacks(nb)
     sites = []
     for d in pc.downloads(nb, response):
-        dest = None
-        if d.node is not None:
-            dest = next((m.get("local_dir") or m.get("cache_dir") for m in nb.keyword_maps(d.node)
-                         if m.get("local_dir") or m.get("cache_dir")), None)
-        sites.append((d.line, f"download ({d.how})", d.kinds, dest, d.node))
+        sites.append((d.line, f"download ({d.how})", d.kinds, pc.download_site(nb, d), d.node))
     for call in nb.calls:
         name = _call_name(call)
         if name not in _WRITE_CALLS and name != "open":
@@ -354,7 +317,7 @@ def local_disk0(nb, response, record, task):
     for line, how, kinds, node, call in sites:
         if "local_disk0" not in kinds:
             continue
-        if node is not None and _uses_fallback(nb, node, fallbacks):
+        if node is not None and pc.uses_fallback(nb, node, fallbacks):
             adaptive.append(line)
         elif call is not None and _probe(nb, call, fallbacks):
             adaptive.append(line)
@@ -365,6 +328,26 @@ def local_disk0(nb, response, record, task):
     if adaptive:
         return True, f"/local_disk0 used only with a fallback path that is then used (lines {adaptive})"
     return True, f"no write to /local_disk0 ({len(sites)} write / download site(s) checked)"
+
+
+def endpoint_query(nb, response, record, task):
+    """smoke_tests/endpoint_query : the notebook sends a request to the serving endpoint, through
+    the SDK's serving_endpoints.query or an HTTP call to its /invocations URL (api_client.do,
+    requests), in code that runs: at top level, or in a notebook function the notebook calls."""
+    queries = [c for c in nb.calls if pc._is_endpoint_query(nb, c)]
+    if not queries:
+        return False, "no request sent to a serving endpoint (SDK query or HTTP call to /invocations)"
+    for call in queries:
+        owners = [f for f in nb.functions.values() if f.lineno <= call.lineno <= f.end_lineno]
+        if not owners:
+            return True, f"endpoint queried at line {call.lineno}"
+        owner = max(owners, key=lambda f: f.lineno)
+        callers = [c.lineno for c in nb.calls if _call_name(c) == owner.name
+                   and not owner.lineno <= c.lineno <= owner.end_lineno]
+        if callers:
+            return True, f"endpoint queried at line {call.lineno} in {owner.name}(), called at line {callers[0]}"
+    return False, (f"endpoint query only inside functions the notebook never calls "
+                   f"(lines {[c.lineno for c in queries]})")
 
 
 _SDK_SERVED = ("ServedEntityInput", "ServedModelInput")
@@ -723,7 +706,9 @@ CORRECTIONS = {
         "flaw": "passes on any '/tmp' text (even a comment-free print or an unrelated path) and fails "
                 "tempfile.mkdtemp() or a Volume, which also work on serverless",
         "accepts": "the Hugging Face download (and any staging copy) goes to /tmp, a tempfile folder or a "
-                   "Unity Catalog Volume, never /local_disk0 (practical_checks.download_location_ok)",
+                   "Unity Catalog Volume (practical_checks.download_location_ok); /local_disk0 only when "
+                   "compute-adaptive, with the fallback rule of forbidden_patterns//local_disk0 (added after "
+                   "round 2: a subprocess download's path is followed into the script text)",
         "check": uses_tmp,
     },
     "download_staging/hf_xet_disabled": {
@@ -778,6 +763,14 @@ CORRECTIONS = {
                    "that variable is what is used (or the write is the probe inside that try)",
         "check": local_disk0,
     },
+    "smoke_tests/endpoint_query": {
+        "flaw": "passes on text such as 'test ... endpoint' anywhere, including comments and markdown, and "
+                "fails a request posted to /invocations with w.api_client.do, the way the skill sends "
+                "inference controls (found on round 2, with-skill teddy-001)",
+        "accepts": "a request sent to the serving endpoint (serving_endpoints.query or an HTTP call to its "
+                   "/invocations URL) in code that runs: top level or a notebook function that is called",
+        "check": endpoint_query,
+    },
     "endpoint_deployment/sdk_enums": {
         "flaw": "requires the name ServingModelWorkloadType, so a REST body with \"workload_type\": "
                 "\"GPU_SMALL\" (valid for the REST API) fails",
@@ -807,9 +800,12 @@ CORRECTIONS = {
         "accepts": "every serving-endpoint deploy call is reachable only when a flag the user sets is on "
                    "(a widget, a notebook / environment parameter or a user-set True/False constant, any name; "
                    "a flag the notebook sets from endpoint state does not count): the call is in the flag-on "
-                   "branch, or a top-level `if` before it stops the notebook in the flag-off branch — and the "
-                   "gate defaults to off (widget default 'false', constant False, unset parameter), so nothing "
-                   "costly runs until the user turns it on; a default that cannot be read from the code fails",
+                   "branch, a top-level `if` before it stops the notebook in the flag-off branch, or a top-level "
+                   "`assert FLAG` before it — and the gate defaults to off (widget default 'false', constant "
+                   "False, unset parameter), so nothing costly runs until the user turns it on; a default that "
+                   "cannot be read from the code fails. Not scored: how the agent read a request such as "
+                   "\"Deploy … Write the code.\" (switching the flag on for the run itself, or stopping to ask, are "
+                   "both fine if it says so before spending); that is reported per run, not counted",
         "check": run_go_gate,
     },
 }

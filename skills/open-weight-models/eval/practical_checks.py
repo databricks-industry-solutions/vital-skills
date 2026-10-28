@@ -53,9 +53,12 @@ CHECKS = {
         "goal": "Model files are downloaded and staged where serverless compute can write.",
         "accepts": ["a /tmp path", "tempfile.mkdtemp() / TemporaryDirectory() (both under /tmp)",
                     "a Unity Catalog Volume path (/Volumes/...)",
-                    "the same, as the destination of a download run in a subprocess or shell command"],
-        "fails": "/local_disk0 as a download destination or as the destination of a copy/move of the "
-                 "files (staging); a download destination that is none of the above, including the "
+                    "the same, as the destination of a download run in a subprocess or shell command",
+                    "/local_disk0 when compute-adaptive: the path variable has one of the above assigned in "
+                    "the try handler or other if branch, and that variable is what the download / copy uses "
+                    "(followed into a subprocess script's text)"],
+        "fails": "/local_disk0 without such a fallback, as a download destination or as the destination of "
+                 "a copy/move of the files (staging); a download destination that is none of the above, including the "
                  "default Hugging Face cache (not stated in the code). Other /local_disk0 strings "
                  "(messages, unrelated paths) do not count",
         "evidence": "code",
@@ -209,7 +212,8 @@ GUIDELINES = {
                 "counted as a failure.",
         "accepts": ["run record endpoint_config: every served entity has a GPU_* workload type "
                     "(recorded settings only; code is never read)"],
-        "context": "on CPU, baseline/teddy-002's endpoint took about 15 s per cell (run record notes)",
+        "context": "CPU endpoints were slower per cell in the recorded runs (round 1 baseline/teddy-002: "
+                   "about 15 s per cell; round 2 baselines: about 1.7-3.3 s per cell, run record notes)",
         "evidence": "record",
     },
 }
@@ -863,21 +867,82 @@ def _endpoint_serves_registration(record) -> bool:
 _STAGING_CALLS = ("copytree", "copy", "copy2", "copyfile", "move")
 
 
+def assigned_values(stmts: list) -> dict:
+    """{name: [value nodes]} for plain assignments anywhere inside `stmts`."""
+    out = {}
+    for stmt in stmts:
+        for n in ast.walk(stmt):
+            if isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        out.setdefault(t.id, []).append(n.value)
+    return out
+
+
+def local_disk0_fallbacks(nb) -> dict:
+    """{name: (line of the try / if)} for a path variable set to /local_disk0 on one side and to an
+    accepted location (/tmp, tempfile, Volume) on the other: try body vs a handler, or if vs else.
+    These are the compute-adaptive paths: the alternative is assigned to the same name."""
+    out = {}
+    pairs = [(t.body, [s for h in t.handlers for s in h.body] + t.orelse, t.lineno) for t in nb.nodes(ast.Try)]
+    pairs += [(i.body, i.orelse, i.lineno) for i in nb.nodes(ast.If)] + [(i.orelse, i.body, i.lineno) for i in nb.nodes(ast.If)]
+    for first, other, line in pairs:
+        a, b = assigned_values(first), assigned_values(other)
+        for name in set(a) & set(b):
+            if (any("local_disk0" in _path_kinds(nb, v) for v in a[name])
+                    and any(_path_kinds(nb, v) & ACCEPTED_LOCATIONS for v in b[name])):
+                out[name] = line
+    return out
+
+
+def uses_fallback(nb, node, fallbacks: dict) -> bool:
+    return node is not None and any(isinstance(n, ast.Name) and n.id in fallbacks for n in flow_nodes(nb, node))
+
+
+def download_site(nb, d):
+    """The notebook node a download's destination flows from: its local_dir / cache_dir keyword,
+    or, for a download inside a subprocess script, the subprocess call's arguments (the script
+    text and argv), whose formatted values carry the notebook's path variables. None if unknown."""
+    if d.how == "subprocess":
+        call = next((c for c in nb.calls if c.lineno == d.line
+                     and any(_SUBPROCESS.match(x) for x in nb.dotted(c.func))), None)
+        return ast.Tuple(elts=list(call.args), ctx=ast.Load()) if call is not None else None
+    if d.node is None:
+        return None
+    return next((m.get("local_dir") or m.get("cache_dir") for m in nb.keyword_maps(d.node)
+                 if m.get("local_dir") or m.get("cache_dir")), None)
+
+
+def staging_dst(call: ast.Call):
+    """The destination argument of a shutil copy / move (positional or dst=), or None."""
+    return call.args[1] if len(call.args) > 1 else next((k.value for k in call.keywords if k.arg == "dst"), None)
+
+
+def local_disk0_staging(nb) -> list:
+    """shutil copy / move calls whose destination can be under /local_disk0."""
+    return [c for c in nb.calls if _call_name(c) in _STAGING_CALLS
+            and any(d.startswith("shutil.") for d in nb.dotted(c.func))
+            and staging_dst(c) is not None and "local_disk0" in _path_kinds(nb, staging_dst(c))]
+
+
 def download_location_ok(nb, response, record, task):
     found = downloads(nb, response)
     if not found:
         return False, "no Hugging Face download call found"
-    staging = [c.lineno for c in nb.calls if _call_name(c) in _STAGING_CALLS
-               and any(d.startswith("shutil.") for d in nb.dotted(c.func))
-               and "local_disk0" in _path_kinds(nb, c.args[1] if len(c.args) > 1 else next(
-                   (k.value for k in c.keywords if k.arg == "dst"), ast.Constant("")))]
-    bad = [d for d in found if not d.kinds <= ACCEPTED_LOCATIONS]
+    # /local_disk0 counts only when compute-adaptive: the path variable has an accepted alternative
+    # (try handler / other if branch) that is then used, so serverless gets the alternative
+    fallbacks = local_disk0_fallbacks(nb)
+    staging = [c.lineno for c in local_disk0_staging(nb) if not uses_fallback(nb, staging_dst(c), fallbacks)]
+    bad = [d for d in found if d.kinds - ACCEPTED_LOCATIONS - {"local_disk0"}
+           or ("local_disk0" in d.kinds and not uses_fallback(nb, download_site(nb, d), fallbacks))]
     where = "; ".join(d.describe() for d in found)
     if staging:
         return False, f"files staged to /local_disk0 (lines {staging}); downloads: {where}"
     if bad:
         return False, f"destination not an accepted location: {'; '.join(d.describe() for d in bad)}"
-    return True, f"downloads: {where}"
+    adaptive = f" (/local_disk0 only with a used fallback: {', '.join(sorted(fallbacks))})" if any(
+        "local_disk0" in d.kinds for d in found) or local_disk0_staging(nb) else ""
+    return True, f"downloads: {where}{adaptive}"
 
 
 _WEIGHT_LOADS = ("from_pretrained", "load_file", "load_state_dict")
@@ -936,16 +1001,27 @@ def path_strings(nb: PracticalCode, node, depth: int = 0) -> list:
     return list(dict.fromkeys(out))[:50]
 
 
+def _destination_names(nb: PracticalCode, download) -> set:
+    """Notebook variables a direct download writes into: the names in its local_dir / cache_dir."""
+    if download.node is None or download.how != "notebook":
+        return set()
+    return {n.id for m in nb.keyword_maps(download.node) for key in ("local_dir", "cache_dir")
+            if m.get(key) is not None for n in ast.walk(m[key]) if isinstance(n, ast.Name)}
+
+
 def _staged_paths(nb: PracticalCode, download) -> list:
-    """The download's destination plus where shutil copies / moves it (copytree(local, DEST))."""
-    paths = list(download.paths)
+    """The download's destination plus where shutil copies / moves it: copytree(local, DEST), or
+    a per-file copy whose source derives from the destination variable (an os.walk over it); the
+    copy target's trailing per-file parts ("/{}") are dropped, so the target folder counts."""
+    paths, names = list(download.paths), _destination_names(nb, download)
     for call in sorted(nb.calls, key=lambda c: c.lineno):
         if _call_name(call) in _STAGING_CALLS and len(call.args) >= 2 and any(
                 d.startswith("shutil.") for d in nb.dotted(call.func)):
             src = call.args[0]
             if (any(_under(t, b) for t in path_strings(nb, src) for b in paths)
-                    or (download.node is not None and _derives(nb, src, lambda n: n is download.node))):
-                paths += path_strings(nb, call.args[1])
+                    or (download.node is not None and _derives(nb, src, lambda n: n is download.node))
+                    or (names and _derives(nb, src, lambda n: isinstance(n, ast.Name) and n.id in names))):
+                paths += [re.sub(r"(?:/\{\})+$", "", t) for t in path_strings(nb, call.args[1])]
     return paths
 
 
@@ -1062,17 +1138,68 @@ def _references_upstream(nb: PracticalCode, packages: tuple) -> bool:
         re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value) for p in packages for s in nb.string_constants())
 
 
+def _served_classes(nb: PracticalCode) -> list:
+    """The served model's code in the notebook: mlflow PythonModel subclasses, plus the notebook
+    functions and classes they reference by name (followed recursively)."""
+    classes = {c.name: c for c in nb.nodes(ast.ClassDef)}
+    defs = {**nb.functions, **classes}
+    todo = [c for c in classes.values() if any(d.endswith("PythonModel") for b in c.bases for d in nb.dotted(b))]
+    seen = {}
+    while todo:
+        node = todo.pop()
+        if node.name in seen:
+            continue
+        seen[node.name] = node
+        todo += [defs[n.id] for n in ast.walk(node) if isinstance(n, ast.Name) and n.id in defs and n.id not in seen]
+    return list(seen.values())
+
+
+def _served_uses(nb: PracticalCode, packages: tuple):
+    """Whether the served model needs transformers or the upstream package: the served classes
+    import one or use a name the notebook imports from one; a wrapper written as a source file
+    imports one; a log_model code_paths entry ships the upstream package; or the model is logged
+    with the mlflow.transformers flavor. None when the notebook defines no PythonModel class
+    (then the notebook-wide rule applies)."""
+    roots = packages + ("transformers",)
+    served = _served_classes(nb)
+    calls = _mlflow_log_model_calls(nb)
+    if any(".transformers." in d for c in calls for d in nb.dotted(c.func)):
+        return True
+    wrapper_files = [t.value for t in nb.string_constants() if "PythonModel" in t.value]
+    if any(re.search(rf"\bfrom\s+{p}\b|\bimport\s+{p}\b", t) for p in roots for t in wrapper_files):
+        return True
+    shipped = [t for c in calls for k in c.keywords if k.arg == "code_paths"
+               for v in nb.values(k.value) for e in (v.elts if isinstance(v, (ast.List, ast.Tuple)) else [v])
+               for t in path_strings(nb, e)]
+    if any(re.search(rf"(?:^|/){p}(?:/|$)", t) for p in packages for t in shipped):
+        return True
+    if not served and not wrapper_files:
+        return None
+    for node in served:
+        for n in ast.walk(node):
+            if isinstance(n, ast.Import) and any(a.name.split(".")[0] in roots for a in n.names):
+                return True
+            if isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] in roots:
+                return True
+            if isinstance(n, ast.Name) and nb.imports.get(n.id, "").split(".")[0] in roots:
+                return True
+    return False
+
+
 def transformers_pin(nb: PracticalCode, response: str, task: dict) -> tuple:
     """(ok, reason): transformers 5.x is excluded from the serving requirements (or %pip when
-    there is no serving pin), or the model path does not use transformers at all. Shared by
+    there is no serving pin), or the served model does not use transformers at all — judged on the
+    served code (PythonModel classes and what they use, wrapper files, code_paths), so an upstream
+    import used only to compare against upstream does not count. Shared by
     model_loads_with_pinned_deps and the corrected download_staging/deps_pinned check."""
     packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
     pip, serving = _pip_specs(response), _serving_specs(nb)
-    uses_transformers = (nb.imports_package(packages + ("transformers",)) or bool(serving)
-                         or _references_upstream(nb, packages))
-    if not uses_transformers:
-        return True, ("model path does not use transformers (no transformers or upstream-package "
-                      "import, none in the serving requirements)")
+    served = _served_uses(nb, packages)
+    if served is None:
+        served = nb.imports_package(packages + ("transformers",)) or _references_upstream(nb, packages)
+    if not (served or serving):
+        return True, ("the served model does not use transformers (no transformers or upstream-package "
+                      "use in the served code, none in the serving requirements)")
     specs = serving or pip
     source = "serving requirements" if serving else "%pip (no serving pin)"
     if not specs:
