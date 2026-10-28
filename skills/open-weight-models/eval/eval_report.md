@@ -171,9 +171,12 @@ Ordered by how much each one matters for deploying and serving.
 | 🟡 | Licence ambiguous upstream: model card Apache-2.0, bundled package MIT | none technically; matters before redistributing the model | round 1 | the skill records both and asks the user to confirm | both with-skill runs recorded both |
 | 🟡 | "Deploy … Write the code." read as code only, so it stopped to ask | none; one extra confirmation | with skill teddy-002, latest round | prompt wording, next round | reported, not scored |
 
-The scorer had problems too: literal-text matches and path-tracing gaps that failed valid code.
-13 replicated checks are now judged by intent (one added in round 2) and five more were corrected
-while scoring round 2; earlier rounds' results are unchanged (round 2 `RESULTS.md`, "How scored").
+**The scorer improved through the rounds too.** Each round of testing showed checks failing valid
+code: some matched literal text from the skill (a different valid way of doing the same thing
+failed), others could not follow a path or a copy through the notebook. They were fixed as they
+were found: 13 replicated checks are now judged by intent (one added in round 2), and five more
+were corrected while scoring round 2. After those five, round 1 and Sep–Oct were re-scored and
+none of their results changed (round 2 `RESULTS.md`, "How scored").
 
 ### Verdict
 
@@ -192,12 +195,15 @@ they work. Follow-ups, in order:
 
 ### Limitations
 
-- One sample per (run, task) in each round: directional, not statistical.
+- **One sample per (run, task) in each round, run by hand:** directional, not statistical. Manual
+  runs in the workspace UI are slow and prone to the same mistakes repeating (wrong chat tab,
+  compute not selected, a stale prompt, a go-ahead timed wrong); several runs had to be redone. Running
+  the tasks through the Genie Code CLI (follow-up 1 above) would allow repeats and remove those
+  steps.
 - Checks come from the skill's own references, so they can favour it; the corrected checks and the
   practical-checks trial (reported in each round) judge goals instead of text.
 - Built-in skills are always on, so the result is the skill's value on top of them.
-- Runs are driven by hand in the workspace UI; each round's `RESULTS.md` records the setup and any
-  slips.
+- Each round's `RESULTS.md` records the setup and any slips.
 
 ## Geneformer
 
