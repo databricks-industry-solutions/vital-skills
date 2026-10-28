@@ -24,17 +24,30 @@ percentages, no single score.
 **Words used here.** GPU / CPU = graphics / central processing unit (serving hardware). SDK =
 software development kit. REST body = the request text sent to an endpoint. UC = Unity Catalog.
 AI Gateway = the endpoint setting that logs requests to an inference table and tracks usage.
-`run_go` = the notebook switch that must be on before anything billable is created. Severity:
-**critical** = does not work or gives wrong results; **major** = works but unsafe, ungoverned or
-not reproducible; **minor** = robustness or style. "Failed c / m / m" = failed critical / major /
-minor checks (counted checks only, [`CHECKS.md`](CHECKS.md)).
+`run_go` = the notebook switch that must be on before anything billable is created.
+
+**Severity of a failed check:** 🔴 critical = does not work or gives wrong results ·
+🟠 major = works, but unsafe, ungoverned or not reproducible · 🟡 minor = robustness or style.
+Every check, with its severity and why it matters: [`CHECKS.md`](CHECKS.md).
 
 ## At a glance
 
-| Family | Latest round | Tasks | With skill, failed c / m / m | Baseline, failed c / m / m | Outcome checks | Verdict |
+| Family | Latest round | Tasks | Failed checks with the skill (each task) | Failed checks without the skill (each task) | Endpoint worked? | Verdict |
 |---|---|---|---|---|---|---|
-| TEDDY | round 2 (`runs_20261027`) | teddy-001, teddy-002 | 0 / 0 / 0 and 0 / 0 / 0 | 0 / 4 / 3 and 0 / 4 / 3 | all passed, both arms | ship with follow-ups |
-| Geneformer | — | geneformer-001, -002 planned | — | — | — | not evaluated |
+| TEDDY | round 2 (`runs_20261027`) | teddy-001, teddy-002 | none | 🟠 4 · 🟡 3 | yes, with and without | ship with follow-ups |
+| Geneformer | — | geneformer-001, -002 planned | — | — | — | pending (not yet evaluated) |
+
+**What the TEDDY runs without the skill failed** (round 2, the same 7 on both tasks):
+
+| | Check | Why it matters |
+|---|---|---|
+| 🟠 | request logging configured on the endpoint (`ai_gateway_config`) | requests and responses are not logged, so the endpoint is not governed |
+| 🟠 | inference table on (`inference_table`) | no record of what was sent and returned, so nothing to audit |
+| 🟠 | usage tracking on (`usage_tracking`) | no record of who used the endpoint and how much |
+| 🟠 | source, revision and licence tags on the model (`provenance_tags`) | which upstream version and licence the model came from is not recorded, so it is not reproducible |
+| 🟡 | deploy switch saved off (`run_go_gate`) | re-running the saved notebook can create billable resources again |
+| 🟡 | serving pins from the model's own dependency file (`pip_reqs_from_source`) | the pins record what was installed that day, not what the model needs |
+| 🟡 | cached code modules cleaned up on re-run (`sys_modules_purge`) | re-running cells out of order can serve stale code |
 
 ## TEDDY
 
