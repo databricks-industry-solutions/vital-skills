@@ -37,10 +37,22 @@ AI Gateway = the endpoint setting that logs requests to an inference table and t
 
 ## At a glance
 
-| Family | Latest round | Tasks | Failed checks with the skill (each task) | Failed checks without the skill (each task) | Endpoint worked? | Verdict |
-|---|---|---|---|---|---|---|
-| TEDDY | round 2 (2026-10-27/28) | teddy-001, teddy-002 | none | 🟠 4 · 🟡 3 | yes, with and without | ship with follow-ups |
-| Geneformer | — | geneformer-001, -002 planned | — | — | — | pending (not yet evaluated) |
+**TEDDY** — latest round (round 2, 2026-10-27/28), tasks teddy-001 and teddy-002. Verdict: **ship
+with follow-ups**.
+
+| | Without the skill | With the skill |
+|---|---|---|
+| Endpoint (and, for teddy-002, the cell search) worked | yes | yes |
+| Failed checks, each task | 🟠 4 · 🟡 3 (listed below) | none |
+| Served on | CPU (1.7–15 s per cell in the runs' notes) | `GPU_SMALL`, the size the model reference recommends |
+| Requests and usage logged | no | yes (AI Gateway inference table and usage tracking) |
+| Where the model came from recorded | no | yes (pinned upstream revision, both licences, checksums) |
+| Request format | its own, different each run | the shared single-cell format, the same across models |
+| Re-running the saved notebook | can create billable resources again | creates nothing until `run_go` is switched on |
+| Checked against TEDDY's own code | yes in the latest round | yes, before deploying |
+| The `name=` SDK error | hit it, fixed it mid-run | right the first time |
+
+**Geneformer** — pending (not yet evaluated; geneformer-001 and -002 planned).
 
 **What the TEDDY runs without the skill failed** (latest round, the same 7 on both tasks):
 
@@ -81,24 +93,6 @@ installed only for the with-skill runs.
 | Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md) |
 
 "Latest round" below means round 2.
-
-### What the skill changed, beyond the numbers
-
-With and without the skill, Genie Code built a TEDDY endpoint that works. What the skill changes
-is how that endpoint is built and whether it is safe to keep:
-
-| Without the skill | With the skill |
-|---|---|
-| Served on CPU (1.7–15 s per cell in the runs' notes) | Served on `GPU_SMALL`, the size the model reference recommends |
-| No record of requests or usage | AI Gateway inference table and usage tracking on |
-| No record of where the model came from | Pinned upstream revision, both licences and checksums recorded |
-| Its own request format per run | The shared single-cell request format, the same across models |
-| A re-run of the saved notebook can create billable resources again | `run_go` saved off; switched on only for the run that asked to deploy |
-| Settings sent where a custom model may ignore them (round 1, both arms) | Settings sent in the REST body, with a test that a changed value changes the output |
-| Hits the `name=` SDK error and fixes it mid-run | Gets it right the first time |
-
-The two with-skill runs also checked the wrapper against TEDDY's own code before deploying,
-and rejected requests whose genes TEDDY does not know.
 
 ### Results by round
 
