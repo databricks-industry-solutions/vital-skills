@@ -1,5 +1,19 @@
 # Evaluation Report — open-weight-models Skill
 
+## Takeaways (TEDDY, the one model family evaluated so far)
+
+1. **Without the skill, Genie Code can already deploy a working TEDDY endpoint** (and the cell
+   search). The skill is not what makes it work.
+2. **With the skill, the endpoint is one a team can keep.** It runs on a GPU, logs its requests,
+   records where the model came from (revision, licences), uses the same request format as the
+   other single-cell models, and the saved notebook does not create billable resources again on
+   a re-run. The runs without the skill missed these every time.
+3. **The evaluation found real problems in the skill and they are fixed:** six, for example
+   settings that a custom model silently ignored. The second round shows the fixes work.
+4. **Limits:** one run per task per arm, driven by hand in the workspace, so read this as
+   direction, not statistics. The checks were also corrected along the way (some had failed
+   valid code); the numbers below use the corrected checks.
+
 Genie Code with its built-in skills **plus** this skill, against built-ins only, on the same
 plain request. One section per model family; each round's full results are in its
 `models/<family>/runs_<date>/RESULTS.md`, and every check is explained in
