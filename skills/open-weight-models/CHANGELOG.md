@@ -107,6 +107,7 @@ frontmatter `version` is the source of truth for releases.
 
 ### Changed
 - `run_go` gate (`SKILL.md` #14, `teddy.md`, `model-template.md`): a request that says both "deploy" and "write the code" is treated as a deploy request, said in the same one line before switching the gate on (in TEDDY round 2 one with-skill run read "Deploy … Write the code." as code only and stopped to ask).
+- Geneformer status: "Pending" in the `SKILL.md` validation table (serving tested by hand, Genie Code evaluation planned), and "evaluation pending" instead of "eval WIP" in `geneformer.md` and `models/index.md`; the `SKILL.md` legend defines "Pending".
 - "VS" spelled out as "AI Search" (the repo's current name for Vector Search, which the skill never defined; where AI Search is first defined, "formerly Vector Search, VS" is kept so older files and file names still decode) in `SKILL.md`, `scimilarity.md` and the round 1 and round 2 `RESULTS.md`. Left as recorded: the Sep–Oct 2026 record, exported notebooks, and the original check's text match in `scorers.py` (and its test), which reproduce what was scored.
 - Renamed the skill from `oss-models` to `open-weight-models`.
 - Corrected Geneformer status to serving tested, with evaluation still in

@@ -23,14 +23,14 @@ Not all model references have been tested end-to-end through the eval harness.
 | Reference | Validated | Eval tasks | Notes |
 |-----------|-----------|------------|-------|
 | `teddy.md` | **Yes** | teddy-001 (deploy; formerly oss-001), teddy-002 (deploy + AI Search; formerly oss-002) | 70M variant. 160M/400M share ref but not yet tested. |
-| `geneformer.md` | No | geneformer-001, geneformer-002 (formerly oss-005, oss-006; WIP) | Serving tested; eval (geneformer-001/002) WIP. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
+| `geneformer.md` | Pending | geneformer-001, geneformer-002 (formerly oss-005, oss-006; planned) | Serving tested; evaluation pending. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
 | `scgpt.md` | No | — | Reference provided; no eval task yet. |
 | `scimilarity.md` | No | — | Zenodo v1.1 and HF expanded. |
 | `alphafold-openfold.md` | No | — | Reference provided; no eval task yet. |
 | `boltz.md` | No | — | Reference provided; no eval task yet. |
 | `midnight.md` | No | — | DINOv2 pathology tile embedder. Skeleton wrapper. |
 
-**Validated** = used by Genie Code in a blind eval run producing a working deployment. Does not imply scientific/clinical validation.
+**Validated** = used by Genie Code in a blind eval run producing a working deployment. Does not imply scientific/clinical validation. **Pending** = deployment tested by hand; the Genie Code evaluation is planned.
 
 ## When to Use
 
