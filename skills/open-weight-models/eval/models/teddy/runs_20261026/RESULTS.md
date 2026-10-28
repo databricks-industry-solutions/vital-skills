@@ -9,8 +9,8 @@ build a nearest-neighbour cell search). Raw counts only — no percentages, no s
 (the two kinds of serving hardware; `GPU_SMALL` is Model Serving's smallest GPU size, A10 is
 the GPU model). SDK = software development kit (here the Databricks Python SDK). REST = the
 plain web interface of an endpoint; "REST body" = the request text sent to it. ID =
-identifier. UTC = coordinated universal time. UC = Unity Catalog (where models are registered). VS = Vector Search
-(the index used for nearest-neighbour cell lookup). AI Gateway = the serving endpoint
+identifier. UTC = coordinated universal time. UC = Unity Catalog (where models are registered). AI Search = Databricks AI Search,
+formerly Vector Search (the index used for nearest-neighbour cell lookup). AI Gateway = the serving endpoint
 setting that logs requests to an inference table and tracks usage. HF = Hugging Face (where
 TEDDY's weights live). Sub-check = one pass/fail line of a scorer. Severity: **critical** =
 the endpoint does not work or gives wrong embeddings; **major** = works but unsafe,
@@ -184,7 +184,7 @@ carries the provenance "measured by orchestrator 2026-10-27, before teardown" in
 | Serves the recorded model version | pass | pass | pass | pass | pass |
 | Valid embeddings in its own declared format (one finite 512-dimension vector per cell) | **fail** — equal-length batches work; mixed lengths fail ("index out of range": the padding value −100 is used as a token ID) | pass (equal and mixed lengths) | pass (gene IDs + counts; checked by hand on 2 of the 3 fixture cells, not with mixed lengths) | pass | pass |
 | Takes cell expression + gene IDs (not pre-tokenized token IDs) | **fail** (token IDs; tokenization left to the client) | **fail** (same) | pass | pass | pass |
-| VS endpoint online | — | — | pass | pass | — |
+| AI Search endpoint online | — | — | pass | pass | — |
 | Index ready | — | — | pass (3,538 rows) | pass (1,000 rows) | — |
 | Nearest-neighbour query returns a cell type | — | — | pass | pass | — |
 

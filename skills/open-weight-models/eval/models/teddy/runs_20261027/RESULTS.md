@@ -10,7 +10,7 @@ score.
 **Words used here.** CPU / GPU = central / graphics processing unit (serving hardware;
 `GPU_SMALL` is Model Serving's smallest GPU size). SDK = software development kit (the
 Databricks Python SDK). REST = the plain web interface of an endpoint; "REST body" = the request
-text sent to it. UC = Unity Catalog. VS = Vector Search. AI Gateway = the endpoint setting that
+text sent to it. UC = Unity Catalog. AI Search = Databricks AI Search (formerly Vector Search), the index used for nearest-neighbour cell lookup. AI Gateway = the endpoint setting that
 logs requests to an inference table and tracks usage. HF = Hugging Face. Sub-check = one
 pass/fail line of a scorer. Severity: **critical** = the endpoint does not work or gives wrong
 embeddings; **major** = works but unsafe, ungoverned or not reproducible; **minor** = robustness
@@ -34,9 +34,9 @@ that must be on before anything billable is created.
 | Run | Task | Notebook | Skill | Serving | Built |
 |---|---|---|---|---|---|
 | baseline | teddy-001 | `baseline/teddy-001.py` | off | CPU Small | model v1, endpoint |
-| baseline | teddy-002 | `baseline/teddy-002.py` | off | CPU Small | model v1, endpoint, 3,538-cell table, VS endpoint + index |
+| baseline | teddy-002 | `baseline/teddy-002.py` | off | CPU Small | model v1, endpoint, 3,538-cell table, AI Search endpoint + index |
 | with_skill | teddy-001 | `with_skill/teddy-001.py` | on | GPU_SMALL | model v1, endpoint (inference table) |
-| with_skill | teddy-002 | `with_skill/teddy-002.py` | on | GPU_SMALL | model v1, endpoint (inference table), 2,000-cell table, VS endpoint + index |
+| with_skill | teddy-002 | `with_skill/teddy-002.py` | on | GPU_SMALL | model v1, endpoint (inference table), 2,000-cell table, AI Search endpoint + index |
 
 Same setup for every run: serverless GPU (A10), environment AI v6 (read from each notebook's
 saved settings); the same temporary 3-line instructions file (179 bytes: be concise, no
@@ -105,7 +105,7 @@ each endpoint declares.
 
 - **All four endpoints** were READY, served the recorded UC model version, took expression input
   and returned one finite 512-number embedding per cell for cells of different lengths.
-- **teddy-002 search, both runs:** VS endpoint ONLINE, index ready with every table row (3,538
+- **teddy-002 search, both runs:** AI Search endpoint ONLINE, index ready with every table row (3,538
   baseline, 2,000 with skill), and a nearest-neighbour query returned rows with a cell-type
   column.
 - Run notes (Genie Code's own tests, in the records): baseline teddy-002 labelled 20 of 21
