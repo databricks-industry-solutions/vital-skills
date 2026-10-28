@@ -11,8 +11,9 @@
 3. **The evaluation found real problems in the skill and they are fixed:** six, for example
    settings that a custom model silently ignored. The second round shows the fixes work.
 4. **Limits:** one run per task per arm, driven by hand in the workspace, so read this as
-   direction, not statistics. The checks were also corrected along the way (some had failed
-   valid code); the numbers below use the corrected checks.
+   direction, not statistics; automated runs are the next step (see Verdict). The checks were
+   corrected along the way (some had failed valid code); the numbers below use the corrected
+   checks.
 
 Genie Code with its built-in skills **plus** this skill, against built-ins only, on the same
 plain request. One section per model family; each round's full results are in its
@@ -62,44 +63,50 @@ is how that endpoint is built and whether it is safe to keep:
 The two with-skill runs also checked the wrapper against TEDDY's own code before deploying,
 and rejected requests whose genes TEDDY does not know.
 
-### Rounds
+### Results by round
 
-Primary sample per (run, task); repeat and discarded attempts are in each round's `RESULTS.md`.
+Every sub-check judged with the corrected logic (`corrected_checks.py`; what each one is:
+[`CHECKS.md`](CHECKS.md)). A task passes only if every sub-check passes, so one minor failure
+makes it fail. Rounds 1 and 2 add the governance, safety and outcome checks, so they have more
+sub-checks than Sep–Oct. Primary samples only.
 
-| Round | Skill | teddy-001 baseline → with skill | teddy-002 baseline → with skill |
-|---|---|---|---|
-| Sep–Oct 2026 | `oss-models` (pre-rename) | 5 / 3 / 3 → 0 / 0 / 1 | 3 / 3 / 3 → 0 / 0 / 2 |
-| Round 1 (`runs_20261026`) | before the fixes below | 0 / 5 / 3 → 0 / 0 / 1 | 0 / 5 / 4 → 0 / 0 / 0 |
-| Round 2 (`runs_20261027`) | after the fixes (`7ca4eee`) | 0 / 4 / 3 → 0 / 0 / 0 | 0 / 4 / 3 → 0 / 0 / 0 |
+| Round | Task | Sub-checks | Baseline passed | With skill passed | Skill only | Baseline only | Both fail | Outcome |
+|---|---|---|---|---|---|---|---|---|
+| Round 2 | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | win |
+| Round 2 | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | win |
+| Round 1 | teddy-001 | 38 | 30 | 37 | 7 | 0 | 1 (`run_go_gate`) | tie-fail |
+| Round 1 | teddy-002 | 45 | 36 | 45 | 9 | 0 | 0 | win |
+| Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | tie-fail |
+| Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 31 | 22 | 29 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | tie-fail |
 
-Sep–Oct is re-scored with the corrected checks (replicated checks only; the original numbers and
-their caveats are in its report: the with-skill prompt told Genie Code to read the skill). Every
-endpoint built in rounds 1 and 2 with the skill worked; every baseline endpoint in round 2 worked
-too.
+No sub-check passed without the skill and failed with it, in any round. Sep–Oct as originally
+reported (the old literal-text logic, and a with-skill prompt that told Genie Code to read the
+skill): [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
 
-### Failed checks by category
+### Where the skill helps — by category
 
-Counted checks that failed, primary samples, both tasks unless a task is named; "every round" =
-Sep–Oct, round 1 and round 2. Major or critical unless marked minor.
+Both tasks together. "Skill only" = passed with the skill, failed without it.
 
-| Category | What went wrong without the skill | With the skill |
-|---|---|---|
-| Download and staging | Sep–Oct: files saved where serverless cannot write (teddy-001); the Xet download setting not disabled; `transformers` not pinned below 5 | — |
-| Model wrapper | rounds 1 and 2, and Sep–Oct teddy-001: no clean-up of cached code modules on re-run (minor); Sep–Oct: weights or code not declared as model artifacts (teddy-001), made-up gene IDs in the test input | — |
-| Registration | every round: serving versions pinned to whatever was installed, not to the model's own dependency file (minor) | — |
-| Endpoint deployment | every round: no request logging configured; no deploy switch saved off (minor) | Sep–Oct (both tasks) and round 1 (teddy-001 only): deploy switch not saved off (minor) |
-| Tests | Sep–Oct: registered model never loaded and called before serving | — |
-| Known-bad patterns | Sep–Oct: an open-ended `transformers>=` pin that installs the breaking 5.x | — |
-| Search (teddy-002) | Sep–Oct and round 1: no guard if the cell table is missing (minor) | Sep–Oct: same (minor) |
-| Governance | rounds 1 and 2: no inference table, no usage tracking, no source / revision / licence tags on the model | — |
-| Safety | round 1: an existing table overwritten without looking (teddy-002) | — |
-| Outcome | round 1: endpoint accepts only token IDs, not a cell's expression (teddy-001) | — |
+| Category | Sub-checks | Round 2, baseline → with skill | Skill only in round 2 | Skill only in earlier rounds |
+|---|---|---|---|---|
+| Download and staging | 6 | 6 → 6 | — | Sep–Oct: download location, Xet setting, `transformers` pin |
+| Model wrapper | 14 | 12 → 14 | clean-up of cached code modules on re-run (minor) | round 1: same; Sep–Oct: also artifacts declared, real gene IDs in the test input |
+| Registration | 10 | 8 → 10 | serving pins taken from the model's dependency file (minor) | same |
+| Endpoint deployment | 8 | 4 → 8 | request logging configured; deploy switch saved off (minor) | request logging configured; round 1 teddy-002: deploy switch saved off |
+| Tests before and after deploying | 6 | 6 → 6 | — | Sep–Oct: registered model called before serving |
+| Known-bad patterns | 10 | 10 → 10 | — | Sep–Oct: no open-ended `transformers>=` pin |
+| Edge cases | 2 | 2 → 2 | — | — |
+| Search (teddy-002) | 4 | 4 → 4 | — | round 1: guard on a missing cell table (minor) |
+| Governance: request logging | 4 | 0 → 4 | inference table, usage tracking | round 1: same |
+| Governance: provenance | 4 | 2 → 4 | source, revision and licence tags on the model | round 1: same |
+| Safety: look before creating or deleting | 4 | 4 → 4 | — | round 1: no overwrite of an existing table |
+| Outcome | 11 | 11 → 11 | — | round 1: endpoint takes a cell's expression, not token IDs |
 
-The check behind each phrase, with its severity: [`CHECKS.md`](CHECKS.md). Governance, safety
-and outcome checks did not exist in Sep–Oct 2026.
-
-Not counted, but seen in every baseline: serving on CPU (the task guidelines suggest
-`GPU_SMALL`) and a request format of its own instead of the shared single-cell format.
+**Reading it:** without the skill, Genie Code passed the download, test and known-bad-pattern
+checks in rounds 1 and 2 that it failed in Sep–Oct (the Sep–Oct setup also differed). The
+skill's lasting help is in **governance** (request logging, provenance), **deployment safety**
+(a deploy switch saved off) and **reproducibility** (pins from the model's own dependency file).
+Not counted, but also with the skill only: GPU serving and the shared request format.
 
 ### Problems found in the skill, and where they are fixed
 
@@ -129,9 +136,14 @@ regression.
 | Outcome | tie, both worked | tie, both worked | no regression; no win to show, because the baselines' endpoints also worked |
 
 **Ship with follow-ups.** No regression in any group in either round; round 1 also won on
-outcome (a baseline endpoint that took only token IDs). Follow-ups: reword the prompts so
-"deploy" and "write the code only" are distinct; more than one sample per run (the Genie Code
-CLI harness in `benchmarks/biomnibench/` is the model for unattended runs); Geneformer.
+outcome (a baseline endpoint that took only token IDs). Follow-ups, in order:
+1. **Automate the runs.** Hand-driven runs in the workspace UI were slow and error-prone (wrong
+   chat tab, compute not selected, a stale prompt path); each slip cost a rerun. The Genie Code
+   CLI harness in `benchmarks/biomnibench/` already switches skills and memories by config and
+   runs replicates unattended; adapt it for these tasks, with outcome checks and teardown
+   scripted per run, and report it next to the workspace runs (as `accelerators` does).
+2. Reword the prompts so "deploy" and "write the code only" are distinct.
+3. Geneformer.
 
 ### Limitations
 
