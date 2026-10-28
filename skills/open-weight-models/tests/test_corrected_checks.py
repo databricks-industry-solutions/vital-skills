@@ -19,7 +19,7 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
 ROUND = EVAL_DIR / "models" / "teddy" / "runs_20261026"
-SEP_OCT = EVAL_DIR / "runs_20260924"
+SEP_OCT = EVAL_DIR / "models" / "teddy" / "runs_20260924"
 
 
 @pytest.fixture(scope="module")
@@ -425,7 +425,7 @@ def test_committed_sep_oct_corrected_scores_reproduce(cc):
 
 
 def test_sep_oct_rescore_writes_only_new_files(cc, tmp_path, monkeypatch):
-    """--sep-oct --write touches nothing but runs_20260924/scores_corrected/."""
+    """--sep-oct --write touches nothing but models/teddy/runs_20260924/scores_corrected/."""
     monkeypatch.setattr(cc, "SEP_OCT_DIR", tmp_path)
     for arm in cc.SEP_OCT_ARMS:
         (tmp_path / "results" / arm).mkdir(parents=True)

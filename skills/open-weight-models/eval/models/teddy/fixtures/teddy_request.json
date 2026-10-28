@@ -744,6 +744,6 @@
  "expected": {
   "n_cells": 3,
   "embedding_dim": 512,
-  "embedding_dim_source": "config.json d_model=512 at the revision above; runs_20260924/_ground_truth/gt_teddy.py:264 (70M d=512); teddy.md:48"
+  "embedding_dim_source": "config.json d_model=512 at the revision above; eval/ground_truth/gt_teddy.py:264 (70M d=512); teddy.md:48"
  }
 }

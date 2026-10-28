@@ -20,8 +20,8 @@ frontmatter `version` is the source of truth for releases.
   gate count it, not the verbatim logic, which is kept as a historical record shown as ⚑
   flags. Corrected score files for the 2026-10-27 round (`scores/<run>_corrected.json`)
   and a corrected re-score of the Sep–Oct 2026 exports
-  (`runs_20260924/scores_corrected/`, new files; recorded files untouched). `RESULTS.md`,
-  the round README, `eval/README.md` and a note in `runs_20260924/README.md` explain the
+  (`models/teddy/runs_20260924/scores_corrected/`, new files; recorded files untouched). `RESULTS.md`,
+  the round README, `eval/README.md` and a note in `models/teddy/runs_20260924/README.md` explain the
   flaws. Tests in `tests/test_corrected_checks.py`. The corrected `run_go_gate` needs
   every serving-endpoint deploy call to be reachable only with the user's flag on, and
   the flag to default to off (a widget default of "true", a constant `True` or a default
@@ -63,7 +63,7 @@ frontmatter `version` is the source of truth for releases.
 - `references/models/midnight.md` for the `kaiko-ai/midnight` pathology tile
   encoder.
 - Evaluation prompt-template library (now
-  `eval/runs_20260924/02_eval_prompt_templates.py`) and
+  `eval/models/teddy/runs_20260924/02_eval_prompt_templates.py`) and
   runtime-environment reference (now `eval/README_environments.md`).
 - Evaluation harness in the standard skill-eval `eval/` layout, shared across model
   families: `evalset.json` / `expectations.json` (teddy-001, teddy-002: the Sep–Oct 2026
@@ -99,10 +99,11 @@ frontmatter `version` is the source of truth for releases.
 - Convention check `convention/shared_single_cell_format` (shared `adata_*` input format),
   scored and reported apart from the outcome group; outcome checks
   `returns_valid_embeddings`, `accepts_expression_input`, `nn_returns_cell_type`.
-- `eval/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a frozen record
-  in the same layout, plus the Geneformer oss-005/oss-006 notebooks and the oss-005
-  with-skill output from a workspace backup (user name, project folder and catalog
-  replaced by placeholders).
+- `eval/models/teddy/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a
+  frozen record, filed with the later TEDDY rounds. The Sep–Oct Geneformer notebooks and the
+  oss-005 output were removed (never evaluated: no baseline, no scores; they remain in git
+  history), and the hand-built reference notebooks moved to a shared `eval/ground_truth/` (from
+  `tests/_ground_truth/` on `main`), with a README, for every model family.
 
 ### Changed
 - `run_go` gate (`SKILL.md` #14, `teddy.md`, `model-template.md`): a request that says both "deploy" and "write the code" is treated as a deploy request, said in the same one line before switching the gate on (in TEDDY round 2 one with-skill run read "Deploy … Write the code." as code only and stopped to ask).
@@ -136,7 +137,7 @@ frontmatter `version` is the source of truth for releases.
   how each round was run, results per round with the corrected checks, the checks that passed
   only with the skill, and where the skill helps by category — is in the new
   `eval/models/teddy/ROUNDS.md`; each round's record stays in its `RESULTS.md`.
-  `runs_20260924/eval_report.md` points to `CHECKS.md` for the list of its sub-checks.
+  `models/teddy/runs_20260924/eval_report.md` points to `CHECKS.md` for the list of its sub-checks.
 
 ### Fixed
 - Inference controls for custom PyFunc endpoints: the guidance to pass them as

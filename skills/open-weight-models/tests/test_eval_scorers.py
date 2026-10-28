@@ -18,7 +18,7 @@ import pytest
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
-PREVIOUS = EVAL_DIR / "runs_20260924"
+PREVIOUS = EVAL_DIR / "models" / "teddy" / "runs_20260924"
 OLD_TO_NEW = {"oss-001": "teddy-001", "oss-002": "teddy-002"}
 RECORDED = {"baseline": "baseline_scores.json", "with_skill": "with_skill_scores.json"}
 

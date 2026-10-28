@@ -2,14 +2,14 @@
 
 **Status: historical record.** These runs were made between 2026-09-24 and 2026-10-07 against the skill
 before it was renamed from `oss-models` to `open-weight-models`. They are kept as
-recorded and are **not** the current evaluation; the retest is in [`../`](../README.md).
+recorded and are **not** the current evaluation; the retest is in [`../`](../../../README.md).
 
 **Setup**: 2 TEDDY tasks, each run once with and once without the skill in Genie Code.
 Scored with the deterministic phase checks in `scorers.py` (8 groups of text checks on
 the exported notebook; no LLM judge), compared with `compare_runs.py`. Score files:
 `baseline_scores.json`, `with_skill_scores.json`. Per-task reports: `reports/`.
 The sub-checks themselves (added 2026-10-28): the rows counted as *replicated* in
-[`../CHECKS.md`](../CHECKS.md) — 27 for oss-001 and 30 for oss-002 (the search group applies to
+[`../CHECKS.md`](../../../CHECKS.md) — 27 for oss-001 and 30 for oss-002 (the search group applies to
 oss-002 only). That list shows each one with its severity, what it guards and, where the logic
 used here matched literal text, how the corrected version judges it.
 
@@ -86,7 +86,7 @@ two score files reports 2 wins, 0 regressions.
    the content has changed since.
 6. **One run per task per arm, two tasks.** Direction only, not significance.
 7. **Geneformer:** oss-005 has a with-skill notebook output
-   (`results/with_skill/oss-005.txt`) but no baseline and no scores; oss-006 was never
+   (`results/with_skill/oss-005.txt`, since removed from this record, see `README.md`) but no baseline and no scores; oss-006 was never
    run. Neither is in the results above.
 
 ## Verdict

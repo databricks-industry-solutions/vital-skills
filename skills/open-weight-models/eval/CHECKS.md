@@ -64,7 +64,7 @@ The severity tables in the reports count failed *counted* checks only.
 | `forbidden_patterns/local_disk0` | all | critical | replicated, by intent | /local_disk0 is not available on serverless. *Judged by intent:* no download, copy or file write to /local_disk0, unless the path variable has an alternative (/tmp, tempfile, Volume) assigned in the try handler or other if branch and that variable is what is used (or the write is the probe inside that try) |
 | `forbidden_patterns/transformers` | all | critical | replicated, by intent | transformers>= resolves to 5.x and breaks TeddyGModel. *Judged by intent:* no transformers requirement (%pip or serving) that allows 5.x |
 | `forbidden_patterns/ENSG00000FAKE` | all | major | replicated | Invented gene IDs give degenerate embeddings in validation. |
-| `forbidden_patterns/AutoCaptureConfigInput` | all | critical | replicated | The legacy auto-capture API is rejected (recorded: runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails. |
+| `forbidden_patterns/AutoCaptureConfigInput` | all | critical | replicated | The legacy auto-capture API is rejected (recorded: models/teddy/runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails. |
 | `forbidden_patterns/workload_type_GPU` | all | critical | replicated | String workload_type breaks ServedEntityInput.as_dict, so endpoint creation fails. |
 
 ### Search (nearest-neighbour tasks)

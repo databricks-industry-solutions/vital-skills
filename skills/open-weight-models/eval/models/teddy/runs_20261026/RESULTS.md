@@ -47,7 +47,7 @@ of them by its intent (list and rules: `eval/README.md`, "Corrected set"); every
 below uses the corrected results (`scores/<run>_corrected.json`). The unchanged
 ("verbatim") results stay in `scores/<run>_replicated.json` as a historical record; where
 they differ, a cell shows the verbatim result as a ⚑ flag with the reason. The Sep–Oct 2026
-runs were re-scored the same way (`../../../runs_20260924/scores_corrected/`, new files; the
+runs were re-scored the same way (`../runs_20260924/scores_corrected/`, new files; the
 recorded scores are kept as reported), so each table gives one line comparing them.
 
 ## Severity table — failed checks per run

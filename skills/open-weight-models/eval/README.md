@@ -17,7 +17,9 @@ eval/
     fixtures/teddy_request.json, answer_sheet.md, old_prompt_baseline.md, old_prompt_with_skill.md
     runs_20261026/         round 1: run_records.json, exported notebooks, screenshots, scores
     runs_20261027/         round 2 (same layout; tools take --round runs_20261027)
-  runs_20260924/           the frozen Sep 24 – Oct 7, 2026 sprint (old task IDs)
+    runs_20260924/         the frozen Sep 24 – Oct 7, 2026 TEDDY sprint (old task IDs)
+    ROUNDS.md              all TEDDY rounds side by side
+  ground_truth/            the hand-built reference notebooks the model references were written from
 ```
 
 **What is compared:** Genie Code with its built-in skills **plus** this skill, against
@@ -82,7 +84,7 @@ The scoring notebook logs this rendered prompt as each row's query.
   Genie Code to read `SKILL.md` and `teddy.md` first. Only the resource names and paths
   (the per-run names above), the skill file paths and the export path were changed
   (listed at the top of each file). The Sep 24 – Oct 7, 2026 record is in
-  [`runs_20260924/`](runs_20260924/README.md).
+  [`models/teddy/runs_20260924/`](models/teddy/runs_20260924/README.md).
 
 **Environment per pair.** Both pairs run in the baseline environment above (the AI Dev
 Kit user skills from Sep–Oct 2026 removed), so the replication pair is *not* the Sep–Oct 2026
@@ -222,7 +224,7 @@ Checklist for **each** (run, task):
      steer the work.
    - **Replication pair:** skip the follow-up — the Sep–Oct 2026 prompts already end with
      this request (for example
-     `runs_20260924/results/with_skill/oss-001.txt:23`). Record the answer
+     `models/teddy/runs_20260924/results/with_skill/oss-001.txt:23`). Record the answer
      Genie Code gave in the notebook or chat instead (`skills_self_report.source` is
      pre-filled accordingly).
    - **Evidence of skill use** is read from three sources together, none of them proof
@@ -354,7 +356,7 @@ outcome (endpoint READY serving the registered version). Severities are those of
 sub-check it corrects (`corrected_checks.SEVERITY_NOTE`). Headline counts, the severity
 table and the ship gate use it. Wherever the verbatim result differs, reports show it as
 a ⚑ flag with the reason. `corrected_checks.py --sep-oct --write` re-scored the Sep–Oct
-2026 exports into `runs_20260924/scores_corrected/` (new files; the recorded files are
+2026 exports into `models/teddy/runs_20260924/scores_corrected/` (new files; the recorded files are
 untouched), so rounds are compared corrected against corrected.
 
 | Sub-check | Verbatim flaw | Corrected: passes when |
@@ -448,7 +450,7 @@ verbatim logic, `tests/test_corrected_checks.py` tests the corrected one.
 | `model_registration/pip_reqs_from_source` | copying the pins without naming `pyproject.toml` / requirements | `teddy.md:165-173` |
 | `pyfunc_quality/real_gene_ids` | a payload built from `GeneTokenizer.from_pretrained(model_dir)` without naming `vocab.txt` | `teddy.md:126` |
 | `download_staging/uses_tmp` | `tempfile.mkdtemp()` (writes under /tmp, no literal) | — |
-| `forbidden_patterns/local_disk0` | compute-adaptive code that tries `/local_disk0` and falls back to `/tmp` | Sep–Oct 2026 ground-truth pattern (`runs_20260924/00_oss_models_test_plan.py`) |
+| `forbidden_patterns/local_disk0` | compute-adaptive code that tries `/local_disk0` and falls back to `/tmp` | Sep–Oct 2026 ground-truth pattern (`models/teddy/runs_20260924/00_oss_models_test_plan.py`) |
 | `endpoint_deployment/ai_gateway_config` | an inference table set in a REST body (`"inference_table_config": {...}`) | `SKILL.md:325` (the new `ai_gateway` checks accept it) |
 | `endpoint_deployment/sdk_enums` | REST deployment with `"workload_type": "GPU_SMALL"` (valid for the REST API) | — |
 | `ai_search/graceful_skip` | `try/except AnalysisException` around reading the table | — |

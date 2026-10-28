@@ -24,7 +24,7 @@ so those alternatives can only be credited for runs from 2026-10-27 on.
   python3 skills/open-weight-models/eval/corrected_checks.py --sep-oct [--write]
 
 prints every sample's corrected results and ⚑ flags; --write writes the corrected score
-files (scores/<run>_corrected.json for a round; runs_20260924/scores_corrected/ for Sep–Oct,
+files (scores/<run>_corrected.json for a round; models/teddy/runs_20260924/scores_corrected/ for Sep–Oct,
 never touching the recorded Sep–Oct files). Needs mlflow-skinny and packaging; no workspace,
 no network.
 """
@@ -52,7 +52,7 @@ from mlflow.genai.scorers import scorer as mlflow_scorer  # noqa: E402
 from scorers import _call_name  # noqa: E402
 
 CORRECTED_PREFIX = scorers.CORRECTED_PREFIX
-SEP_OCT_DIR = EVAL_DIR / "runs_20260924"
+SEP_OCT_DIR = EVAL_DIR / "models" / "teddy" / "runs_20260924"
 SEP_OCT_TASKS = {"oss-001": "teddy-001", "oss-002": "teddy-002"}
 SEP_OCT_ARMS = {"baseline": "baseline_scores.json", "with_skill": "with_skill_scores.json"}
 

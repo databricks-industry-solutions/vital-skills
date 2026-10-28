@@ -13,7 +13,7 @@ installed only for the with-skill runs.
 |---|---|---|---|
 | **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) | [`runs_20261027/RESULTS.md`](runs_20261027/RESULTS.md) |
 | Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists | [`runs_20261026/RESULTS.md`](runs_20261026/RESULTS.md) |
-| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [`runs_20260924/eval_report.md`](../../runs_20260924/eval_report.md) |
+| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md) |
 
 "Latest round" below means round 2.
 
@@ -58,7 +58,7 @@ deploy calls were not behind it; there was no `transformers>=` text, yet the ser
 went the other way, `sdk_enums`). With the skill, 27 → 26 and 30 → 28: the deploy switch (its
 saved default could not be read, or it was missing) and, on oss-002, the cell-table guard. Detail
 and the original caveats (the with-skill prompt told Genie Code to read the skill):
-[`runs_20260924/eval_report.md`](../../runs_20260924/eval_report.md).
+[`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
 
 ## Where the skill helps — by category
 

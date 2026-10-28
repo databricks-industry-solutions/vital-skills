@@ -255,7 +255,7 @@
         "severity": "critical",
         "source": "references/models/teddy.md:562",
         "quote": "AutoCaptureConfigInput",
-        "why": "The legacy auto-capture API is rejected (recorded: runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
+        "why": "The legacy auto-capture API is rejected (recorded: models/teddy/runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {
@@ -613,7 +613,7 @@
         "severity": "critical",
         "source": "references/models/teddy.md:562",
         "quote": "AutoCaptureConfigInput",
-        "why": "The legacy auto-capture API is rejected (recorded: runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
+        "why": "The legacy auto-capture API is rejected (recorded: models/teddy/runs_20260924/results/baseline/oss-002.txt:1169, 'auto_capture deprecated'), so endpoint creation with it fails.",
         "depends_on": "none"
       },
       "forbidden_patterns/workload_type_GPU": {

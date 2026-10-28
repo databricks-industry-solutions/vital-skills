@@ -421,7 +421,7 @@ def test_record_protocol_fields():
 
 
 def test_self_report_prompt_is_the_sep_oct_2026_line():
-    recorded = (SKILL_DIR / "eval" / "runs_20260924" / "results" / "with_skill" / "oss-001.txt").read_text()
+    recorded = (SKILL_DIR / "eval" / "models" / "teddy" / "runs_20260924" / "results" / "with_skill" / "oss-001.txt").read_text()
     line = recorded.splitlines()[22]
     assert line == "# MAGIC > At the end, l" + inst.SELF_REPORT_PROMPT[1:]
 

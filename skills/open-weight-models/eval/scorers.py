@@ -3,7 +3,7 @@
 Groups, reported separately (plus an optional judge):
 
   Replicated set ("verbatim") — the 8 phase checks used for the Sep–Oct 2026 runs, with the
-  check logic copied unchanged from runs_20260924/scorers.py. Kept as a historical record
+  check logic copied unchanged from models/teddy/runs_20260924/scorers.py. Kept as a historical record
   only: it reproduces the Sep–Oct 2026 numbers as originally reported. Several sub-checks are
   flawed (literal-text matches); corrected_checks.py judges their intent properly, and those
   corrected results ("corrected/<phase>/<check>", the scorer of record) are what the severity

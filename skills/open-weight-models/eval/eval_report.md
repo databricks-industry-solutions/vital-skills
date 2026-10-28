@@ -5,7 +5,7 @@ Databricks — once with this skill and once without it (built-in skills on in b
 plain request. Two tasks: **teddy-001** deploys TEDDY as a serving endpoint that turns a cell's
 gene counts into an embedding; **teddy-002** also builds a nearest-neighbour search that labels a
 cell by the types of its closest reference cells. Latest round: 2026-10-27/28, one run per task
-with and one without the skill, serverless GPU notebooks. Geneformer is not tested yet.
+with and one without the skill, serverless GPU notebooks. Geneformer is not evaluated yet.
 
 **In one line:** both ways, Genie Code built endpoints that work. With the skill they were also
 logged, traceable to their source, and safe to re-run; without it, they were not.
@@ -67,13 +67,13 @@ ship rule (`skill-eval`: at least one win, no regressions).
 - **The checks come from the skill's own references,** so they can favour it. They were corrected
   where they failed valid code; see "How the checks changed" in [`ROUNDS`](models/teddy/ROUNDS.md).
 - **The request "Deploy … Write the code." is ambiguous.** Next round: reword it.
-- **Geneformer** next, starting from the working reference notebooks `gt_geneformer` and
-  `gt_geneformer_bionemo` named in `references/models/geneformer.md`.
+- **Geneformer** is not evaluated yet.
 
 ## More detail
 
 - **All rounds** (Sep–Oct 2026, round 1, round 2), results per round, and where the skill helps by
-  category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md).
+  category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md). The Sep–Oct record itself is in
+  `models/teddy/runs_20260924/`.
 - **Each round's record** (setup, runs, outcome checks, skill use): `models/teddy/runs_<date>/RESULTS.md`.
 - **Every check:** [`CHECKS.md`](CHECKS.md). **Protocol and scorers:** [`README.md`](README.md).
 

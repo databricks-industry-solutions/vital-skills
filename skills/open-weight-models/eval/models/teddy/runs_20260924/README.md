@@ -1,13 +1,22 @@
 # Previous runs (Sep 24 – Oct 7, 2026) — frozen record
 
-Folder `runs_20260924/` (named for the first run date; it was `tests/`, then
-`previous_runs_2026-10/`). The current round is under `../models/teddy/runs_20261026/`.
+Folder `models/teddy/runs_20260924/` (named for the first run date; it was `tests/`, then
+`previous_runs_2026-10/`, then `eval/runs_20260924/`). The later rounds are next to it:
+`../runs_20261026/` (round 1) and `../runs_20261027/` (round 2); all rounds side by side:
+[`../ROUNDS.md`](../ROUNDS.md).
 
 The first evaluation of this skill, made between 2026-09-24 and 2026-10-07 when it was
 still called `oss-models`. **Frozen: do not edit these files.** Recorded evidence keeps its old task
 IDs (`oss-001`, `oss-002`, …); the ID mapping and results are in
-[`eval_report.md`](eval_report.md). The harness for the current retest lives one level up, in
-[`../`](../README.md).
+[`eval_report.md`](eval_report.md). The harness for the current retest is in
+[`../../../`](../../../README.md).
+
+**Removed after the move (2026-10-28):** the Sep–Oct Geneformer notebooks (`oss-005_*`,
+`oss-006_*`) and the oss-005 with-skill output (`results/with_skill/oss-005.txt`). Geneformer was
+never evaluated (no baseline, no scores), so they are not part of this TEDDY record; they remain
+in the git history. The reference notebooks (`_ground_truth/`) moved to
+[`../../../ground_truth/`](../../../ground_truth/README.md), shared by all model families. Files
+below that still mention oss-005, oss-006 or `_ground_truth/` are kept as recorded.
 
 ## What was run
 
@@ -56,9 +65,8 @@ original, moved or renamed only, except the four files marked *split*, *new* or
 | `eval_report.md`, `README.md` | *new*: summary and this file |
 | `results/{baseline,with_skill,with_skill_v2}/*.txt` | exported notebook sources that were scored; `manifest.json` run index; `oss-002_teddy_md_v1_diff.md` (the v1→v2 `teddy.md` patches) |
 | `oss-001_*`, `oss-002_*` | the notebook pairs, as prepared (prompt cell + skill check) |
-| `oss-005_*`, `oss-006_*`, `results/with_skill/oss-005.txt` | *scrubbed*: Geneformer notebooks and the oss-005 with-skill output, added from a workspace backup; only the user name, project folder and catalog were replaced by `<workspace-user>`, `<project-folder>`, `<catalog>` |
 | `00_oss_models_test_plan.py`, `02_eval_prompt_templates.py` | test plan and prompt library (the latter includes later prompt edits not used in the recorded runs) |
-| `_ground_truth/` | reference implementation notebooks |
+| (`_ground_truth/`) | moved to `../../../ground_truth/` (see above) |
 | `README_20260924_protocol.md` | the original `tests/README.md` |
 
 ## The old scoring notebook no longer runs as is
