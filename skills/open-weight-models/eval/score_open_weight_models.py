@@ -9,8 +9,8 @@
 # MAGIC |---|---|---|---|
 # MAGIC | standard | `baseline` | built-in skills only | `evalset.json` query, names rendered for the run |
 # MAGIC | standard | `with_skill` | built-in skills + open-weight-models | `evalset.json` query, names rendered for the run |
-# MAGIC | replication | `old_prompt_baseline` | built-in skills only | `models/teddy/old_prompt_baseline.md` (Sep–Oct 2026 baseline prompt) |
-# MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `models/teddy/old_prompt_with_skill.md` (Sep–Oct 2026 forced-read prompt) |
+# MAGIC | replication | `old_prompt_baseline` | built-in skills only | `models/teddy/old_prompts.json` → `old_prompt_baseline` (Sep–Oct 2026 baseline prompt) |
+# MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `models/teddy/old_prompts.json` → `old_prompt_with_skill` (Sep–Oct 2026 forced-read prompt) |
 # MAGIC
 # MAGIC Scorers come from `corrected_checks.py` and `scorers.py`; extraction and the paired comparison from
 # MAGIC `skills/skill-eval/scripts/compare_runs.py`. Groups are compared separately: the
@@ -86,7 +86,7 @@ with open(EVAL_DIR / "expectations.json", encoding="utf-8") as handle:
 
 task_ids = [task["task_id"] for task in evalset]
 # The prompt actually pasted in each run: evalset query (standard pair) or the
-# Sep–Oct 2026 prompt text from models/<family>/old_prompt_*.md (replication pair), with
+# Sep–Oct 2026 prompt text from models/<family>/old_prompts.json (replication pair), with
 # the run's names filled in; this is what each eval row logs as its query.
 prompts = run_prompts(FAMILY, EVAL_DIR)
 expectations_by_task = {}

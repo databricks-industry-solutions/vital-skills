@@ -94,10 +94,10 @@ def rewrite_old_prompt(recorded: str, settings: dict, run_id: str, task_id: str)
 
 
 def old_prompt_blocks(settings: dict, run_id: str, family: str = DEFAULT_FAMILY, eval_dir: Path = EVAL_DIR) -> dict:
-    """{task_id: prompt} from the ```text blocks under "## <task_id>" in models/<family>/old_prompt_*.md."""
-    path = family_dir(family, eval_dir) / settings["old_prompts"][run_id]["file"]
-    text = path.read_text(encoding="utf-8")
-    return dict(re.findall(r"^## ([a-z]+-\d{3}) [^\n]*\n.*?^```text\n(.*?)\n```", text, re.M | re.S))
+    """{task_id: prompt} for an old-prompt run, from models/<family>/old_prompts.json (family.json old_prompts_file)."""
+    path = family_dir(family, eval_dir) / settings["old_prompts_file"]
+    with open(path, encoding="utf-8") as handle:
+        return {task_id: entry["prompt"] for task_id, entry in json.load(handle)[run_id]["prompts"].items()}
 
 
 def run_prompts(family: str = DEFAULT_FAMILY, eval_dir: Path = EVAL_DIR) -> dict:

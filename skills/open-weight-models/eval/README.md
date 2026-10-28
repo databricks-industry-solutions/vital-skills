@@ -36,7 +36,8 @@ eval/
   CHECKS.md, list_checks.py                                        every scored check (generated)
   models/teddy/
     family.json            names per run, outcome settings (dim 512, which tasks have search)
-    fixtures/teddy_request.json, answer_sheet.md, old_prompt_baseline.md, old_prompt_with_skill.md
+    fixtures/teddy_request.json, answer_sheet.md
+    old_prompts.json       the Sep–Oct 2026 prompts of both replication runs, with this round's names
     runs_20261026/         round 1: run_records.json, exported notebooks, screenshots, scores   (git-ignored)
     runs_20261027/         round 2 (same layout; tools take --round runs_20261027)              (git-ignored)
     runs_20260924/         the frozen Sep 24 – Oct 7, 2026 TEDDY sprint (old task IDs)          (git-ignored)
@@ -73,8 +74,8 @@ Each pair is compared only within itself.
 |---|---|---|---|
 | standard | `baseline` | off | the task's `query` from `evalset.json`, names rendered for the run |
 | standard | `with_skill` | on | the same `query`, names rendered for the run, nothing else |
-| replication | `old_prompt_baseline` | off | the task's block from `models/teddy/old_prompt_baseline.md` |
-| replication | `old_prompt_with_skill` | on | the task's block from `models/teddy/old_prompt_with_skill.md` |
+| replication | `old_prompt_baseline` | off | the task's prompt under `old_prompt_baseline` in `models/teddy/old_prompts.json` |
+| replication | `old_prompt_with_skill` | on | the task's prompt under `old_prompt_with_skill` in `models/teddy/old_prompts.json` |
 
 - **Standard pair — the evaluation.** Does Genie Code find and use the skill on its own, from a plain request?
 - **Replication pair — the Sep–Oct 2026 results again.** It reuses the Sep–Oct 2026 prompts as recorded: the
@@ -135,7 +136,7 @@ All resources live under schema `skills_owm_202610` (owm = open-weight-models; m
 | `evalset.json` | task requests: `task_id`, `dataset`, `query` (with `{run}`) only | the person running the eval |
 | `family_settings.py`, `models/<family>/family.json` | per-family names, prompt rendering, outcome settings | the person running the eval |
 | `models/teddy/answer_sheet.md` | fixed replies if Genie Code asks a question | the person running the eval |
-| `models/teddy/old_prompt_baseline.md`, `old_prompt_with_skill.md` | Sep–Oct 2026 prompts with this round's names (replication pair only) | the person running the eval |
+| `models/teddy/old_prompts.json` | Sep–Oct 2026 prompts with this round's names, both replication runs, with their source and notes (replication pair only) | the person running the eval |
 | `install_skill_for_run.py` | laptop script: skill off/on + run record | the person running the eval |
 | `check_outcome.py`, `models/teddy/fixtures/teddy_request.json` | laptop script: outcome checks on what a run built, with the family's fixed request | the person running the eval (never pasted into Genie Code) |
 | `expectations.json` | answer key: difficulty, model family, variant, capability, expected facts, checks, new checks, outcome checks, per-check severity / source / environment dependence | scoring only |
@@ -228,7 +229,7 @@ replication prompts export there too.
    Code chat on it.
 5. **Run.**
    - Paste the prompt verbatim: the `query` from `evalset.json` for the standard pair, or the task's block
-     from `models/teddy/old_prompt_baseline.md` / `old_prompt_with_skill.md` for the replication pair. Print
+     from `models/teddy/old_prompts.json` (`old_prompt_baseline` / `old_prompt_with_skill`) for the replication pair. Print
      it with `family_settings.py prompt` and fill `<catalog>` / `<workspace-user>`.
    - Answer questions **only** from `models/teddy/answer_sheet.md`. Do not steer, hint or correct.
    - Let it run to the end.
@@ -533,7 +534,7 @@ Checked and **not** false negatives:
    discarded is skipped), leaves discarded records out, and stops if a counted record has no recorded
    outcome or a protocol gap.
 2. **Evaluates each (run, task)** with `mlflow.genai.evaluate`. Each row's `query` is the prompt actually
-   pasted in that run: the evalset query, or the `old_prompt_*.md` text with placeholders as written.
+   pasted in that run: the evalset query, or the `old_prompts.json` text with placeholders as written.
 3. **Writes the round's score files** (local, in the git-ignored round folder), using
    `compare_runs.extract_scores()`: `models/teddy/runs_<YYYYMMDD>/scores/<run_id>_scores.json` (all metrics;
    extra attempts as `<run_id>_attempt_<n>_scores.json`) and `<run_id>_<group>.json`.

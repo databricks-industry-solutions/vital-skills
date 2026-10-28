@@ -58,13 +58,12 @@
     ],
     "convention_checks_note": "Shared single-cell input format (adata_sparsematrix + adata_obs + adata_var) of references/models/teddy.md, also used by scgpt.md and Genesis Workbench. Reported on its own, not as a failure of the run."
   },
+  "old_prompts_file": "old_prompts.json",
   "old_prompts": {
     "old_prompt_baseline": {
-      "file": "old_prompt_baseline.md",
       "recorded_arm": "baseline"
     },
     "old_prompt_with_skill": {
-      "file": "old_prompt_with_skill.md",
       "recorded_arm": "with_skill"
     }
   },
