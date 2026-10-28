@@ -673,3 +673,53 @@ def test_committed_summary_matches_round_2_scores(scorers):
     for run, name in scorers.SUMMARY_FILES.items():
         full = json.loads((ROUND_2 / "scores" / name).read_text())
         assert json.loads((EVAL_DIR / name).read_text()) == scorers.counted_scores(full), name
+
+
+# ---- per-round results kept in the repo (eval/results/) ----------------------------------------------
+RESULTS = EVAL_DIR / "results"
+ROUND_1 = EVAL_DIR / "models" / "teddy" / "runs_20261026"
+
+
+def test_write_round_results_keeps_counted_groups_per_sample(scorers, tmp_path):
+    path = scorers.write_round_results(scorers.round_results_path(tmp_path, "teddy", "x/runs_20991231"), "teddy",
+                                       "runs_20991231", {"baseline": {"teddy-001": {"outcome/endpoint_ready": True,
+                                                                                    "pyfunc_quality/load_context": False}}})
+    assert path == tmp_path / "results" / "teddy_20991231_scores.json"
+    body = json.loads(path.read_text())
+    assert body["samples"] == {"baseline": {"teddy-001": {"outcome/endpoint_ready": True}}}
+    assert body["counted_groups"] == list(scorers.COUNTED_GROUPS)
+
+
+def test_latest_round_results_agree_with_the_summary_pair():
+    samples = json.loads((RESULTS / "teddy_20261027_scores.json").read_text())["samples"]
+    for run in ("baseline", "with_skill"):
+        assert json.loads((EVAL_DIR / f"{run}_scores.json").read_text()) == samples[run], run
+
+
+@pytest.mark.skipif(not (ROUND_2.is_dir() and ROUND_1.is_dir()),
+                    reason="run records not in this checkout (round folders are kept outside the repository)")
+def test_round_results_match_their_round_folders(scorers):
+    for folder, labels in ((ROUND_2, ["baseline", "with_skill"]), (ROUND_1, ["baseline", "baseline_attempt_1", "with_skill"])):
+        samples = json.loads(scorers.round_results_path(EVAL_DIR, "teddy", folder).read_text())["samples"]
+        for label in labels:
+            full = json.loads((folder / "scores" / f"{label}_scores.json").read_text())
+            corrected = json.loads((folder / "scores" / f"{label}_corrected.json").read_text())
+            merged = {t: {**full[t], **corrected.get(t, {})} for t in full}   # round 1 scored corrected checks later
+            assert samples[label.replace("_attempt_", " attempt ")] == scorers.counted_scores(merged), (folder.name, label)
+
+
+def test_eval_docs_link_only_to_files_in_the_repo():
+    """Relative links in the eval docs resolve to files that are tracked (round folders are git-ignored)."""
+    import subprocess
+
+    tracked = set(subprocess.run(["git", "ls-files"], cwd=SKILL_DIR, capture_output=True, text=True).stdout.split())
+    docs = [EVAL_DIR / "eval_report.md", EVAL_DIR / "README.md", EVAL_DIR / "models" / "teddy" / "ROUNDS.md",
+            *sorted(RESULTS.glob("*.md"))]
+    for doc in docs:
+        for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", doc.read_text()):
+            if target.startswith(("http://", "https://", "mailto:")):
+                assert "eval-records" not in target, f"{doc.name}: links to another branch: {target}"
+                continue
+            resolved = (doc.parent / target).resolve()
+            rel = resolved.relative_to(SKILL_DIR.resolve()).as_posix()
+            assert resolved.is_dir() or rel in tracked, f"{doc.name}: {target} is not a tracked file"

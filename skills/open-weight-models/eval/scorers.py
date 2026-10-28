@@ -1093,6 +1093,25 @@ def update_summary(eval_dir, run: str, task_scores: dict) -> Path:
     return path
 
 
+def round_results_path(eval_dir, family: str, round_dir) -> Path:
+    """eval/results/<family>_<YYYYMMDD>_scores.json for round folder models/<family>/runs_<YYYYMMDD>/."""
+    return Path(eval_dir) / "results" / f"{family}_{Path(round_dir).name.removeprefix('runs_')}_scores.json"
+
+
+def write_round_results(path, family: str, round_name: str, scores_by_sample: dict) -> Path:
+    """One round's counted scores for every sample (baseline, with_skill, extra attempts), kept in the repo.
+
+    The round folder itself (exported notebooks, run records, per-group score files) is git-ignored; this
+    file and the round's notes (results/<family>_<YYYYMMDD>.md) are what the repo keeps of each round.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = {"family": family, "round": round_name, "counted_groups": list(COUNTED_GROUPS),
+            "samples": {label: counted_scores(s) for label, s in scores_by_sample.items()}}
+    path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 SEVERITIES = ("critical", "major", "minor")
 
 
