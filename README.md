@@ -8,7 +8,7 @@ Site: [https://databricks-industry-solutions.github.io/vital-skills/](https://da
 <!-- Do not change this header which generates setup.md -->
 #### Git clone this repo to Databricks
 [Git clone](https://docs.databricks.com/aws/en/repos/git-operations-with-repos#clone-a-repo) this repo onto Databricks. Then open Genie Code and click on [Customizations to add the cloned folder](https://docs.databricks.com/aws/en/genie-code/skills#add-skills-from-another-folder). It should point to the `skills` subfolder
-[![Watch setup]](./docs/guide/assets/vitalskills_setup.mp4)
+![setup](./docs/guide/assets/setup.gif)
 
 <details>
     <summary>Optional registration to Unity Gateway</summary>
