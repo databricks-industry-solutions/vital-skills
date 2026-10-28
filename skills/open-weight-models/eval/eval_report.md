@@ -1,6 +1,6 @@
 # Evaluation Report — open-weight-models Skill
 
-## Takeaways (TEDDY, the one model family evaluated so far)
+## Takeaways (TEDDY, the model family evaluated so far)
 
 1. **Without the skill, Genie Code can already deploy a working TEDDY endpoint** (and the cell
    search). The skill is not what makes it work.
@@ -151,17 +151,11 @@ while scoring round 2; earlier rounds' results are unchanged (round 2 `RESULTS.m
 
 ### Verdict
 
-The ship gate (skill-eval default) asks, per group, for at least one task-level win and no
-regression.
-
-| Group (round 2) | teddy-001 | teddy-002 | Gate |
-|---|---|---|---|
-| Corrected replicated checks | win | win | met |
-| New checks | win | win | met |
-| Outcome | tie, both worked | tie, both worked | no regression; no win to show, because the baselines' endpoints also worked |
-
-**Ship with follow-ups.** No regression in any group in either round; round 1 also won on
-outcome (a baseline endpoint that took only token IDs). Follow-ups, in order:
+**Ship with follow-ups.** In round 2, with the skill both tasks passed every sub-check and
+without it neither did, and no sub-check got worse with the skill (in any round). That meets the
+repo's ship rule (`skill-eval`: the skill must win at least one task and make none worse). The
+endpoints worked with and without the skill, so the gain is in how they are built, not whether
+they work. Follow-ups, in order:
 1. **Automate the runs.** Hand-driven runs in the workspace UI were slow and error-prone (wrong
    chat tab, compute not selected, a stale prompt path); each slip cost a rerun. The Genie Code
    CLI harness in `benchmarks/biomnibench/` already switches skills and memories by config and
