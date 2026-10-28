@@ -189,9 +189,13 @@ they work. Follow-ups, in order:
    chat tab, compute not selected, a stale prompt path); each slip cost a rerun. Genie Code's
    memories also had to be checked and cleared by hand before every run: they are saved on the
    service side with no off switch, and in Sep–Oct they carried eval details into later chats. The Genie Code
-   CLI harness in `benchmarks/biomnibench/` already switches skills and memories by config and
-   runs replicates unattended; adapt it for these tasks, with outcome checks and teardown
-   scripted per run, and report it next to the workspace runs (as `accelerators` does).
+   CLI harness in `benchmarks/biomnibench/` already does the setup by script: it runs
+   `genie exec` once per task, arm and repeat in a fresh folder, with a config profile that turns
+   memories and personal skills off, copies the skills at a pinned commit into that folder for the
+   skills arm, and logs which skills were opened (its `README.md`, "How it works"). Adapt it for
+   these tasks, with outcome checks and teardown scripted per run, and report it next to the
+   workspace runs (as `accelerators` does). The CLI works from a local folder, not a serverless
+   GPU notebook, so it complements the workspace runs rather than replacing them.
 2. Reword the prompts so "deploy" and "write the code only" are distinct.
 3. Geneformer.
 
