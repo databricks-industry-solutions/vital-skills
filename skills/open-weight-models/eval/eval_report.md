@@ -196,7 +196,9 @@ they work. Follow-ups, in order:
    these tasks, with outcome checks and teardown scripted per run, and report it next to the
    workspace runs (as `accelerators` does). The CLI works from a local folder, not a serverless
    GPU notebook, so it complements the workspace runs rather than replacing them.
-2. Reword the prompts so "deploy" and "write the code only" are distinct.
+2. Reword the prompts so "deploy" and "write the code only" are distinct — not done yet: the prompts
+   in `evalset.json` were kept word for word so rounds 1 and 2 stay comparable, and the skill has
+   no line yet for a request that mixes the two.
 3. Geneformer.
 
 ### Limitations
