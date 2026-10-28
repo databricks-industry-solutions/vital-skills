@@ -8,7 +8,7 @@ frontmatter `version` is the source of truth for releases.
 
 ### Added
 - `eval/corrected_checks.py` — the scorer of record for the replicated Sep–Oct 2026
-  sub-checks: twelve of them matched literal text and were wrong both ways (valid
+  sub-checks: twelve of them (thirteen after round 2) matched literal text and were wrong both ways (valid
   alternatives failed; mentions in markdown, download filters or the quoted prompt passed),
   so each is judged by its intent (download location, Xet or a completed download, a
   `transformers` pin excluding 5.x, a real signature, real gene data in the example,
@@ -130,13 +130,16 @@ frontmatter `version` is the source of truth for releases.
   `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
   Sep–Oct 2026 files keep the old IDs).
-- `eval/eval_report.md` rewritten as the one complete report for the skill (skill-eval
-  report layout: results, failure taxonomy, verdict, limitations, reproduce): TEDDY
-  2026-10-27 group tables (replicated, new, outcome, convention apart), severity counts,
-  the practical trial reported separately, GPU guideline, skill-use evidence, the six
-  findings for the skill, then the Sep–Oct 2026 round (historical) and Geneformer
-  (pending). Counts re-derived from the committed score files. Task-ID tables now head
-  the current ID column "ID" (was "Retest ID"), also in `runs_20260924/eval_report.md`.
+- `eval/eval_report.md` is the one short report for the skill: takeaways; a with / without
+  comparison per model family; the task list; results by round (Sep–Oct 2026, round 1, and
+  the latest round 2, all judged with the corrected checks, counting only the sub-checks that
+  apply to a task) with the sub-checks that passed only with the skill named; where the skill
+  helps, by category; the problems the 2026-10-27 runs found in the skill, ranked by their
+  effect on serving, and where each is fixed; the verdict; and limitations with next steps
+  (automate the runs with the Genie Code CLI harness, reword the prompts, Geneformer). Each
+  round's detail stays in its `RESULTS.md`. Task-ID tables head the current ID column "ID"
+  (was "Retest ID"), also in `runs_20260924/eval_report.md`, which now points to `CHECKS.md`
+  for the list of its sub-checks.
 
 ### Fixed
 - Inference controls for custom PyFunc endpoints: the guidance to pass them as
