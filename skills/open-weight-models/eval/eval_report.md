@@ -63,24 +63,44 @@ their caveats are in its report: the with-skill prompt told Genie Code to read t
 endpoint built in rounds 1 and 2 with the skill worked; every baseline endpoint in round 2 worked
 too.
 
-### What kinds of failures surfaced
+### Failed checks by category
 
-| Kind of failure | Where | Status |
+Counted checks that failed, primary samples, by what they are about (categories as in
+[`CHECKS.md`](CHECKS.md)); (1) / (2) = teddy-001 / teddy-002, both when not marked. The
+governance, safety and outcome checks did not exist in Sep–Oct 2026.
+
+| Category | Baseline | With skill |
 |---|---|---|
-| No AI Gateway inference table or usage tracking | every baseline, both rounds | not seen with the skill |
-| No provenance on the UC model (source, revision, licence) | baselines | not seen with the skill |
-| Deploy switch missing, or saved **on** after the user's go-ahead | baselines, round 2 | with the skill: `run_go` saved off in both runs |
-| Served on CPU (the guideline suggests `GPU_SMALL`; not counted) | every baseline | with the skill: `GPU_SMALL` in every run |
-| Endpoint takes pre-tokenized token IDs, not a cell's expression | baseline teddy-001, round 1 | not seen since |
-| Existing table overwritten without looking; revision not pinned | baseline teddy-002, round 1 | not seen since |
-| `EndpointCoreConfigInput` needs `name=` (databricks-sdk 0.71.0+) | most runs of round 1; both round-2 baselines | fixed in the skill; with-skill runs got it right first time |
-| Inference controls sent with the SDK's `extra_params`, which a custom model silently ignores | with skill, round 1 | fixed in the skill (`SKILL.md` Troubleshooting #13; `teddy.md` "Sending inference controls"); both round-2 with-skill runs sent them in the REST body and showed a changed value changes the output |
-| Wrapper compared only with itself, not with upstream TEDDY | with skill, round 1 | fixed (`teddy.md` "Upstream-parity test"); both round-2 with-skill runs matched upstream (cosine ≥ 0.99999) |
-| Skill text: genes outside TEDDY's vocabulary mapped to `<unk>` (upstream drops them) | `teddy.md`, round 1 | fixed (`teddy.md` "Out-of-vocabulary (OOV) genes"); both round-2 with-skill models reject a request with no known gene |
-| Skill text: drop and recreate an index on a dimension mismatch | `teddy.md`, round 1 | fixed: write additively, ask before replacing (`SKILL.md` Best Practices #15) |
-| Licence ambiguous upstream: model card Apache-2.0, bundled package MIT | upstream TEDDY | the skill records both and asks the user to confirm; both round-2 with-skill runs did |
-| "Deploy … Write the code." read as code only, so it stopped to ask | with skill teddy-002, round 2 | prompt is ambiguous; reported, not scored — reword the prompt next round |
-| Check mistakes: literal-text matches and path-tracing gaps that fail valid code | the scorer, both arms | 13 replicated checks now judged by intent (one added in round 2) and five more corrected while scoring round 2; earlier rounds' results unchanged (round 2 `RESULTS.md`, "How scored") |
+| Download and staging | Sep–Oct: `uses_tmp` (1), `hf_xet_disabled`, `deps_pinned` | — |
+| Model wrapper (PyFunc) | rounds 1 and 2: `sys_modules_purge`; Sep–Oct: `sys_modules_purge` (1), `artifacts_declared` (1), `real_gene_ids` | — |
+| Registration | all rounds: `pip_reqs_from_source` | — |
+| Endpoint deployment | all rounds: `ai_gateway_config`, `run_go_gate` | Sep–Oct: `run_go_gate`; round 1: `run_go_gate` (1) |
+| Tests before and after deploying | Sep–Oct: `registration_smoke` | — |
+| Known-bad patterns | Sep–Oct: `transformers>=` (an unbounded pin that resolves to 5.x) | — |
+| Search | Sep–Oct, round 1: `graceful_skip` (2) | Sep–Oct: `graceful_skip` (2) |
+| Governance: request logging | rounds 1 and 2: `inference_table`, `usage_tracking` | — |
+| Governance: provenance | rounds 1 and 2: `provenance_tags` | — |
+| Safety: look before creating or deleting | round 1: existing table overwritten (2) | — |
+| Outcome | round 1: endpoint takes token IDs, not a cell's expression (1) | — |
+
+Not counted, but seen in every baseline: serving on CPU (the task guidelines suggest
+`GPU_SMALL`) and a request format of its own instead of the shared single-cell format.
+
+### Problems found in the skill, and where they are fixed
+
+| Problem | Found | Fixed in | Round 2 |
+|---|---|---|---|
+| Inference controls sent with the SDK's `extra_params`, which a custom model silently ignores | with skill, round 1 | `SKILL.md` Troubleshooting #13; `teddy.md` "Sending inference controls" | both with-skill runs sent them in the REST body and showed a changed value changes the output |
+| Wrapper compared only with itself, not with upstream TEDDY | with skill, round 1 | `teddy.md` "Upstream-parity test" | both matched upstream (cosine ≥ 0.99999) |
+| `EndpointCoreConfigInput` needs `name=` (databricks-sdk 0.71.0+) | most round-1 runs | the skill's examples | with-skill runs right first time; both baselines hit the error |
+| Genes outside TEDDY's vocabulary mapped to `<unk>` (upstream drops them) | `teddy.md`, round 1 | `teddy.md` "Out-of-vocabulary (OOV) genes" | both with-skill models reject a request with no known gene |
+| Drop and recreate an index on a dimension mismatch | `teddy.md`, round 1 | `SKILL.md` Best Practices #15 (write additively, ask before replacing) | nothing replaced in either with-skill run |
+| Licence ambiguous upstream: model card Apache-2.0, bundled package MIT | round 1 | the skill records both and asks the user to confirm | both with-skill runs recorded both |
+| "Deploy … Write the code." read as code only, so it stopped to ask | — | prompt wording, next round | with skill teddy-002; reported, not scored |
+
+The scorer had problems too: literal-text matches and path-tracing gaps that failed valid code.
+13 replicated checks are now judged by intent (one added in round 2) and five more were corrected
+while scoring round 2; earlier rounds' results are unchanged (round 2 `RESULTS.md`, "How scored").
 
 ### Verdict
 
