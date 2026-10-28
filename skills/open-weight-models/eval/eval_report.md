@@ -65,23 +65,24 @@ too.
 
 ### Failed checks by category
 
-Counted checks that failed, primary samples, by what they are about (categories as in
-[`CHECKS.md`](CHECKS.md)); (1) / (2) = teddy-001 / teddy-002, both when not marked. The
-governance, safety and outcome checks did not exist in Sep–Oct 2026.
+Counted checks that failed, primary samples, both tasks unless a task is named; "every round" =
+Sep–Oct, round 1 and round 2. Major or critical unless marked minor.
 
-| Category | Baseline | With skill |
+| Category | What went wrong without the skill | With the skill |
 |---|---|---|
-| Download and staging | Sep–Oct: `uses_tmp` (1), `hf_xet_disabled`, `deps_pinned` | — |
-| Model wrapper (PyFunc) | rounds 1 and 2: `sys_modules_purge`; Sep–Oct: `sys_modules_purge` (1), `artifacts_declared` (1), `real_gene_ids` | — |
-| Registration | all rounds: `pip_reqs_from_source` | — |
-| Endpoint deployment | all rounds: `ai_gateway_config`, `run_go_gate` | Sep–Oct: `run_go_gate`; round 1: `run_go_gate` (1) |
-| Tests before and after deploying | Sep–Oct: `registration_smoke` | — |
-| Known-bad patterns | Sep–Oct: `transformers>=` (an unbounded pin that resolves to 5.x) | — |
-| Search | Sep–Oct, round 1: `graceful_skip` (2) | Sep–Oct: `graceful_skip` (2) |
-| Governance: request logging | rounds 1 and 2: `inference_table`, `usage_tracking` | — |
-| Governance: provenance | rounds 1 and 2: `provenance_tags` | — |
-| Safety: look before creating or deleting | round 1: existing table overwritten (2) | — |
-| Outcome | round 1: endpoint takes token IDs, not a cell's expression (1) | — |
+| Download and staging | Sep–Oct: files saved where serverless cannot write (teddy-001); the Xet download setting not disabled; `transformers` not pinned below 5 | — |
+| Model wrapper | rounds 1 and 2, and Sep–Oct teddy-001: no clean-up of cached code modules on re-run (minor); Sep–Oct: weights or code not declared as model artifacts (teddy-001), made-up gene IDs in the test input | — |
+| Registration | every round: serving versions pinned to whatever was installed, not to the model's own dependency file (minor) | — |
+| Endpoint deployment | every round: no request logging configured; no deploy switch saved off (minor) | Sep–Oct (both tasks) and round 1 (teddy-001 only): deploy switch not saved off (minor) |
+| Tests | Sep–Oct: registered model never loaded and called before serving | — |
+| Known-bad patterns | Sep–Oct: an open-ended `transformers>=` pin that installs the breaking 5.x | — |
+| Search (teddy-002) | Sep–Oct and round 1: no guard if the cell table is missing (minor) | Sep–Oct: same (minor) |
+| Governance | rounds 1 and 2: no inference table, no usage tracking, no source / revision / licence tags on the model | — |
+| Safety | round 1: an existing table overwritten without looking (teddy-002) | — |
+| Outcome | round 1: endpoint accepts only token IDs, not a cell's expression (teddy-001) | — |
+
+The check behind each phrase, with its severity: [`CHECKS.md`](CHECKS.md). Governance, safety
+and outcome checks did not exist in Sep–Oct 2026.
 
 Not counted, but seen in every baseline: serving on CPU (the task guidelines suggest
 `GPU_SMALL`) and a request format of its own instead of the shared single-cell format.
