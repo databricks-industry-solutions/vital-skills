@@ -13,7 +13,7 @@ description: >
 category: Clinical
 summary: Comparative effectiveness (cohort study) with propensity adjustment (matching, IPW).
 author: Yen Low
-version: 0.5
+version: 1.0.0
 license: Databricks
 ---
 

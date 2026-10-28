@@ -15,7 +15,7 @@ description: >
 category: Others
 summary: Publication-quality scientific and biopharma figures for notebooks, apps, and reports.
 author: Peter Hawkins
-version: 0.5
+version: 1.0.0
 license: Databricks
 ---
 

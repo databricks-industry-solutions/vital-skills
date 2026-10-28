@@ -87,11 +87,13 @@ def _catalog(skills):
 
 def on_post_build(config):
     path = Path(config["site_dir"]) / "index.html"
-    if path.is_file():
-        path.write_text(
-            inject_landing_page(path.read_text(encoding="utf-8"), _skills),
-            encoding="utf-8",
-        )
+    if not path.is_file():
+        return
+    html = inject_landing_page(path.read_text(encoding="utf-8"), _skills)
+    property_id = str(((config.extra or {}).get("analytics") or {}).get("property") or "")
+    if property_id and property_id != "G-G34C8X35XB":
+        html = html.replace("__GA_MEASUREMENT_ID__", property_id)
+    path.write_text(html, encoding="utf-8")
 
 
 def on_config(config):

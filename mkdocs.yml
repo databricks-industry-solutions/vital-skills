@@ -27,6 +27,22 @@ extra_css:
 
 extra:
   homepage: ./
+  analytics:
+    provider: google
+    # GA4 Measurement ID for https://databricks-industry-solutions.github.io/vital-skills/
+    # Create a Web stream in Google Analytics and replace this value.
+    property: G-G34C8X35XB
+  consent:
+    title: Analytics cookies
+    description: >
+      We use Google Analytics to see which pages of this site are used.
+      Accept to help us improve it. You can change this later from the footer.
+    actions:
+      - accept
+      - reject
+    cookies:
+      analytics: Google Analytics
+      github: false
 
 theme:
   name: material

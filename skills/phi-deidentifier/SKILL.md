@@ -14,7 +14,7 @@ description: >-
   do not hand-write de-identification SQL. For building patient cohorts use cohort-builder.
 category: Clinical
 summary: HIPAA Safe-Harbor de-identify a Unity Catalog table (k-anonymity + governed view).
-version: 0.5
+version: 1.0.0
 author: Zachary Phillips
 license: Databricks License
 ---

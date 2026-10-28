@@ -3,7 +3,7 @@ name: accelerators
 description: HLS solution accelerator steerage for Databricks (DICOM imaging, protein and single-cell models, HL7v2 messages). Routes a task to an existing databricks-industry-solutions accelerator and gives the precise next step - Pixels (DICOM medical imaging, OHIF viewer, DICOMweb, MONAI segmentation), Genesis Workbench (protein folding and design, docking, ADMET, single-cell foundation models, variant calling, NVIDIA BioNeMo) and funke-hl7v2 (HL7v2 message parsing of ADT, ORU, ORM, SIU and VXU files into Delta). Consult before building an imaging pipeline, biology model stack or HL7 parser from scratch. For notebook single-cell analysis use sc-rnaseq; for de-identifying tables use phi-deidentifier; for measures from parsed claims or EHR data use semantic-builder.
 category: Others
 summary: Route imaging, biology-model and HL7v2 tasks to an HLS accelerator (Pixels, Genesis Workbench or funke-hl7v2) with the exact next step.
-version: 0.6
+version: 1.0.0
 author: Rohan Parikh
 license: Databricks License
 ---

@@ -43,6 +43,31 @@
           try { localStorage.setItem("vs-theme", dark ? "dark" : "light"); } catch (e) {}
         }
       });
+
+      // Shared analytics consent with the landing page (localStorage "vs-ga-consent").
+      // Material stores its own site-root ".__consent" map; seed it from the landing
+      // choice before Material's consent script runs, and copy Material's form back.
+      var consentKey = new URL("{{ base_url }}", location).pathname + ".__consent";
+      var vsGa = null;
+      try { vsGa = localStorage.getItem("vs-ga-consent"); } catch (e) {}
+      if (vsGa === "accepted" || vsGa === "rejected") {
+        try {
+          localStorage.setItem(consentKey, JSON.stringify({ analytics: vsGa === "accepted" }));
+        } catch (e) {}
+      }
+      function mirrorGaConsent(accepted) {
+        try { localStorage.setItem("vs-ga-consent", accepted ? "accepted" : "rejected"); } catch (e) {}
+      }
+      addEventListener("submit", function (e) {
+        var f = e.target;
+        if (!f || f.name !== "consent") return;
+        mirrorGaConsent(!!(f.elements.analytics && f.elements.analytics.checked));
+      }, true);
+      addEventListener("reset", function (e) {
+        var f = e.target;
+        if (!f || f.name !== "consent") return;
+        mirrorGaConsent(false);
+      }, true);
     })();
   </script>
 {% endblock %}

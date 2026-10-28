@@ -16,7 +16,7 @@ description: >
 category: Bioinformatics
 summary: Find top differentially expressed genes from bulk RNA-seq counts.
 author: Yen Low
-version: 0.6
+version: 1.0.0
 license: Databricks
 ---
 

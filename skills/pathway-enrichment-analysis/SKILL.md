@@ -4,7 +4,7 @@ description: Pathway enrichment method selection for RNA-seq. Choose among ORA (
 category: Bioinformatics
 summary: Pathway enrichment for RNA-seq (ORA or GSEA).
 author: Yen Low
-version: 0.5
+version: 1.0.0
 license: MIT
 ---
 

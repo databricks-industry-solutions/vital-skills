@@ -15,7 +15,7 @@ description: >-
   For PHI de-identification of the result use phi-deidentifier.
 category: Clinical
 summary: Build a reproducible, feasibility-checked patient cohort from coded + free-text clinical data.
-version: 0.5
+version: 1.0.0
 author: Zachary Phillips
 license: Databricks License
 ---

@@ -14,7 +14,7 @@ description: >-
   deck HTML. For building the cohort use cohort-builder; to de-identify first use phi-deidentifier.
 category: Others
 summary: Turn a cohort, dataset, model, or analysis into a grounded, shareable HTML deck (PHI de-id delegated to phi-deidentifier).
-version: 0.1
+version: 1.0.0
 author: Zachary Phillips
 license: Databricks License
 ---

@@ -10,7 +10,7 @@ description: >
 category: Bioinformatics
 summary: Analyze single-cell RNA-seq data from .h5ad files.
 author: Peter Hawkins
-version: 0.5
+version: 1.0.0
 license: Databricks
 ---
 
