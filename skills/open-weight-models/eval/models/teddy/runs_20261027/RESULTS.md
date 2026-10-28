@@ -53,10 +53,10 @@ it after a setup slip; its notebook had no GPU selected). It is not scored.
 
 | Task | Run | Critical failed | Major failed | Minor failed | Outcome passed | Shared input format |
 |---|---|---|---|---|---|---|
-| teddy-001 | baseline | 0 | 4 | 3 | yes (4/4) | no |
-| teddy-001 | with_skill | 0 | 0 | 0 | yes (4/4) | yes |
-| teddy-002 | baseline | 0 | 4 | 3 | yes (7/7) | no |
-| teddy-002 | with_skill | 0 | 0 | 0 | yes (7/7) | yes |
+| teddy-001 | baseline | 0 | 4 | 3 | yes | no |
+| teddy-001 | with_skill | 0 | 0 | 0 | yes | yes |
+| teddy-002 | baseline | 0 | 4 | 3 | yes | no |
+| teddy-002 | with_skill | 0 | 0 | 0 | yes | yes |
 
 Counts cover the corrected replicated checks, the new checks and the outcome checks; the shared
 input format is a convention, shown on its own. With the original Sep–Oct logic (⚑, not
@@ -74,8 +74,8 @@ counted) the same table reads 2 / 4 / 3, 1 / 1 / 0, 3 / 4 / 3 and 0 / 0 / 1.
 | `corrected/model_registration/pip_reqs_from_source` | minor | serving pins are the versions installed at run time, not the upstream `pyproject.toml` ranges (see "Things that look off") |
 | `corrected/pyfunc_quality/sys_modules_purge` | minor | the original text check for `sys.modules` (see "Things that look off") |
 
-Sub-checks passed: corrected — baseline 25/29 and 27/31, with skill 29/29 and 31/31; new checks —
-baseline 2/5 and 4/7, with skill 5/5 and 7/7 (teddy-001 and teddy-002).
+What each check guards: [`../../../CHECKS.md`](../../../CHECKS.md). Pass ratios are not reported: the
+checks differ in weight, so only failed checks by severity are counted.
 
 ## Deploy switch (`run_go`) — how each run behaved
 
@@ -152,8 +152,11 @@ Sep–Oct result — their score files were rewritten and are unchanged):
 6. `hf_xet_disabled` — the evidence that a download completed follows a per-file copy from the
    download folder (baseline teddy-002's `os.walk` copy into the Volume).
 
-Practical-checks trial (`eval/practical_checks.py`, not adopted, as in round 1): baseline 10/12
-and 10/13, with skill 12/12 and 13/13 (teddy-001 and teddy-002).
+Practical-checks trial (`eval/practical_checks.py`, not adopted, as in round 1), failed critical /
+major / minor: baseline 0 / 2 / 0 (teddy-001) and 0 / 3 / 0 (teddy-002), with skill 0 / 0 / 0 on both.
+Both baselines fail its `fidelity_verified`, although both compared their own PyTorch copy with
+upstream TEDDY (difference 0.0 on the sample cells): the trial does not recognise that comparison —
+a flaw of the trial, not the run.
 
 ## Things that look off
 
