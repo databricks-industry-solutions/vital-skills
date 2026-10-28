@@ -93,6 +93,17 @@ have more sub-checks than Sep–Oct. Primary samples only.
 | Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | neither passes every check |
 | Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 31 | 22 | 29 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | neither passes every check |
 
+**Which sub-checks passed only with the skill** (plain words; the check name, in brackets, is
+the row in [`CHECKS.md`](CHECKS.md)):
+
+| Round, task | Passed only with the skill |
+|---|---|
+| Round 2, teddy-001 and teddy-002 (7 each, the same 7) | request logging configured (`ai_gateway_config`), inference table on (`inference_table`), usage tracking on (`usage_tracking`), source / revision / licence tags on the model (`provenance_tags`), deploy switch saved off (`run_go_gate`, minor), serving pins from the model's own dependency file (`pip_reqs_from_source`, minor), cached code modules cleaned up on re-run (`sys_modules_purge`, minor) |
+| Round 1, teddy-001 (7) | request logging configured, inference table, usage tracking, provenance tags, serving pins from the dependency file, module clean-up — and the endpoint takes a cell's expression, not token IDs (`accepts_expression_input`) |
+| Round 1, teddy-002 (9) | the 7 of round 2, plus a guard if the cell table is missing (`graceful_skip`, minor) and looking before writing to an existing table (`existing_resources/table`) |
+| Sep–Oct, teddy-001 (10) | files saved where serverless can write (`uses_tmp`), the Xet download setting handled (`hf_xet_disabled`), `transformers` pinned below 5 (`deps_pinned`), no open-ended `transformers>=` pin (`transformers`), weights and code declared as model artifacts (`artifacts_declared`), real gene IDs in the test input (`real_gene_ids`), registered model called before serving (`registration_smoke`), request logging configured, serving pins from the dependency file, module clean-up |
+| Sep–Oct, teddy-002 (7) | the Xet setting, the `transformers` pin, no open-ended pin, real gene IDs, registered model called before serving, request logging configured, serving pins from the dependency file |
+
 No sub-check passed without the skill and failed with it, in any round. Sep–Oct as originally
 reported (the old literal-text logic, and a with-skill prompt that told Genie Code to read the
 skill): [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
