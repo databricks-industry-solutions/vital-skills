@@ -73,9 +73,6 @@ ship rule (`skill-eval`: at least one win, no regressions).
 
 - **All rounds** (Sep–Oct 2026, round 1, round 2), results per round, and where the skill helps by
   category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md).
-- **Each round's record** (setup, exported notebooks, outcome checks, skill use, every score file): on the
-  [`eval-records/open-weight-models`](https://github.com/hengrumay/vital-skills/tree/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy) branch, one `runs_<date>/` folder per round; linked from
-  `ROUNDS.md`.
 - **Every check:** [`CHECKS.md`](CHECKS.md). **Protocol and scorers:** [`README.md`](README.md).
 
 ## Reproduce

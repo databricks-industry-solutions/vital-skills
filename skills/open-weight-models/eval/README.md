@@ -23,8 +23,7 @@ eval/
   ground_truth/            the hand-built reference notebooks the model references were written from
 ```
 
-The `runs_<date>/` round folders are git-ignored: the tools write them locally during a round, and the full
-record of every round so far is on the [`eval-records/open-weight-models`](https://github.com/hengrumay/vital-skills/tree/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy) branch. The repo keeps the
+The `runs_<date>/` round folders are git-ignored: the tools write them locally during a round. The repo keeps the
 summary: `eval_report.md`, `models/teddy/ROUNDS.md` and the two score files above.
 
 **What is compared:** Genie Code with its built-in skills **plus** this skill, against
@@ -88,8 +87,8 @@ The scoring notebook logs this rendered prompt as each row's query.
   Sep–Oct 2026 prompts, as recorded: the baseline prompt and the with-skill prompt that told
   Genie Code to read `SKILL.md` and `teddy.md` first. Only the resource names and paths
   (the per-run names above), the skill file paths and the export path were changed
-  (listed at the top of each file). The Sep 24 – Oct 7, 2026 record is in
-  [`models/teddy/runs_20260924/`](https://github.com/hengrumay/vital-skills/blob/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy/runs_20260924/README.md) (records branch).
+  (listed at the top of each file). The Sep 24 – Oct 7, 2026 results are summarised in
+  [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md).
 
 **Environment per pair.** Both pairs run in the baseline environment above (the AI Dev
 Kit user skills from Sep–Oct 2026 removed), so the replication pair is *not* the Sep–Oct 2026

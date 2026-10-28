@@ -19,9 +19,9 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
 PREVIOUS = EVAL_DIR / "models" / "teddy" / "runs_20260924"
-# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
-# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
-# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+# Run folders (exported notebooks, run records, per-run scores) are not kept in the repository: they are
+# git-ignored and stay with whoever ran the round. Tests that replay them run where the folders are
+# present and are skipped elsewhere, e.g. on CI.
 NEEDS_PREVIOUS = pytest.mark.skipif(not PREVIOUS.is_dir(),
                                  reason=f"run records not in this checkout ({PREVIOUS.name} is kept outside the repository)")
 OLD_TO_NEW = {"oss-001": "teddy-001", "oss-002": "teddy-002"}

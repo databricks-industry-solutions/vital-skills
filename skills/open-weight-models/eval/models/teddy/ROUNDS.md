@@ -9,14 +9,15 @@ installed only for the with-skill runs.
 
 **Rounds**, newest first:
 
-| Round | When | What it is | Detail |
-|---|---|---|---|
-| **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) | [`runs_20261027/RESULTS.md`](https://github.com/hengrumay/vital-skills/blob/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy/runs_20261027/RESULTS.md) |
-| Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists | [`runs_20261026/RESULTS.md`](https://github.com/hengrumay/vital-skills/blob/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy/runs_20261026/RESULTS.md) |
-| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [`runs_20260924/eval_report.md`](https://github.com/hengrumay/vital-skills/blob/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy/runs_20260924/eval_report.md) |
+| Round | When | What it is |
+|---|---|---|
+| **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) |
+| Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists |
+| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` |
 
-"Latest round" below means round 2. The round folders (`runs_<date>/`: exported notebooks, run records,
-per-run scores) are kept outside this repository, on the [`eval-records/open-weight-models`](https://github.com/hengrumay/vital-skills/tree/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy) branch.
+"Latest round" below means round 2. Round folders (`runs_<date>/`: exported notebooks, run records, per-run
+scores) are not kept in the repository; the latest round's scores are in `eval/baseline_scores.json` and
+`eval/with_skill_scores.json`.
 
 ## Results by round
 
@@ -57,9 +58,8 @@ file was named but the test input was not real gene data; a deploy-switch word a
 deploy calls were not behind it; there was no `transformers>=` text, yet the serving pins allowed
 5.x (oss-002 also: the Xet setting named but not set, and no guard on the cell table; one check
 went the other way, `sdk_enums`). With the skill, 27 → 26 and 30 → 28: the deploy switch (its
-saved default could not be read, or it was missing) and, on oss-002, the cell-table guard. Detail
-and the original caveats (the with-skill prompt told Genie Code to read the skill):
-[`runs_20260924/eval_report.md`](https://github.com/hengrumay/vital-skills/blob/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy/runs_20260924/eval_report.md).
+saved default could not be read, or it was missing) and, on oss-002, the cell-table guard. Caveat from
+the original report: the with-skill prompt told Genie Code to read the skill first.
 
 ## Where the skill helps — by category
 
@@ -97,4 +97,4 @@ code: some matched literal text from the skill (a different valid way of doing t
 failed), others could not follow a path or a copy through the notebook. They were fixed as they
 were found: 13 replicated checks are now judged by intent (one added in round 2), and five more
 were corrected while scoring round 2. After those five, round 1 and Sep–Oct were re-scored and
-none of their results changed (round 2 `RESULTS.md`, "How scored").
+none of their results changed.

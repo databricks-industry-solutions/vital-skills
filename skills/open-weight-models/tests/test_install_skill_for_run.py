@@ -13,9 +13,9 @@ sys.path.insert(0, str(SKILL_DIR / "eval"))
 
 import install_skill_for_run as inst  # noqa: E402
 
-# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
-# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
-# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+# Run folders (exported notebooks, run records, per-run scores) are not kept in the repository: they are
+# git-ignored and stay with whoever ran the round. Tests that replay them run where the folders are
+# present and are skipped elsewhere, e.g. on CI.
 SEP_OCT = SKILL_DIR / "eval" / "models" / "teddy" / "runs_20260924"
 ROUND_1 = SKILL_DIR / "eval" / "models" / "teddy" / "runs_20261026"
 NEEDS_SEP_OCT = pytest.mark.skipif(not SEP_OCT.is_dir(),
