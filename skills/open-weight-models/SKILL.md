@@ -40,7 +40,7 @@ Not all model references have been tested end-to-end through the eval harness.
 - You must decide between Model Serving, Jobs, an interactive app, or a multi-step workflow for a scientific model.
 - The request touches provenance, licensing, or offline reproducibility controls for external model weights and datasets.
 - The user asks for AI Gateway policies, usage tracking, or inference tables over an HLS endpoint that may log sensitive payloads.
-- The deployment combines a model endpoint with a **Databricks AI Search index** for embedding-based retrieval.
+- The deployment combines a model endpoint with a **Databricks AI Search index** (formerly Vector Search, VS) for embedding-based retrieval.
 - The model requires **vLLM** (autoregressive generation) or **NVIDIA TE stubs** (BioNeMo models) rather than a standard PyFunc wrapper.
 
 For generic custom PyFunc, sklearn, or ordinary PyTorch packaging with no scientific inputs, use the standard Databricks ML training skill instead.

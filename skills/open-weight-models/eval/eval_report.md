@@ -23,6 +23,7 @@ percentages, no single score.
 
 **Words used here.** GPU / CPU = graphics / central processing unit (serving hardware). SDK =
 software development kit. REST body = the request text sent to an endpoint. UC = Unity Catalog.
+AI Search = Databricks AI Search, formerly Vector Search (VS, as older files and file names still say).
 AI Gateway = the endpoint setting that logs requests to an inference table and tracks usage.
 `run_go` = the notebook switch that must be on before anything billable is created.
 

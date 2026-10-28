@@ -10,7 +10,7 @@ score.
 **Words used here.** CPU / GPU = central / graphics processing unit (serving hardware;
 `GPU_SMALL` is Model Serving's smallest GPU size). SDK = software development kit (the
 Databricks Python SDK). REST = the plain web interface of an endpoint; "REST body" = the request
-text sent to it. UC = Unity Catalog. AI Search = Databricks AI Search (formerly Vector Search), the index used for nearest-neighbour cell lookup. AI Gateway = the endpoint setting that
+text sent to it. UC = Unity Catalog. AI Search = Databricks AI Search, formerly Vector Search (VS), the index used for nearest-neighbour cell lookup. AI Gateway = the endpoint setting that
 logs requests to an inference table and tracks usage. HF = Hugging Face. Sub-check = one
 pass/fail line of a scorer. Severity: **critical** = the endpoint does not work or gives wrong
 embeddings; **major** = works but unsafe, ungoverned or not reproducible; **minor** = robustness

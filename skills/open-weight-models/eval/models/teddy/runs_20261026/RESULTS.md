@@ -10,7 +10,7 @@ build a nearest-neighbour cell search). Raw counts only — no percentages, no s
 the GPU model). SDK = software development kit (here the Databricks Python SDK). REST = the
 plain web interface of an endpoint; "REST body" = the request text sent to it. ID =
 identifier. UTC = coordinated universal time. UC = Unity Catalog (where models are registered). AI Search = Databricks AI Search,
-formerly Vector Search (the index used for nearest-neighbour cell lookup). AI Gateway = the serving endpoint
+formerly Vector Search or VS: the index used for nearest-neighbour cell lookup. AI Gateway = the serving endpoint
 setting that logs requests to an inference table and tracks usage. HF = Hugging Face (where
 TEDDY's weights live). Sub-check = one pass/fail line of a scorer. Severity: **critical** =
 the endpoint does not work or gives wrong embeddings; **major** = works but unsafe,
