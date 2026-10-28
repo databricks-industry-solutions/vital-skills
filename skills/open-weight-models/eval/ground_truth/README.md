@@ -10,8 +10,8 @@ them (the run protocol's leak check looks for `gt_` paths).
 | Notebook | Model | Status |
 |---|---|---|
 | `gt_teddy.py` | TEDDY-70M | working; the TEDDY evaluation (`../models/teddy/`) is drawn from it |
-| `gt_geneformer.py` | Geneformer V1-10M (Hugging Face path) | working; not evaluated yet |
-| `gt_geneformer_bionemo.py` | Geneformer V2 (NVIDIA BioNeMo path) | working; not evaluated yet |
+| `gt_geneformer.py` | Geneformer V1-10M (Hugging Face path) | working; evaluation pending |
+| `gt_geneformer_bionemo.py` | Geneformer V2 (NVIDIA BioNeMo path) | working; evaluation pending |
 | `gt_scgpt_todo.py`, `gt_scimilarity_todo.py` | scGPT, SCimilarity | to-do stubs |
 
 Moved here from `tests/_ground_truth/` (on `main` before the eval reorganisation) by way of
