@@ -1,8 +1,0 @@
-{
-  "teddy-001": {
-    "outcome/endpoint_ready": true,
-    "outcome/serves_recorded_version": true,
-    "outcome/returns_valid_embeddings": false,
-    "outcome/accepts_expression_input": false
-  }
-}

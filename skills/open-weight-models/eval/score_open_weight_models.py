@@ -55,7 +55,8 @@ for directory in (EVAL_DIR, SCRIPTS_DIR):
         sys.path.insert(0, str(directory))
 
 from scorers import (
-    GROUPS, guideline_judges, metric_group, run_prompts, scorers as all_scorers, severity_table,
+    GROUPS, SUMMARY_FILES, guideline_judges, metric_group, run_prompts, scorers as all_scorers, severity_table,
+    update_summary,
 )
 from check_outcome import outcome_scores
 from corrected_checks import corrected_scorers
@@ -174,6 +175,12 @@ for label in samples:
         if any(group_scores.values()):
             with open(SCORES_DIR / f"{stem}_{group}.json", "w", encoding="utf-8") as handle:
                 json.dump(group_scores, handle, indent=2)
+
+# The summary pair kept in the repo (eval/baseline_scores.json, eval/with_skill_scores.json): this round's
+# primary baseline and with-skill samples, counted groups only. The round folder itself is git-ignored.
+for run in SUMMARY_FILES:
+    if run in scores:
+        print(f"updated {update_summary(EVAL_DIR, run, scores[run])}")
 
 # COMMAND ----------
 

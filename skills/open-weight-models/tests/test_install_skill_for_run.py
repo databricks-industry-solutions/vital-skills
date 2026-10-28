@@ -13,6 +13,16 @@ sys.path.insert(0, str(SKILL_DIR / "eval"))
 
 import install_skill_for_run as inst  # noqa: E402
 
+# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
+# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
+# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+SEP_OCT = SKILL_DIR / "eval" / "models" / "teddy" / "runs_20260924"
+ROUND_1 = SKILL_DIR / "eval" / "models" / "teddy" / "runs_20261026"
+NEEDS_SEP_OCT = pytest.mark.skipif(not SEP_OCT.is_dir(),
+                                   reason="run records not in this checkout (runs_20260924 is kept outside the repository)")
+NEEDS_ROUND_1 = pytest.mark.skipif(not ROUND_1.is_dir(),
+                                   reason="run records not in this checkout (runs_20261026 is kept outside the repository)")
+
 
 @pytest.fixture()
 def fake_skill(tmp_path):
@@ -420,8 +430,9 @@ def test_record_protocol_fields():
     assert old["skills_panel"]["expected"] == ["open-weight-models"]
 
 
+@NEEDS_SEP_OCT
 def test_self_report_prompt_is_the_sep_oct_2026_line():
-    recorded = (SKILL_DIR / "eval" / "models" / "teddy" / "runs_20260924" / "results" / "with_skill" / "oss-001.txt").read_text()
+    recorded = (SEP_OCT / "results" / "with_skill" / "oss-001.txt").read_text()
     line = recorded.splitlines()[22]
     assert line == "# MAGIC > At the end, l" + inst.SELF_REPORT_PROMPT[1:]
 
@@ -544,6 +555,7 @@ def test_prompt_used_and_skill_on_suffix():
     assert inst.expected_resources("with_skill", "teddy-002")["serving_endpoint"] == "owm_teddy_ep_002_with_skill"
 
 
+@NEEDS_ROUND_1
 def test_live_round_records_deviation_is_recorded():
     records = inst.load_records(inst.default_records())
     first_001 = next(r for r in records if (r["run_id"], r["task_id"]) == ("baseline", "teddy-001"))
@@ -552,6 +564,7 @@ def test_live_round_records_deviation_is_recorded():
     assert "Deviation" in first_001["notes"]
 
 
+@NEEDS_ROUND_1
 def test_live_round_passes_the_scoring_preflight():
     """Every counted 2026-10-27 record has its protocol fields and an outcome; the stray
     setup record is discarded; the two baseline/teddy-001 attempts map to their own exports."""

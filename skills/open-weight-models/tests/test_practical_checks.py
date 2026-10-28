@@ -18,6 +18,11 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
 ROUND = EVAL_DIR / "models" / "teddy" / "runs_20261026"
+# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
+# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
+# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+NEEDS_ROUND = pytest.mark.skipif(not ROUND.is_dir(),
+                                 reason=f"run records not in this checkout ({ROUND.name} is kept outside the repository)")
 SHA = "8c880aa67674042ccdc254bccb5de081092a48bf"
 
 
@@ -446,6 +451,7 @@ EXPECTED_GPU = {("baseline", "teddy-001"): False, ("baseline attempt 1", "teddy-
                 ("baseline", "teddy-002"): False, ("with_skill", "teddy-001"): True, ("with_skill", "teddy-002"): True}
 
 
+@NEEDS_ROUND
 def test_trial_results_on_committed_exports(pc):
     samples = pc.round_samples(ROUND)
     assert {(label, tid) for label, tid, _, _ in samples} == set(EXPECTED_FAILS)

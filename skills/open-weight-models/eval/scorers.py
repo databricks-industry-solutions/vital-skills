@@ -1069,6 +1069,29 @@ def metric_group(name: str) -> str:
     return "replicated"
 
 
+# skill-eval's summary pair (skills/skill-eval/SKILL.md "Outputs"): eval/baseline_scores.json and
+# eval/with_skill_scores.json, {task_id: {metric: bool}}, read by compare_runs.py. Task IDs are unique
+# across model families (teddy-001, geneformer-001, ...), so every family's latest round shares the two files.
+SUMMARY_FILES = {"baseline": "baseline_scores.json", "with_skill": "with_skill_scores.json"}
+
+
+def counted_scores(task_scores: dict) -> dict:
+    """Keep only the counted groups (COUNTED_GROUPS) of {task_id: {metric: bool}}."""
+    return {task_id: {m: v for m, v in metrics.items() if metric_group(m) in COUNTED_GROUPS}
+            for task_id, metrics in task_scores.items()}
+
+
+def update_summary(eval_dir, run: str, task_scores: dict) -> Path:
+    """Write one standard run's counted scores into eval/<run>_scores.json.
+
+    The tasks scored now replace their earlier entries; other tasks (other model families) are kept.
+    """
+    path = Path(eval_dir) / SUMMARY_FILES[run]
+    summary = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    summary.update(counted_scores(task_scores))
+    path.write_text(json.dumps(dict(sorted(summary.items())), indent=2) + "\n", encoding="utf-8")
+    return path
+
 
 SEVERITIES = ("critical", "major", "minor")
 

@@ -20,6 +20,13 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
 ROUND = EVAL_DIR / "models" / "teddy" / "runs_20261026"
 SEP_OCT = EVAL_DIR / "models" / "teddy" / "runs_20260924"
+# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
+# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
+# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+NEEDS_ROUND = pytest.mark.skipif(not ROUND.is_dir(),
+                                 reason=f"run records not in this checkout ({ROUND.name} is kept outside the repository)")
+NEEDS_SEP_OCT = pytest.mark.skipif(not SEP_OCT.is_dir(),
+                                 reason=f"run records not in this checkout ({SEP_OCT.name} is kept outside the repository)")
 
 
 @pytest.fixture(scope="module")
@@ -74,6 +81,7 @@ def test_every_correction_states_flaw_and_rule(cc):
     assert "unchanged" in cc.SEVERITY_NOTE
 
 
+@NEEDS_ROUND
 def test_unflawed_keys_keep_the_verbatim_result(cc):
     source = (ROUND / "baseline" / "teddy-002.py").read_text()
     task = cc.scorers.TASKS["teddy-002"]
@@ -398,6 +406,7 @@ def _round_samples(cc):
     return cc.pc.round_samples(ROUND)
 
 
+@NEEDS_ROUND
 def test_verbatim_round_scores_unchanged(cc):
     """The verbatim replicated score files of the 2026-10-27 round still come from scorers.py as is."""
     for label, task_id, record, source in _round_samples(cc):
@@ -407,6 +416,7 @@ def test_verbatim_round_scores_unchanged(cc):
         assert fresh == recorded, label
 
 
+@NEEDS_ROUND
 def test_committed_round_corrected_scores_reproduce(cc):
     files = {}
     for label, task_id, record, source in _round_samples(cc):
@@ -416,6 +426,7 @@ def test_committed_round_corrected_scores_reproduce(cc):
         assert json.loads((ROUND / "scores" / name).read_text()) == scores, name
 
 
+@NEEDS_SEP_OCT
 def test_committed_sep_oct_corrected_scores_reproduce(cc):
     files = {}
     for arm, old, new, source in cc.sep_oct_samples():
@@ -424,6 +435,7 @@ def test_committed_sep_oct_corrected_scores_reproduce(cc):
         assert json.loads((SEP_OCT / "scores_corrected" / name).read_text()) == scores, name
 
 
+@NEEDS_SEP_OCT
 def test_sep_oct_rescore_writes_only_new_files(cc, tmp_path, monkeypatch):
     """--sep-oct --write touches nothing but models/teddy/runs_20260924/scores_corrected/."""
     monkeypatch.setattr(cc, "SEP_OCT_DIR", tmp_path)
@@ -438,6 +450,7 @@ def test_sep_oct_rescore_writes_only_new_files(cc, tmp_path, monkeypatch):
         "scores_corrected/baseline_corrected.json", "scores_corrected/with_skill_corrected.json"}
 
 
+@NEEDS_ROUND
 def test_scorer_feedbacks_flag_verbatim_disagreement(cc):
     source = (ROUND / "baseline" / "teddy-002.py").read_text()
     record = next(r for label, t, r, _ in _round_samples(cc) if label == "baseline" and t == "teddy-002")

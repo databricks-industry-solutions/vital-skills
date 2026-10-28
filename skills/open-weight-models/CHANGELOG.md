@@ -38,9 +38,9 @@ frontmatter `version` is the source of truth for releases.
   side (primary samples only), failed checks by category, the problems found in the skill and
   where they are fixed, and the verdict per group —
   with each round's detail left in its `RESULTS.md`.
-- Round 2 of the TEDDY runs (`eval/models/teddy/runs_20261027/`): a clean rerun of all
-  four runs with the updated skill — run records, exported notebooks (and the notebook as it
-  stood before each go-ahead), scores, `RESULTS.md` and a round README. Run records now name
+- Round 2 of the TEDDY runs (round folder `runs_20261027/`, on the `eval-records/open-weight-models`
+  branch): a clean rerun of all four runs with the updated skill — run records, exported notebooks (and
+  the notebook as it stood before each go-ahead), scores, `RESULTS.md` and a round README. Run records now name
   their export (`export_file`). While scoring it, six checks were fixed, each with tests and
   none changing a round-1 or Sep–Oct result: an `assert FLAG` counts as a deploy gate; a
   download run in a subprocess script is followed back to the notebook's path variables, and
@@ -89,7 +89,8 @@ frontmatter `version` is the source of truth for releases.
   README; run records can override names with `resources_created` / `prompt_used`). Unit tests in
   `tests/test_install_skill_for_run.py`, `tests/test_eval_scorers.py` and
   `tests/test_check_outcome.py`.
-- `eval/models/teddy/runs_20261026/`: the 2026-10-27 TEDDY runs (five exported notebooks,
+- Round folder `runs_20261026/` (on the `eval-records/open-weight-models` branch): the 2026-10-27 TEDDY
+  runs (five exported notebooks,
   catalog name replaced by `<catalog>`), filled run records, score files and the results
   (`RESULTS.md`); `eval_report.md` points to it. The first baseline/teddy-001 attempt
   is kept as a second sample: the prompt is the standard teddy-001 request, identical word
@@ -99,13 +100,23 @@ frontmatter `version` is the source of truth for releases.
 - Convention check `convention/shared_single_cell_format` (shared `adata_*` input format),
   scored and reported apart from the outcome group; outcome checks
   `returns_valid_embeddings`, `accepts_expression_input`, `nn_returns_cell_type`.
-- `eval/models/teddy/runs_20260924/`: the Sep 24 – Oct 7, 2026 TEDDY evaluation kept as a
-  frozen record, filed with the later TEDDY rounds. The Sep–Oct Geneformer notebooks and the
+- Round folder `runs_20260924/` (on the `eval-records/open-weight-models` branch): the Sep 24 – Oct 7,
+  2026 TEDDY evaluation kept as a frozen record, filed with the later TEDDY rounds; it moves out of
+  `tests/` on `main`. The Sep–Oct Geneformer notebooks and the
   oss-005 output were removed (never evaluated: no baseline, no scores; they remain in git
   history), and the hand-built reference notebooks moved to a shared `eval/ground_truth/` (from
   `tests/_ground_truth/` on `main`), with a README, for every model family.
 
 ### Changed
+- Round folders (`eval/models/<family>/runs_<date>/`: exported notebooks, run records, per-run scores) are
+  no longer kept in the repository (reviewer request): they are git-ignored, and the full record of every
+  round so far is on the `eval-records/open-weight-models` branch of the author's fork, linked from
+  `eval/models/teddy/ROUNDS.md` and `eval/eval_report.md`. The repo keeps the summary, as other skills do:
+  `eval/baseline_scores.json` and `eval/with_skill_scores.json` (latest round, counted checks — corrected,
+  new checks, outcome — in skill-eval's format; `compare_runs.py` on them gives the report's verdict),
+  written by the scoring notebook (`scorers.update_summary`). The Sep–Oct score files that `main` kept in
+  `tests/results/` are part of that record. Tests that replay round records skip where the folders are
+  absent (e.g. CI); `test_metric_names_are_valid_mlflow_names` no longer needs them.
 - `run_go` gate (`SKILL.md` #14, `teddy.md`, `model-template.md`): a request that says both "deploy" and "write the code" is treated as a deploy request, said in the same one line before switching the gate on (in TEDDY round 2 one with-skill run read "Deploy … Write the code." as code only and stopped to ask).
 - Geneformer status: "Pending" in the `SKILL.md` validation table (serving tested by hand, Genie Code evaluation planned), and "evaluation pending" instead of "eval WIP" in `geneformer.md` and `models/index.md`; the `SKILL.md` legend defines "Pending".
 - "VS" spelled out as "AI Search" (the repo's current name for Vector Search, which the skill never defined; where AI Search is first defined, "formerly Vector Search, VS" is kept so older files and file names still decode) in `SKILL.md`, `scimilarity.md` and the round 1 and round 2 `RESULTS.md`. Left as recorded: the Sep–Oct 2026 record, exported notebooks, and the original check's text match in `scorers.py` (and its test), which reproduce what was scored.

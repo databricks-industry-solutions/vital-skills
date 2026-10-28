@@ -72,9 +72,10 @@ ship rule (`skill-eval`: at least one win, no regressions).
 ## More detail
 
 - **All rounds** (Sep–Oct 2026, round 1, round 2), results per round, and where the skill helps by
-  category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md). The Sep–Oct record itself is in
-  `models/teddy/runs_20260924/`.
-- **Each round's record** (setup, runs, outcome checks, skill use): `models/teddy/runs_<date>/RESULTS.md`.
+  category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md).
+- **Each round's record** (setup, exported notebooks, outcome checks, skill use, every score file): on the
+  [`eval-records/open-weight-models`](https://github.com/hengrumay/vital-skills/tree/eval-records/open-weight-models/skills/open-weight-models/eval/models/teddy) branch, one `runs_<date>/` folder per round; linked from
+  `ROUNDS.md`.
 - **Every check:** [`CHECKS.md`](CHECKS.md). **Protocol and scorers:** [`README.md`](README.md).
 
 ## Reproduce
@@ -84,4 +85,10 @@ uv run --isolated --with pytest --with-requirements skills/open-weight-models/te
     python -m pytest -q skills/open-weight-models/tests
 ```
 
-Score files: `models/<family>/runs_<date>/scores/`; run records: `models/<family>/runs_<date>/run_records.json`.
+Score summary (latest round, counted checks; read by `skills/skill-eval/scripts/compare_runs.py`):
+[`baseline_scores.json`](baseline_scores.json), [`with_skill_scores.json`](with_skill_scores.json):
+
+```bash
+python3 skills/skill-eval/scripts/compare_runs.py skills/open-weight-models/eval/baseline_scores.json \
+    skills/open-weight-models/eval/with_skill_scores.json --difficulty skills/open-weight-models/eval/expectations.json
+```

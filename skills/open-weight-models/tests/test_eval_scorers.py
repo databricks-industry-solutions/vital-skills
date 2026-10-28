@@ -19,6 +19,11 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent
 EVAL_DIR = SKILL_DIR / "eval"
 PREVIOUS = EVAL_DIR / "models" / "teddy" / "runs_20260924"
+# Run folders (exported notebooks, run records, per-run scores) are kept outside the repository: they are
+# git-ignored, and a full copy lives on the eval-records/open-weight-models branch. Tests that replay them
+# run where the folders are present (the author's checkout) and are skipped elsewhere, e.g. on CI.
+NEEDS_PREVIOUS = pytest.mark.skipif(not PREVIOUS.is_dir(),
+                                 reason=f"run records not in this checkout ({PREVIOUS.name} is kept outside the repository)")
 OLD_TO_NEW = {"oss-001": "teddy-001", "oss-002": "teddy-002"}
 RECORDED = {"baseline": "baseline_scores.json", "with_skill": "with_skill_scores.json"}
 
@@ -50,6 +55,7 @@ def _source(arm: str, old_id: str) -> str:
     return (PREVIOUS / "results" / arm / f"{old_id}.txt").read_text()
 
 
+@NEEDS_PREVIOUS
 @pytest.mark.parametrize("arm", RECORDED)
 @pytest.mark.parametrize("old_id", OLD_TO_NEW)
 def test_replicated_checks_reproduce_sep_oct_2026_scores(scorers, arm, old_id):
@@ -57,6 +63,7 @@ def test_replicated_checks_reproduce_sep_oct_2026_scores(scorers, arm, old_id):
     assert scorers.sub_check_scores(task, _source(arm, old_id)) == _recorded(arm)[old_id]
 
 
+@NEEDS_PREVIOUS
 @pytest.mark.parametrize("arm", RECORDED)
 @pytest.mark.parametrize("old_id", OLD_TO_NEW)
 def test_frozen_scorers_still_reproduce_their_record(old_scorers, arm, old_id):
@@ -68,6 +75,7 @@ def test_frozen_scorers_still_reproduce_their_record(old_scorers, arm, old_id):
     assert flat == _recorded(arm)[old_id]
 
 
+@NEEDS_PREVIOUS
 def test_previous_split_files_match_combined_original():
     combined = {t["task_id"]: t for t in json.loads((PREVIOUS / "evalset_combined_original.json").read_text())["tasks"]}
     requests = json.loads((PREVIOUS / "evalset.json").read_text())
@@ -86,6 +94,7 @@ FIRST_RUN_SENTENCE = (  # the exact sentence used for the first rerun (baseline,
 )
 
 
+@NEEDS_PREVIOUS
 def test_retest_queries_are_sep_oct_2026_queries_plus_schema_and_names(scorers):
     """Sep–Oct 2026 wording kept; only the schema changed and ONE names sentence added after it."""
     import family_settings as fs
@@ -116,8 +125,8 @@ def test_evalset_is_canonical():
 
 
 def test_metric_names_are_valid_mlflow_names(scorers):
-    for arm in RECORDED:
-        for key in _recorded(arm)["oss-002"]:
+    for task in scorers.TASKS.values():
+        for key in scorers.sub_check_scores(task, ""):      # every replicated sub-check key of every task
             name = scorers.mlflow_metric_name(key)
             assert re.fullmatch(r"[A-Za-z0-9_.\-/]+", name) and "//" not in name, name
     assert scorers.mlflow_metric_name('forbidden_patterns/workload_type="GPU') == "forbidden_patterns/workload_type_GPU"
@@ -325,6 +334,7 @@ def _recorded_prompt(path: Path) -> str:
     return "\n".join(out)
 
 
+@NEEDS_PREVIOUS
 @pytest.mark.parametrize("run, arm", [("old_prompt_baseline", "baseline"), ("old_prompt_with_skill", "with_skill")])
 def test_old_prompts_are_recorded_text_plus_documented_substitutions(scorers, run, arm):
     """Applying family.json's substitutions (names/paths), the skill-folder change and the
@@ -621,3 +631,45 @@ def test_conditional_gateway_config_is_followed(scorers):
               "w.serving_endpoints.create(name=N, config=cfg, ai_gateway=ai_gateway)\n")
     details = scorers.new_check_details(scorers.TASKS["teddy-002"], source, groups={"ai_gateway"})
     assert details["new_checks/ai_gateway/inference_table"][0] and details["new_checks/ai_gateway/usage_tracking"][0]
+
+
+# ---- skill-eval summary pair (eval/baseline_scores.json, eval/with_skill_scores.json) ----------------
+ROUND_2 = EVAL_DIR / "models" / "teddy" / "runs_20261027"
+
+
+def test_counted_scores_keep_only_the_counted_groups(scorers):
+    scores = {"teddy-001": {"corrected/pyfunc_quality/load_context": True, "pyfunc_quality/load_context": False,
+                            "new_checks/ai_gateway/inference_table": False, "outcome/endpoint_ready": True,
+                            "convention/shared_single_cell_format": True}}
+    assert scorers.counted_scores(scores) == {"teddy-001": {"corrected/pyfunc_quality/load_context": True,
+                                                            "new_checks/ai_gateway/inference_table": False,
+                                                            "outcome/endpoint_ready": True}}
+
+
+def test_update_summary_replaces_scored_tasks_and_keeps_other_families(scorers, tmp_path):
+    (tmp_path / "baseline_scores.json").write_text(json.dumps({
+        "geneformer-001": {"outcome/endpoint_ready": True}, "teddy-001": {"outcome/endpoint_ready": True}}))
+    path = scorers.update_summary(tmp_path, "baseline", {"teddy-001": {"outcome/endpoint_ready": False,
+                                                                       "pyfunc_quality/load_context": True}})
+    assert json.loads(path.read_text()) == {"geneformer-001": {"outcome/endpoint_ready": True},
+                                            "teddy-001": {"outcome/endpoint_ready": False}}
+
+
+def test_committed_summary_gives_the_reported_verdict():
+    """The repo's summary pair alone reproduces the report: the skill wins both TEDDY tasks, no regressions."""
+    sys.path.insert(0, str(SKILL_DIR.parent / "skill-eval" / "scripts"))
+    import compare_runs
+
+    comp = compare_runs.compare(compare_runs.load_scores(EVAL_DIR / "baseline_scores.json"),
+                                compare_runs.load_scores(EVAL_DIR / "with_skill_scores.json"),
+                                difficulty=compare_runs.load_difficulty(EVAL_DIR / "expectations.json"))
+    assert comp.counts()["win"] == 2 and comp.counts()["regression"] == 0
+    assert comp.gate_passed()
+
+
+@pytest.mark.skipif(not ROUND_2.is_dir(),
+                    reason="run records not in this checkout (runs_20261027 is kept outside the repository)")
+def test_committed_summary_matches_round_2_scores(scorers):
+    for run, name in scorers.SUMMARY_FILES.items():
+        full = json.loads((ROUND_2 / "scores" / name).read_text())
+        assert json.loads((EVAL_DIR / name).read_text()) == scorers.counted_scores(full), name
