@@ -1,6 +1,6 @@
 ---
 name: accelerators
-description: HLS solution accelerator steerage for Databricks (DICOM imaging, protein and single-cell models, HL7v2 messages). Routes a task to an existing databricks-industry-solutions accelerator and gives the precise next step - Pixels (DICOM medical imaging, OHIF viewer, DICOMweb, MONAI segmentation), Genesis Workbench (protein folding and design, docking, ADMET, single-cell foundation models, variant calling, NVIDIA BioNeMo) and funke-hl7v2 (HL7v2 message parsing of ADT, ORU, ORM, SIU and VXU files into Delta). Consult before building an imaging pipeline, biology model stack or HL7 parser from scratch. For notebook single-cell analysis use sc-rnaseq; for de-identifying tables use phi-deidentifier; for measures from parsed claims or EHR data use payer-provider-measure-catalog.
+description: HLS solution accelerator steerage for Databricks (DICOM imaging, protein and single-cell models, HL7v2 messages). Routes a task to an existing databricks-industry-solutions accelerator and gives the precise next step - Pixels (DICOM medical imaging, OHIF viewer, DICOMweb, MONAI segmentation), Genesis Workbench (protein folding and design, docking, ADMET, single-cell foundation models, variant calling, NVIDIA BioNeMo) and funke-hl7v2 (HL7v2 message parsing of ADT, ORU, ORM, SIU and VXU files into Delta). Consult before building an imaging pipeline, biology model stack or HL7 parser from scratch. For notebook single-cell analysis use sc-rnaseq; for de-identifying tables use phi-deidentifier; for measures from parsed claims or EHR data use semantic-builder.
 category: Others
 summary: Route imaging, biology-model and HL7v2 tasks to an HLS accelerator (Pixels, Genesis Workbench or funke-hl7v2) with the exact next step.
 version: 0.6
@@ -65,7 +65,7 @@ What is the user trying to do?
     ├── Parse message files into Delta, query fields with SQL → funke-hl7v2, library path
     ├── Streaming landing-to-parsed pipeline, ADT bed-utilization demo → funke-hl7v2, bundle
     └── FHIR, X12 claims or MLLP listener → not covered; say so
-        (measures from parsed data → payer-provider-measure-catalog)
+        (measures from parsed data → semantic-builder)
 ```
 
 | Task | Accelerator | Smallest path | Reference |
@@ -156,4 +156,4 @@ Without the skill, Genie Code rebuilt a DICOM pipeline and a protein folding sta
 - `open-weight-models` - package and serve an open-weight HLS model that Genesis Workbench does not ship
 - `sc-rnaseq` - notebook-level single-cell analysis with scanpy and rapids-singlecell
 - `phi-deidentifier` - de-identify structured Unity Catalog tables (Pixels covers DICOM tags)
-- `payer-provider-measure-catalog` - governed measures (length of stay, readmissions) from parsed EHR or claims data
+- `semantic-builder` - governed measures (length of stay, readmissions) from parsed EHR or claims data

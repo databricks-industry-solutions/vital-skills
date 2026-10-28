@@ -17,10 +17,10 @@
 ## Do not use it for
 
 - FHIR resources or bundles: funke parses HL7v2 only
-- X12 EDI claims (837, 835, 834): not covered by funke; to build measures from already-parsed claims use `payer-provider-measure-catalog`
+- X12 EDI claims (837, 835, 834): not covered by funke; to build measures from already-parsed claims use `semantic-builder`
 - Receiving messages over MLLP or a socket: funke reads files, so an interface engine or other process must land each message as a file in the Volume
 - De-identifying the parsed tables: use `phi-deidentifier`
-- Computing utilization, length of stay or other measures beyond the bundled ADT demo: use `payer-provider-measure-catalog`
+- Computing utilization, length of stay or other measures beyond the bundled ADT demo: use `semantic-builder`
 
 ## Deploy signals
 

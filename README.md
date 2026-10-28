@@ -36,7 +36,7 @@ You can get the SQL warehouse id from the Databricks left menu bar: SQL Warehous
 | [**phi-deidentifier**](skills/phi-deidentifier/SKILL.md) | Clinical | HIPAA Safe-Harbor de-identify a Unity Catalog table (k-anonymity + governed view). |
 | [**rwe-cohortstudy**](skills/rwe-cohortstudy/SKILL.md) | Clinical | Comparative effectiveness (cohort study) with propensity adjustment (matching, IPW). |
 | [**semantic-builder**](skills/semantic-builder/SKILL.md) | Clinical | Canonical payer+provider measure catalog mapped to Unity Catalog metric views. |
-| [**accelerators**](skills/accelerators/SKILL.md) | Others | Route imaging and biology-model tasks to an HLS accelerator — Pixels or Genesis Workbench — with the exact next step. |
+| [**accelerators**](skills/accelerators/SKILL.md) | Others | Route imaging, biology-model and HL7v2 tasks to an HLS accelerator (Pixels, Genesis Workbench or funke-hl7v2) with the exact next step. |
 | [**presentation-builder**](skills/presentation-builder/SKILL.md) | Others | Turn a cohort, dataset, model, or analysis into a grounded, shareable HTML deck (PHI de-id delegated to phi-deidentifier). |
 | [**report-builder**](skills/report-builder/SKILL.md) | Others | LaTeX report generation and PDF compilation from analysis notebooks via Tectonic. |
 | [**scientific-figures**](skills/scientific-figures/SKILL.md) | Others | Publication-quality scientific and biopharma figures for notebooks, apps, and reports. |
@@ -96,7 +96,6 @@ This is an open source solution to provide agent skills to assist with healthcar
 - [Vimal Thomas Joseph](mailto:vimalthomas.joseph@databricks.com)
 - [Peter Hawkins](mailto:peter.hawkins@databricks.com)
 - [Rohan Parikh](mailto:rohan.parikh@databricks.com)
-- [Raven Mukherjee](mailto:raven.mukherjee@databricks.com)
 
 To add yourself, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
