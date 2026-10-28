@@ -130,16 +130,13 @@ frontmatter `version` is the source of truth for releases.
   `eval/`. Task IDs renamed: oss-001 → teddy-001, oss-002 → teddy-002, oss-005 →
   geneformer-001, oss-006 → geneformer-002 (`SKILL.md` mentions updated; recorded
   Sep–Oct 2026 files keep the old IDs).
-- `eval/eval_report.md` is the one short report for the skill: takeaways; a with / without
-  comparison per model family; the task list; results by round (Sep–Oct 2026, round 1, and
-  the latest round 2, all judged with the corrected checks, counting only the sub-checks that
-  apply to a task) with the sub-checks that passed only with the skill named; where the skill
-  helps, by category; the problems the 2026-10-27 runs found in the skill, ranked by their
-  effect on serving, and where each is fixed; the verdict; and limitations with next steps
-  (automate the runs with the Genie Code CLI harness, reword the prompts, Geneformer). Each
-  round's detail stays in its `RESULTS.md`. Task-ID tables head the current ID column "ID"
-  (was "Retest ID"), also in `runs_20260924/eval_report.md`, which now points to `CHECKS.md`
-  for the list of its sub-checks.
+- `eval/eval_report.md` is a one-page summary: what was tested, the latest round's results,
+  what the skill adds (the checks the runs without it failed, and why each matters), what the
+  evaluation fixed in the skill, the verdict, and limitations with next steps. The detail —
+  how each round was run, results per round with the corrected checks, the checks that passed
+  only with the skill, and where the skill helps by category — is in the new
+  `eval/models/teddy/ROUNDS.md`; each round's record stays in its `RESULTS.md`.
+  `runs_20260924/eval_report.md` points to `CHECKS.md` for the list of its sub-checks.
 
 ### Fixed
 - Inference controls for custom PyFunc endpoints: the guidance to pass them as
