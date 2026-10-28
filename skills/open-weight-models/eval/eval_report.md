@@ -26,9 +26,14 @@ software development kit. REST body = the request text sent to an endpoint. UC =
 AI Gateway = the endpoint setting that logs requests to an inference table and tracks usage.
 `run_go` = the notebook switch that must be on before anything billable is created.
 
-**Severity of a failed check:** 🔴 critical = does not work or gives wrong results ·
-🟠 major = works, but unsafe, ungoverned or not reproducible · 🟡 minor = robustness or style.
-Every check, with its severity and why it matters: [`CHECKS.md`](CHECKS.md).
+**Severity of a failed check** (every check, with its severity and why it matters:
+[`CHECKS.md`](CHECKS.md)):
+
+| | Severity | Means |
+|---|---|---|
+| 🔴 | critical | does not work, or gives wrong results |
+| 🟠 | major | works, but unsafe, ungoverned or not reproducible |
+| 🟡 | minor | robustness or style |
 
 ## At a glance
 
@@ -55,8 +60,8 @@ Every check, with its severity and why it matters: [`CHECKS.md`](CHECKS.md).
 
 | ID (Sep–Oct ID) | The request, as pasted (names and paths per run, from `evalset.json`) | What a run has to build | Sub-checks | Difficulty |
 |---|---|---|---|---|
-| teddy-001 (oss-001) | "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY … Use these names: model …, serving endpoint …, and store downloaded files under … Write the code and explain your decisions." | a UC-registered TEDDY-70M model and a serving endpoint that returns one 512-number embedding per cell | 38 | hard |
-| teddy-002 (oss-002) | "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. … Use these names: model …, serving endpoint …, Vector Search endpoint …, embeddings table …, index … Write the code." | the same, plus a table of reference-cell embeddings, a Vector Search endpoint and index, and a query that returns the nearest cells' types | 45 | hard |
+| teddy-001 (oss-001) | "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY … Use these names: model …, serving endpoint …, and store downloaded files under … Write the code and explain your decisions." | a UC-registered TEDDY-70M model and a serving endpoint that returns one 512-number embedding per cell | 36 | hard |
+| teddy-002 (oss-002) | "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. … Use these names: model …, serving endpoint …, Vector Search endpoint …, embeddings table …, index … Write the code." | the same, plus a table of reference-cell embeddings, a Vector Search endpoint and index, and a query that returns the nearest cells' types | 44 | hard |
 | geneformer-001 (oss-005), geneformer-002 (oss-006) | Geneformer V1-10M deploy; Geneformer V2 (BioNeMo) deploy | — | — | planned |
 
 Sub-checks per task are listed in [`CHECKS.md`](CHECKS.md) (the outcome check needs the endpoint
@@ -102,16 +107,17 @@ Every sub-check judged with the corrected logic (`corrected_checks.py`; what eac
 makes it fail. "Skill wins" = the task passes every sub-check with the skill and not without it;
 "neither passes every check" = both runs fail at least one sub-check (named in "Failed in both"
 when it is the same one). Rounds 1 and 2 add the governance, safety and outcome checks, so they
-have more sub-checks than Sep–Oct. Primary samples only.
+have more sub-checks than Sep–Oct. Groups that do not apply to a task (search for teddy-001, the
+edge-case group) are not counted. Primary samples only.
 
 | Round | Task | Sub-checks | Baseline passed | With skill passed | Passed only with the skill | Passed only without | Failed in both | Task result |
 |---|---|---|---|---|---|---|---|---|
-| Round 2 (latest) | teddy-001 | 38 | 31 | 38 | 7 | 0 | 0 | skill wins |
-| Round 2 (latest) | teddy-002 | 45 | 38 | 45 | 7 | 0 | 0 | skill wins |
-| Round 1 | teddy-001 | 38 | 30 | 37 | 7 | 0 | 1 (`run_go_gate`) | neither passes every check |
-| Round 1 | teddy-002 | 45 | 36 | 45 | 9 | 0 | 0 | skill wins |
-| Sep–Oct | teddy-001 (oss-001) | 29 | 18 | 28 | 10 | 0 | 1 (`run_go_gate`) | neither passes every check |
-| Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 31 | 22 | 29 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | neither passes every check |
+| Round 2 (latest) | teddy-001 | 36 | 29 | 36 | 7 | 0 | 0 | skill wins |
+| Round 2 (latest) | teddy-002 | 44 | 37 | 44 | 7 | 0 | 0 | skill wins |
+| Round 1 | teddy-001 | 36 | 28 | 35 | 7 | 0 | 1 (`run_go_gate`) | neither passes every check |
+| Round 1 | teddy-002 | 44 | 35 | 44 | 9 | 0 | 0 | skill wins |
+| Sep–Oct | teddy-001 (oss-001) | 27 | 16 | 26 | 10 | 0 | 1 (`run_go_gate`) | neither passes every check |
+| Sep–Oct | teddy-002 (oss-002, after patching `teddy.md`) | 30 | 21 | 28 | 7 | 0 | 2 (`run_go_gate`, `graceful_skip`) | neither passes every check |
 
 **Which sub-checks passed only with the skill** (plain words; the check name, in brackets, is
 the row in [`CHECKS.md`](CHECKS.md)):
@@ -140,8 +146,7 @@ Both tasks together. "Skill only" = passed with the skill, failed without it.
 | Endpoint deployment | 8 | 4 → 8 | request logging configured; deploy switch saved off (minor) | request logging configured; round 1 teddy-002: deploy switch saved off |
 | Tests before and after deploying | 6 | 6 → 6 | — | Sep–Oct: registered model called before serving |
 | Known-bad patterns | 10 | 10 → 10 | — | Sep–Oct: no open-ended `transformers>=` pin |
-| Edge cases | 2 | 2 → 2 | — | — |
-| Search (teddy-002) | 4 | 4 → 4 | — | round 1: guard on a missing cell table (minor) |
+| Search (teddy-002) | 3 | 3 → 3 | — | round 1: guard on a missing cell table (minor) |
 | Governance: request logging | 4 | 0 → 4 | inference table, usage tracking | round 1: same |
 | Governance: provenance | 4 | 2 → 4 | source, revision and licence tags on the model | round 1: same |
 | Safety: look before creating or deleting | 4 | 4 → 4 | — | round 1: no overwrite of an existing table |

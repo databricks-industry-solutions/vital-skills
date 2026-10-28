@@ -8,6 +8,10 @@ recorded and are **not** the current evaluation; the retest is in [`../`](../REA
 Scored with the deterministic phase checks in `scorers.py` (8 groups of text checks on
 the exported notebook; no LLM judge), compared with `compare_runs.py`. Score files:
 `baseline_scores.json`, `with_skill_scores.json`. Per-task reports: `reports/`.
+The sub-checks themselves (added 2026-10-28): the rows counted as *replicated* in
+[`../CHECKS.md`](../CHECKS.md) — 27 for oss-001 and 30 for oss-002 (the search group applies to
+oss-002 only). That list shows each one with its severity, what it guards and, where the logic
+used here matched literal text, how the corrected version judges it.
 
 ## When
 
