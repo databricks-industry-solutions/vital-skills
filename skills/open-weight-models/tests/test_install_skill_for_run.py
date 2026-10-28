@@ -570,3 +570,20 @@ def test_live_round_passes_the_scoring_preflight():
     attempts = inst.run_samples(records, "baseline", "teddy-001")
     assert [inst.export_file(r) for r in attempts] == ["baseline/teddy-001_attempt1.py", "baseline/teddy-001_attempt2.py"]
     assert inst.export_file({"run_id": "with_skill", "task_id": "teddy-002"}) == "with_skill/teddy-002.py"
+
+
+def test_export_file_prefers_the_recorded_name(tmp_path):
+    """Round 2 records name their export; a record with "attempt" but no "export_file" keeps the
+    round-1 naming. A small fake round folder proves both are found."""
+    import json
+    records = [
+        {"run_id": "baseline", "task_id": "teddy-002", "attempt": 1, "export_file": "baseline/teddy-002.py"},
+        {"run_id": "baseline", "task_id": "teddy-001", "attempt": 2},
+    ]
+    (tmp_path / "baseline").mkdir()
+    (tmp_path / "baseline" / "teddy-002.py").write_text("# Databricks notebook source\n")
+    (tmp_path / "baseline" / "teddy-001_attempt2.py").write_text("# Databricks notebook source\n")
+    (tmp_path / "run_records.json").write_text(json.dumps(records))
+    for record in inst.load_records(tmp_path / "run_records.json"):
+        assert (tmp_path / inst.export_file(record)).is_file(), inst.export_file(record)
+    assert [inst.export_file(r) for r in records] == ["baseline/teddy-002.py", "baseline/teddy-001_attempt2.py"]

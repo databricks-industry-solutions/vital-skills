@@ -1,0 +1,492 @@
+[
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-002",
+    "state": "off",
+    "timestamp": "2026-10-27T19:57:18+00:00",
+    "skill_commit": "055c4560317823db3c81a71501d9038096b83446+uncommitted",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshots 2026-10-27 (All skills + User tabs: 'Your skills folder is empty')",
+      "expected": [],
+      "observed_user_tab": [
+        "empty"
+      ],
+      "observed_all_skills_tab": [
+        "empty"
+      ]
+    },
+    "visible_steps": {
+      "text": "not available: the user pasted Genie Code's chat text only (its summary and fix notes, no tool-step list); evidence of no skill use is the empty skills panel and the self-report",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": "Declined to name files: \"I can't share the names of the internal guidance files I use.\" Listed areas followed instead: logging and registering MLflow models; deploying to Model Serving; serving endpoint navigation; Vector Search; fixing errors in Python cells. Not used: data sampling, Spark Connect, PySpark authoring, ML training (left a harmless lint warning on cell 18: res.manifest.columns is a Vector Search response field). No mention of open-weight-models."
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_002_baseline_r2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2",
+      "uc_model_version": "1",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline_r2",
+      "vector_search_endpoint": "owm_teddy_vs_002_baseline_r2",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_baseline_r2"
+    },
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2`, serving endpoint `owm_teddy_ep_002_baseline_r2`, Vector Search endpoint `owm_teddy_vs_002_baseline_r2`, embeddings table `<catalog>.skills_owm_202610.owm_teddy_cells_002_baseline_r2`, index `<catalog>.skills_owm_202610.owm_teddy_index_002_baseline_r2`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_baseline_r2/`. Write the code.",
+    "outcome": {
+      "outcome/endpoint_ready": {
+        "passed": true,
+        "detail": "state.ready=READY"
+      },
+      "outcome/serves_recorded_version": {
+        "passed": true,
+        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2', '1')"
+      },
+      "outcome/accepts_expression_input": {
+        "passed": true,
+        "detail": "gene identifiers + values per cell ['gene_ids: array<string>', 'counts: array<double>']"
+      },
+      "convention/shared_single_cell_format": {
+        "passed": false,
+        "detail": "gene identifiers + values per cell ['gene_ids: array<string>', 'counts: array<double>']"
+      },
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "3 embeddings for 3 cells; all finite, none all-zero; dimensions [512], expected 512; field ['embedding']"
+      },
+      "outcome/vs_endpoint_online": {
+        "passed": true,
+        "detail": "endpoint state=ONLINE"
+      },
+      "outcome/index_ready": {
+        "passed": true,
+        "detail": "ready=True, indexed rows=3538"
+      },
+      "outcome/nn_returns_cell_type": {
+        "passed": true,
+        "detail": "5 rows, columns ['cell_id', 'disease', 'split', '_change_type', 'n_tokens', 'tissue', 'cell_subtype', 'donor_id', 'cell_type', 'cell_type_ontology_term_id', 'embedding', 'score']"
+      }
+    },
+    "discarded": false,
+    "discard_reason": "",
+    "notes": "Round 2 (clean rerun of all four runs). Notebook teddy-eval-2026-10-27/baseline/teddy-002. Temporary 3-line instructions file live (179 bytes). | Memory check before run (2026-10-27, chat opened in the unused round-1 notebook teddy-002-02): no memory file names mention TEDDY or the eval (42 files, Ionis NSI + general preferences); none created today (latest change Oct 26 21:10 UTC, ionis-nsi-frozen-dataset.md). Genie did not delete anything, citing the temporary instructions ('check with you before deleting') -> confirms the 179-byte file is active. Contents not scanned; the same 42 were reviewed by description on 2026-10-27 (all Ionis/preferences). | Notebook teddy-eval-2026-10-27/baseline/teddy-002 created; new chat opened. | Download path changed before the run (user request) to /Volumes/<catalog>/skills_owm_202610/owm_teddy_files/teddy-eval-2026-10-27/002_baseline/ to match the round folder. | Post-run (2026-10-27, polly, read-only): Genie Code renamed the notebook to 'TEDDY Embedding Serving and Cell Type Search' (same folder); exported to runs_20261027/baseline/teddy-002.py. Cells ran through model registration (v1), embeddings table (3,538 cells) and a local exact kNN check (k=10 subtype accuracy 0.987 vs majority 0.415); upstream-parity cell printed max |diff| 0.0. It added its own gate CONFIRM_CREATE_ENDPOINTS = False; the endpoint, Vector Search and search cells have no output, and none of the serving endpoint, Vector Search endpoint or index exist -> outcome checks for those cannot run yet. Download path in the notebook is owm_teddy_files/002_baseline_r2 (exists), not the prompt's teddy-eval-2026-10-27/002_baseline/ (does not exist) -> the pasted prompt (user, chat copy) carried the earlier download path owm_teddy_files/002_baseline_r2/; Genie Code followed it. Same wording as Prompt 1 otherwise. Leak check: no oss-0/gt_/hls-skills/eval/previous-run names in the notebook; personal skills folder still empty. | End of first pass: Genie Code reported everything up to the endpoints as done and asked to confirm a planned deployment (serving CPU Small, scale to zero; Vector Search Standard; Delta Sync index 512-d, triggered), offering 'Set the flag and create both endpoints' / 'Use GPU_SMALL' / 'Add a bigger multi-cell-type reference dataset'. Per the run guide the reply is 'Yes, go ahead.' (no CPU/GPU answer volunteered). | After 'Yes, go ahead.': Genie Code hit the databricks-sdk EndpointCoreConfigInput name= requirement (sdk >= 0.71.0), reported 'Root cause: this SDK version's EndpointCoreConfigInput requires a name argument', fixed 1 cell and created both endpoints (user screenshot). Serving endpoint READY (version 1, CPU Small, scale to zero) at polly's read-only check; index 'pending endpoint provisioning' while the Vector Search endpoint provisions (index cell at 29:19 and running). | Timing (polly read-only checks): Vector Search endpoint created 21:33 UTC; at 22:08 endpoint ONLINE but index still 'pending endpoint provisioning' with its sync pipeline never run; at 22:18 index ready with 3,538 rows (= table). About 45 min from endpoint creation to a ready index; nobody triggered a sync. | Run finished (Genie Code summary, user paste 2026-10-27): three fixes during the run \u2014 EndpointCoreConfigInput name= (sdk); index wait timed out at its own 40-min limit during provisioning, cell changed to sync only once the index is ready, re-run finished; search cell timed out (about 3.3 s per cell on CPU Small, 21 cells in one request) -> 4 cells per request. Endpoint embeddings match local (cosine 1.000000); 20 of 21 held-out cells (3 per subtype) correct via endpoint + index (95.2%); local test on 708 held-out cells 98.7%. Nothing existing deleted. Final notebook re-exported (603 lines) after the run; real catalog name replaced with <catalog> as in round 1. | Outcome checks (polly, check_outcome.py, after the run, before teardown): 7 of 7 outcome checks pass (endpoint_ready, serves_recorded_version, accepts_expression_input, returns_valid_embeddings, vs_endpoint_online, index_ready, nn_returns_cell_type); convention/shared_single_cell_format FAIL (own gene_ids + counts format \u2014 a convention check, not 'broken'). | Teardown (user OK, 2026-10-27): deleted index, Vector Search endpoint (no other indexes on it) and serving endpoint; kept UC model v1 and the embeddings table. | Skills question answered (user paste): Genie Code declined to give skill names this time (round 1 named them) and described guidance areas instead, all matching built-in areas; open-weight-models not mentioned, consistent with the empty skills folder. | User renamed the notebook back to teddy-002 after the run; re-export from the new path matches the saved copy (same notebook ID). Run 1 closed. | Gate default (found by the Codex review of the corrected checks, confirmed by polly): after the user's 'Yes, go ahead.' Genie Code changed the SAVED gate to `CONFIRM_CREATE_ENDPOINTS = True  # confirmed by user 2026-10-27` (final export line 39); the first pass saved it as False. The first-pass export was overwritten by the final re-export (same path), so the False version is evidenced only by this record's earlier note. The user's rule for the skill is the opposite: switch on for the run, never change the saved default. | Compute verified from the saved notebook metadata (JUPYTER export): accelerator GPU_1xA10, base_environment databricks_ai_v6. CPU serving was Genie Code's own choice, not a notebook-compute effect.",
+    "round": "runs_20261027",
+    "attempt": 1,
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_002_baseline_r2",
+          "version": "1",
+          "workload_type": "CPU",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": false,
+      "ai_gateway_usage_tracking": false
+    },
+    "outcome_checked_at": "2026-10-27T22:28:27+00:00",
+    "export_file": "baseline/teddy-002.py"
+  },
+  {
+    "run_id": "baseline",
+    "task_id": "teddy-001",
+    "state": "off",
+    "timestamp": "2026-10-27T22:38:08+00:00",
+    "skill_commit": "055c4560317823db3c81a71501d9038096b83446+uncommitted",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshots 2026-10-27 from teddy-001 (All skills + User tabs: 'Your skills folder is empty')",
+      "expected": [],
+      "observed_user_tab": [
+        "empty"
+      ],
+      "observed_all_skills_tab": [
+        "empty"
+      ]
+    },
+    "visible_steps": {
+      "text": "Used Read Skill File, Execute Code, Fetch Omitted Content, Select Tools, Doc Search, Manage Todo List, Edit Asset, Run Asset (user paste of the chat; which skill files is not shown \u2014 self-report names model-serving, model-serving-ui, diagnose-error)",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": "Named three built-in skills: model-serving (SKILL.md, registration-and-deployment.md, model-logging.md \u2014 signature/input example, uv clean-install check, UC registration, CPU vs GPU, overwrite guard, confirm before creating, readiness wait); model-serving-ui (SKILL.md \u2014 Serving / Metrics navigation); diagnose-error (SKILL.md, python-debugging.md \u2014 uv failing with cwd under /Volumes, EndpointCoreConfigInput name=). Said it did not load but arguably should have: environment-management (%pip installs) and resolve-unresolved-imports ('only appears in the context of your latest message'; linter flags teddy.* imports). No other skills; open-weight-models not mentioned."
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_001_baseline_r2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2",
+      "uc_model_version": "1"
+    },
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2`, serving endpoint `owm_teddy_ep_001_baseline_r2`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/teddy-eval-2026-10-27/001_baseline/`. Write the code and explain your decisions.",
+    "outcome": {
+      "outcome/endpoint_ready": {
+        "passed": true,
+        "detail": "state.ready=READY"
+      },
+      "outcome/serves_recorded_version": {
+        "passed": true,
+        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2', '1')"
+      },
+      "outcome/accepts_expression_input": {
+        "passed": true,
+        "detail": "gene identifiers + values per cell ['ensembl_ids: array<string>', 'counts: array<double>']"
+      },
+      "convention/shared_single_cell_format": {
+        "passed": false,
+        "detail": "gene identifiers + values per cell ['ensembl_ids: array<string>', 'counts: array<double>']"
+      },
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "3 embeddings for 3 cells; all finite, none all-zero; dimensions [512], expected 512; field ['cell_embedding']"
+      }
+    },
+    "discarded": false,
+    "discard_reason": "",
+    "notes": "Round 2, run 2. Notebook teddy-eval-2026-10-27/baseline/teddy-001. Temporary 3-line instructions file live (179 bytes, sha matches run 1). Personal and workspace skills folders empty (install tool listing). | Memory check (user screenshot, chat titled 'Memory Reset', opened from the new blank teddy-001 notebook): no TEDDY/evaluation memories, all existing memories are Ionis NSI work and preferences; none created today (latest Oct 26). Nothing deleted, citing the confirm-before-deleting instruction. Run prompt to go in a NEW chat. | Skills check: user confirmed no skills in the panel and the slim instructions file in place. | Run started (user, 2026-10-27) with Prompt 2 pasted from chat, in a new chat. | Before the go-ahead (Genie Code asked to confirm endpoint settings: CPU Small, scale to zero; offered GPU_SMALL as an alternative): polly exported the notebook as baseline/teddy-001_before_go.py (452 lines, real catalog name replaced). There is NO code gate: the endpoint-create cell is ungated and simply was not run; the stop is conversational only. Along the way Genie Code fixed a token-comparison TypeError, an `uv venv` failure (cwd inside /Volumes), and the EndpointCoreConfigInput name= requirement; model registered as version 1. Its summary also said 'As you asked, I haven't saved anything to memory.' | Run finished after 'Yes, go ahead.' (Genie Code summary, user paste): endpoint READY on CPU Small, scale to zero; 2 test cells returned 512-d embeddings (1,381 and 2,048 genes), cosine 0.999996 / 0.999999 vs Merck's code; about 1.7 s per cell on CPU; 'As you asked, I didn't save anything to memory.' Final export baseline/teddy-001.py (452 lines) is identical to the pre-go export: the go-ahead only ran the existing cells, no code gate was added or changed. Leak check: no old run / eval names. Outcome checks (polly, before teardown): 4 of 4 pass (endpoint_ready, serves_recorded_version, accepts_expression_input, returns_valid_embeddings); convention/shared_single_cell_format FAIL (own ensembl_ids + counts format). | Skills question answered (user paste): named model-serving, model-serving-ui, diagnose-error (all built-in); no open-weight-models. Unlike run 1, it gave skill names this time. | Teardown (user OK, 2026-10-27): deleted serving endpoint; kept UC model v1. Run 2 closed. | Compute verified from the saved notebook metadata (JUPYTER export): accelerator GPU_1xA10, base_environment databricks_ai_v6. CPU serving was Genie Code's own choice, not a notebook-compute effect.",
+    "round": "runs_20261027",
+    "attempt": 1,
+    "export_file": "baseline/teddy-001.py",
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_001_baseline_r2",
+          "version": "1",
+          "workload_type": "CPU",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": false,
+      "ai_gateway_usage_tracking": false
+    },
+    "outcome_checked_at": "2026-10-27T23:58:06+00:00"
+  },
+  {
+    "run_id": "with_skill",
+    "task_id": "teddy-002",
+    "state": "on",
+    "timestamp": "2026-10-28T00:29:42+00:00",
+    "skill_commit": "7ca4eee6552ab15e69fb7566319e2a5214d03687",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [
+        {
+          "name": "open-weight-models",
+          "object_type": "DIRECTORY",
+          "skill_md": {
+            "bytes": 49074,
+            "sha256": "46135b89cc77303c16e5dc9691281f7f347e457cd34ba33601c2c4830afa6224"
+          }
+        }
+      ],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshot 2026-10-27 (All skills tab: only open-weight-models, switched on)",
+      "expected": [
+        "open-weight-models"
+      ],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": [
+        "open-weight-models (on)"
+      ]
+    },
+    "visible_steps": {
+      "text": "First '8 steps' group: Read skill x3, Loaded skill details x3, List files in Merck/TEDDY HF repo (warning icon), List HF repo files via REST; then 'Let me read the key source files to understand the model API.' (5 steps). Which skills were read is not shown.",
+      "screenshot": "user screenshot 2026-10-27"
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": ""
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_002_with_skill_r2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2",
+      "uc_model_version": "",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_with_skill_r2",
+      "vector_search_endpoint": "owm_teddy_vs_002_with_skill_r2",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_with_skill_r2"
+    },
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2`, serving endpoint `owm_teddy_ep_002_with_skill_r2`, Vector Search endpoint `owm_teddy_vs_002_with_skill_r2`, embeddings table `<catalog>.skills_owm_202610.owm_teddy_cells_002_with_skill_r2`, index `<catalog>.skills_owm_202610.owm_teddy_index_002_with_skill_r2`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/teddy-eval-2026-10-27/002_with_skill/`. Write the code.",
+    "outcome": null,
+    "discarded": true,
+    "discard_reason": "Restarted at the user's request: the user reported a setup slip while multitasking during this run (2026-10-27). Discarded before the go-ahead; nothing was run in the workspace and nothing was created (model, endpoints, table, index and download folder all absent at polly's check). Its saved notebook shows no accelerator set (computePreferences empty, base_environment '' , version 6), i.e. not the serverless GPU A10 / AI v6 used for every other run.",
+    "notes": "Round 2, run 3. Skill = review branch feat/owm-teddy-eval-and-skill-updates @ 7ca4eee (local, not pushed; user chose this over the walkthrough branch: 'more stable'), installed from vital-skills-review-eval/skills/open-weight-models, 13 files, no hidden markers. Uploaded SKILL.md matches the commit. Temporary instructions 179 bytes. | Memory check (user screenshot, 'Memory Reset' chat opened from a new untitled notebook): no TEDDY/evaluation memories; none created today (all last updated Oct 26 or earlier); nothing deleted. Skills panel: All skills tab shows only open-weight-models, switched on. | Run started (user, 2026-10-27) with Prompt 3 pasted from chat, new chat in with_skill/teddy-002. | User briefly pasted text from an OLD Genie Code chat (Sep-Oct Geneformer work: SKILL.md.off, BioNeMo endpoint) by mistake ('wrong chat'); polly checked read-only: run-3 notebook blank, installed skill files unchanged, nothing created; the old chat's suggested 'Tear down the BioNeMo endpoint' was not used. Run-3 chat ('Deploy TED...' on with_skill/teddy-002, user screenshot) holds Prompt 3 and is working: it read source files, then smoke-tests inference in a scratch session under /tmp before writing the notebook (steps: install deps, download TEDDY-70M + sample data [warning icon], restart Python, inspect sample h5ad). | Before the go-ahead: Genie Code wrote 18 cells and ran NONE in the workspace ('Since you asked for the code, I haven't run any of it'); asked to confirm the endpoint plan (CPU Small, scale to zero). polly exported with_skill/teddy-002_before_go.py (552 lines). Read-only scan shows NO sign of the skill's guidance: no run_go widget or other code gate; transformers==4.46.3 (skill pins 4.41.0); EndpointCoreConfigInput(served_entities=...) without name= (skill fix); no AI Gateway inference table; masked-mean pooling (skill: cell_emb first position); own ensembl/counts format, not the shared adata_* format; no upstream-parity cell; 'databricks-sdk>=0.40' unpinned. It did use a non-destructive MERGE ('nothing is deleted'). Whether it read the skill is to be confirmed from the chat's visible steps and the skills question. | Visible steps (user screenshot): 3x 'Read skill' + 3x 'Loaded skill details' at the start \u2014 WHICH skills is not shown (could be built-ins); confirm with the skills question. | DISCARDED (see discard_reason). Pre-go export kept as with_skill/teddy-002_discarded_attempt1.py for the record; not scored.",
+    "round": "runs_20261027",
+    "attempt": 1,
+    "export_file": "with_skill/teddy-002_discarded_attempt1.py"
+  },
+  {
+    "run_id": "with_skill",
+    "task_id": "teddy-002",
+    "state": "on",
+    "timestamp": "2026-10-28T01:20:23+00:00",
+    "skill_commit": "7ca4eee6552ab15e69fb7566319e2a5214d03687",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [
+        {
+          "name": "open-weight-models",
+          "object_type": "DIRECTORY",
+          "skill_md": {
+            "bytes": 49074,
+            "sha256": "46135b89cc77303c16e5dc9691281f7f347e457cd34ba33601c2c4830afa6224"
+          }
+        }
+      ],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshot 2026-10-28 (All skills tab: only open-weight-models, switched on)",
+      "expected": [
+        "open-weight-models"
+      ],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": [
+        "open-weight-models (on)"
+      ]
+    },
+    "visible_steps": {
+      "text": "'Read open-weight-models skill' shown at the start (user screenshot); then 'List TEDDY HF repo files at pinned revision', 'Check installed package versions', edited teddy-002 (added cells), running: Install pinned dependencies, Restart Python, Configuration and run_go gate, Download TEDDY snapshot to UC Volume (idempotent), Provenance manifest.",
+      "screenshot": "user screenshots 2026-10-28"
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": "Declined internal names; described 4 loaded areas: (1) 'Open-weight scientific model packaging' plus its TEDDY reference \u2014 Xet-safe HF download, transformers==4.41.0, file-based wrapper logging, cell_emb key, preprocessing order + upstream comparison, params not extra_params, run_go switch, non-overwriting table writes, GPU tier + workload_size, timestamped request-log table name; (2) classic Model Serving (Serving navigation, post-create message); (3) Vector Search (change feed, primary key, permissions, WorkspaceClient endpoint / Delta Sync self-managed index / query calls); (4) widgets and parameters (change run_go at runtime without changing the saved default). Nothing else; no memories saved."
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_002_with_skill_r2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2",
+      "uc_model_version": "1",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_with_skill_r2",
+      "vector_search_endpoint": "owm_teddy_vs_002_with_skill_r2",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_with_skill_r2"
+    },
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2`, serving endpoint `owm_teddy_ep_002_with_skill_r2`, Vector Search endpoint `owm_teddy_vs_002_with_skill_r2`, embeddings table `<catalog>.skills_owm_202610.owm_teddy_cells_002_with_skill_r2`, index `<catalog>.skills_owm_202610.owm_teddy_index_002_with_skill_r2`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/teddy-eval-2026-10-27/002_with_skill/`. Write the code.",
+    "outcome": {
+      "outcome/endpoint_ready": {
+        "passed": true,
+        "detail": "state.ready=READY"
+      },
+      "outcome/serves_recorded_version": {
+        "passed": true,
+        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2', '1')"
+      },
+      "outcome/accepts_expression_input": {
+        "passed": true,
+        "detail": "shared single-cell format ['adata_sparsematrix: array<array>', 'adata_obs: string', 'adata_var: string']"
+      },
+      "convention/shared_single_cell_format": {
+        "passed": true,
+        "detail": "shared single-cell format ['adata_sparsematrix: array<array>', 'adata_obs: string', 'adata_var: string']"
+      },
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "3 embeddings for 3 cells; all finite, none all-zero; dimensions [512], expected 512; field ['embedding']"
+      },
+      "outcome/vs_endpoint_online": {
+        "passed": true,
+        "detail": "endpoint state=ONLINE"
+      },
+      "outcome/index_ready": {
+        "passed": true,
+        "detail": "ready=True, indexed rows=2000"
+      },
+      "outcome/nn_returns_cell_type": {
+        "passed": true,
+        "detail": "5 rows, columns ['cell_id', 'tissue_general', 'disease', '_change_type', 'dataset_id', 'cell_type', 'embedding', 'score']"
+      }
+    },
+    "discarded": false,
+    "discard_reason": "",
+    "notes": "Round 2, run 3 restart (attempt 2; attempt 1 discarded at the user's request). Skill left installed from attempt 1: the install tool refused to overwrite the existing folder, and polly verified the installed SKILL.md matches 7ca4eee (same 13 files, installed 2026-10-28 00:29 UTC); environment fields copied from attempt 1's record. Notebook: a NEW blank with_skill/teddy-002 (workspace object 2371998961469278; the attempt-1 notebook, object 2371998961469273, is no longer in the folder \u2014 its pre-go export is kept locally), new chat. | Memory check for attempt 2 (user screenshot, chat from a separate untitled notebook): 42 memory files, all Ionis NSI project or general preferences; it opened 24 (none mention TEDDY or teddy-eval), the other 18 are named ionis-*; none created or changed today (latest 2026-10-26). Nothing deleted. | Skills check for attempt 2 (user screenshot): only open-weight-models, switched on; notebook teddy-002 blank. | Attempt 2 started: the chat was opened from the untitled memory-check notebook, which the user then renamed to teddy-002 and uses as the run notebook (memory check and run are separate chats in the same notebook; the chat's asset label still shows the old name). Genie Code visibly read the open-weight-models skill; early cells show skill guidance: run_go widget 'Run costly steps' saved false, transformers==4.41.0 pinned with the skill's reason, databricks-sdk>=0.71.0, upstream-parity test planned, provenance manifest, pinned HF revision, GPU serving planned. Compute: Serverless GPU A10, environment AI v6. | Before the go-ahead: Genie Code ran everything up to the costly steps and stopped: 'Since you asked me to write the code, those three cells are behind a run_go switch that's off by default' \u2014 it read 'Write the code' as code-only and did NOT switch run_go on, although the skill (7ca4eee) says a deploy request means switch it on for this run. It asked the user to set run_go=true and re-run the last three cells. Done: pinned snapshot 8c880aa + provenance manifest (licence note apache-2.0 vs MIT), model v1 with alias 'champion', upstream parity on 5 real cells (cosine >= 0.99999), max_seq_len changes output, all-OOV request rejected, reference atlas of 2,000 CELLxGENE Census cells / 227 types (its own choice, not the repo sample), 1-NN same-type 59% vs 16% baseline. Planned: GPU_SMALL, scale to zero, AI Gateway inference table + usage tracking, EndpointCoreConfigInput(name=...), params in the REST body. polly exported with_skill/teddy-002_before_go.py (682 lines; run_go widget saved 'false'). | After the user's 'Yes, go ahead' (user screenshots): Genie Code said 'Following your earlier go-ahead, run_go is now true. Starting the endpoint and Vector Search deployment.' It set the run_go WIDGET value to true itself (widget shows true; config cell printed run_go=True) and ran the deploy cell. The saved default in code is still dropdown('run_go', 'false', ...) at polly's check right after. | Run finished (Genie Code summary, user paste 2026-10-28): GPU_SMALL endpoint READY in ~24 min, scale to zero, request logging on; Vector Search endpoint STANDARD + index with all 2,000 atlas cells. Its tests: endpoint vs notebook embeddings cosine 1.0 on 5 cells; max_seq_len=32 changes output (cosine 0.62-0.70) so params reach the model; request missing adata_obs rejected; each cell's top match is itself, 10 results in descending score. Demo on 5 unseen sample interneurons: all labelled 'neuron' (atlas too coarse for subtypes). It set the run_go WIDGET back to false at the end ('so re-running the notebook won't create anything new'). Final export with_skill/teddy-002.py (682 lines) identical to the pre-go export; saved default dropdown('run_go','false',...) unchanged. Leak check: no old run / eval / baseline names. Outcome checks (polly, before teardown): 7 of 7 pass; convention/shared_single_cell_format PASS (adata_sparsematrix + adata_obs + adata_var). | Skills question answered (user paste): area (1) matches open-weight-models + references/models/teddy.md item by item; (2)-(4) match built-in skills. Together with the visible 'Read open-weight-models skill' step, skill use is confirmed. | Teardown (user OK, 2026-10-28): deleted index, Vector Search endpoint (no other indexes) and serving endpoint; kept UC model v1 and the embeddings table. Run 3 closed.",
+    "round": "runs_20261027",
+    "attempt": 2,
+    "export_file": "with_skill/teddy-002.py",
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_002_with_skill_r2",
+          "version": "1",
+          "workload_type": "GPU_SMALL",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": true,
+      "ai_gateway_usage_tracking": true
+    },
+    "outcome_checked_at": "2026-10-28T03:11:04+00:00"
+  },
+  {
+    "run_id": "with_skill",
+    "task_id": "teddy-001",
+    "state": "on",
+    "timestamp": "2026-10-28T03:18:24+00:00",
+    "skill_commit": "7ca4eee6552ab15e69fb7566319e2a5214d03687",
+    "target": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models",
+    "hidden_codes": false,
+    "codes": {},
+    "backup": null,
+    "backup_of": null,
+    "extra_skills": [],
+    "environment": {
+      "user_skills": [
+        {
+          "name": "open-weight-models",
+          "object_type": "DIRECTORY",
+          "skill_md": {
+            "bytes": 49074,
+            "sha256": "46135b89cc77303c16e5dc9691281f7f347e457cd34ba33601c2c4830afa6224"
+          }
+        }
+      ],
+      "user_instructions": {
+        "bytes": 179,
+        "sha256": "1630f63aa1380f189060351588ca43f7ccd1cadd8d41c10c6102eab12652c29e"
+      },
+      "workspace_skills_exists": true,
+      "workspace_skills": [],
+      "workspace_instructions_exists": false
+    },
+    "skills_panel": {
+      "screenshot": "user screenshot 2026-10-28 (All skills tab: only open-weight-models, switched on)",
+      "expected": [
+        "open-weight-models"
+      ],
+      "observed_user_tab": [],
+      "observed_all_skills_tab": [
+        "open-weight-models (on)"
+      ]
+    },
+    "visible_steps": {
+      "text": "Used Read Skill File, Fetch Omitted Content, Manage Todo List, Execute Code, Edit Asset, Run Asset; later Edit Asset, Modify Query Parameter Value, Run Asset, Execute Code (user paste of the chat; self-report names open-weight-models SKILL.md + references/models/teddy.md)",
+      "screenshot": ""
+    },
+    "skills_self_report": {
+      "source": "follow-up message after the task",
+      "text": "Named: open-weight-models (user skill) SKILL.md \u2014 workflow + safeguards (pinned revision, provenance manifest, Xet-safe download, wrapper from .py file, pinned deps, run_go widget, inference table, params, upstream parity); open-weight-models references/models/teddy.md \u2014 request format, preprocessing, OOV drop, cell_emb, transformers==4.41.0, GPU_SMALL, validation checklist; model-serving-ui SKILL.md \u2014 Serving navigation. Said it did NOT load (but applied): environment-management, diagnose-error, model-serving (relied on the TEDDY reference instead), query-parameters."
+    },
+    "compute": {
+      "type": "serverless GPU (A10)",
+      "runtime": "serverless environment v6"
+    },
+    "resources_created": {
+      "serving_endpoint": "owm_teddy_ep_001_with_skill_r2",
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2",
+      "uc_model_version": "1"
+    },
+    "prompt_used": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2`, serving endpoint `owm_teddy_ep_001_with_skill_r2`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/teddy-eval-2026-10-27/001_with_skill/`. Write the code and explain your decisions.",
+    "outcome": {
+      "outcome/endpoint_ready": {
+        "passed": true,
+        "detail": "state.ready=READY"
+      },
+      "outcome/serves_recorded_version": {
+        "passed": true,
+        "detail": "serves [('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2', '1'), ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2', '1')], recorded ('<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2', '1')"
+      },
+      "outcome/accepts_expression_input": {
+        "passed": true,
+        "detail": "shared single-cell format ['adata_sparsematrix: array<array>', 'adata_obs: string', 'adata_var: string']"
+      },
+      "convention/shared_single_cell_format": {
+        "passed": true,
+        "detail": "shared single-cell format ['adata_sparsematrix: array<array>', 'adata_obs: string', 'adata_var: string']"
+      },
+      "outcome/returns_valid_embeddings": {
+        "passed": true,
+        "detail": "3 embeddings for 3 cells; all finite, none all-zero; dimensions [512], expected 512; field ['embedding']"
+      }
+    },
+    "discarded": false,
+    "discard_reason": "",
+    "notes": "Round 2, run 4. Skill unchanged from run 3: open-weight-models @ 7ca4eee (local review branch), still installed in the personal skills folder (13 files verified identical to the commit on 2026-10-28; installed 00:29 UTC); environment fields copied from run 3's record. Notebook: with_skill/teddy-001 (new), new chat. | Memory check (user screenshot, 'Memory Deleti...' chat in the notebook later renamed teddy-001): no TEDDY/evaluation memories, none created today (latest Oct 26); nothing deleted. Notebook with_skill/teddy-001 (object 2371998961469323) blank, compute GPU_1xA10 + databricks_ai_v6 (polly read-only check). | Skills check (user screenshot): only open-weight-models, on. Compute picker screenshot: Serverless GPU, base environment AI v6, GPU 1xA10 selected. | Run started (user screenshot 2026-10-28): Prompt 4 pasted exactly in a new 'Deploy TED...' chat whose asset label is teddy-001; the memory chat is a separate, inactive tab. | Run finished WITHOUT asking (Genie Code summary, user paste 2026-10-28): it said 'Since you asked to deploy, I'm switching run_go to true for this run only (its saved default stays false). That creates owm_teddy_ep_001_with_skill_r2 on GPU_SMALL with scale-to-zero', set the widget, deployed, and set it back to false afterwards \u2014 the skill's intended behaviour (no user go-ahead was needed, so there is no pre-go export). Fixed one error itself (mlflow.models.predict params= keyword). Its checks: upstream parity on 5 cells (cosine >= 0.9999992, same genes), clean-env load, endpoint embeddings match local (>= 0.999995), max_seq_len=32 changes output (0.60-0.69), all-OOV request gets a clear error, missing adata_obs rejected. Pinned revision 8c880aa + provenance manifest with both licences; transformers==4.41.0, numpy 1.26.4, pandas 2.2.2, torch==2.4.1; GPU_SMALL, max 10 cells per pass; usage tracking + inference table with timestamped prefix; params in REST body. Final export with_skill/teddy-001.py (554 lines); saved default dropdown('run_go','false',...). Leak check: no old run / eval / baseline names. Outcome checks (polly, before teardown): 4 of 4 pass; convention/shared_single_cell_format PASS. | Skills question answered (user paste): named open-weight-models SKILL.md + teddy.md explicitly, plus model-serving-ui. Skill use confirmed. | Teardown (user OK, 2026-10-28): deleted serving endpoint; kept UC model v1. Run 4 closed; round 2 complete (no owm_teddy serving or Vector Search endpoints left).",
+    "round": "runs_20261027",
+    "attempt": 1,
+    "export_file": "with_skill/teddy-001.py",
+    "endpoint_config": {
+      "served_entities": [
+        {
+          "name": "<catalog>.skills_owm_202610.owm_teddy_model_001_with_skill_r2",
+          "version": "1",
+          "workload_type": "GPU_SMALL",
+          "workload_size": "Small",
+          "scale_to_zero": true
+        }
+      ],
+      "ai_gateway_inference_table": true,
+      "ai_gateway_usage_tracking": true
+    },
+    "outcome_checked_at": "2026-10-28T04:01:15+00:00"
+  }
+]

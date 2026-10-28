@@ -422,15 +422,16 @@ def test_environment_dependence_examples(scorers):
 
 
 def test_failed_by_severity_and_table(scorers):
-    metrics = {"download_staging/deps_pinned": False, "pyfunc_quality/sys_modules_purge": False,
+    metrics = {"corrected/download_staging/deps_pinned": False, "corrected/pyfunc_quality/sys_modules_purge": False,
+               "download_staging/uses_tmp": False,           # verbatim: not counted next to corrected ones
                "new_checks/ai_gateway/usage_tracking": False, "outcome/endpoint_ready": True,
                "judge/guidelines": False}
     failed = scorers.failed_by_severity("teddy-001", metrics)
-    assert failed == {"critical": ["download_staging/deps_pinned"],
+    assert failed == {"critical": ["corrected/download_staging/deps_pinned"],
                       "major": ["new_checks/ai_gateway/usage_tracking"],
-                      "minor": ["pyfunc_quality/sys_modules_purge"]}
+                      "minor": ["corrected/pyfunc_quality/sys_modules_purge"]}
     with pytest.raises(ValueError, match="no severity"):
-        scorers.failed_by_severity("teddy-001", {"made_up/check": False})
+        scorers.failed_by_severity("teddy-001", {"corrected/made_up/check": False})
     table = scorers.severity_table({"baseline": {"teddy-001": metrics}, "with_skill": {"teddy-001": {}}},
                                    [("baseline", "with_skill")])
     assert "| baseline / with_skill | baseline | teddy-001 | 1 | 1 | 1 | yes | - |" in table
@@ -438,8 +439,24 @@ def test_failed_by_severity_and_table(scorers):
     assert "%" not in table
 
 
+def test_severity_lookup_normalises_raw_sep_oct_keys(scorers):
+    raw = {"forbidden_patterns//local_disk0": False, "forbidden_patterns/transformers>=": False}
+    assert scorers.failed_by_severity("teddy-001", raw, groups=("replicated",))["critical"] == list(raw)
+
+
+def test_verbatim_metrics_count_only_when_asked(scorers):
+    """Verbatim (Sep–Oct 2026 logic) metrics alone raise by default instead of silently dropping out
+    of the count; groups=("replicated",) gives the numbers as originally reported."""
+    verbatim = {"download_staging/uses_tmp": False, "smoke_tests/endpoint_query": False}
+    with pytest.raises(ValueError, match="without corrected ones"):
+        scorers.failed_by_severity("teddy-001", verbatim)
+    assert scorers.failed_by_severity("teddy-001", verbatim, groups=("replicated",)) == {
+        "critical": ["download_staging/uses_tmp"], "major": ["smoke_tests/endpoint_query"], "minor": []}
+
+
 def test_metric_group(scorers):
-    assert [scorers.metric_group(n) for n in ("smoke_tests/endpoint_query", "new_checks/ai_gateway/usage_tracking",
+    assert [scorers.metric_group(n) for n in ("corrected/smoke_tests/endpoint_query",
+                                              "smoke_tests/endpoint_query", "new_checks/ai_gateway/usage_tracking",
                                               "outcome/index_ready", "convention/shared_single_cell_format",
                                               "judge/guidelines")] == list(scorers.GROUPS)
 

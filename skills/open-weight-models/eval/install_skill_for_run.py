@@ -264,8 +264,11 @@ def run_samples(records: list[dict], run_id: str, task_id: str) -> list[dict]:
 
 
 def export_file(record: dict) -> str:
-    """The exported notebook of a run, relative to the round folder:
-    <run_id>/<task_id>.py, or <run_id>/<task_id>_attempt<n>.py when the record has "attempt"."""
+    """The exported notebook of a run, relative to the round folder: the record's "export_file" when
+    set (round 2 on), else the round-1 naming — <run_id>/<task_id>.py, or
+    <run_id>/<task_id>_attempt<n>.py when the record has "attempt"."""
+    if record.get("export_file"):
+        return record["export_file"]
     attempt = record.get("attempt")
     return f"{record['run_id']}/{record['task_id']}" + (f"_attempt{attempt}" if attempt else "") + ".py"
 

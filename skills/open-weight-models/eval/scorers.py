@@ -1,10 +1,13 @@
 """MLflow scorers for the open-weight-models TEDDY retest (teddy-001, teddy-002).
 
-Three groups, reported separately (plus an optional judge):
+Groups, reported separately (plus an optional judge):
 
-  Replicated set — the 8 phase checks used for the Sep–Oct 2026 runs, with the check
-  logic copied unchanged from runs_20260924/scorers.py so old and new
-  sub-check counts can be compared:
+  Replicated set ("verbatim") — the 8 phase checks used for the Sep–Oct 2026 runs, with the
+  check logic copied unchanged from runs_20260924/scorers.py. Kept as a historical record
+  only: it reproduces the Sep–Oct 2026 numbers as originally reported. Several sub-checks are
+  flawed (literal-text matches); corrected_checks.py judges their intent properly, and those
+  corrected results ("corrected/<phase>/<check>", the scorer of record) are what the severity
+  table counts. Sub-checks:
     1. download_staging      — temp paths, XET, deps
     2. pyfunc_quality        — class structure, imports, sys.modules, io.StringIO
     3. model_registration    — signature, input_example, pip reqs, variant
@@ -45,10 +48,13 @@ eval row's outputs must carry the exported notebook text as "notebook_source".
   metric "judge/guidelines".
 
 Every check has a severity (critical / major / minor), the source line it rests on, and
-whether it depends on the model or the compute, in expectations.json "checks";
-failed_by_severity() / severity_table() report raw failed counts per severity.
+whether it depends on the model or the compute, in expectations.json "checks" (a corrected
+metric takes the severity of the sub-check it corrects); failed_by_severity() /
+severity_table() report raw failed counts per severity over COUNTED_GROUPS (corrected, new
+checks, outcome), or over the verbatim set when asked (`groups=("replicated",)`).
 
-Exports: `scorers` (replicated + new checks + outcome + convention), `replicated_scorers`,
+Exports: `scorers` (replicated + new checks + outcome + convention; the corrected scorer is
+corrected_checks.corrected_scorers, kept there to avoid a circular import), `replicated_scorers`,
 `new_check_scorers`, `outcome_scorers`, `convention_scorers`, guideline_judges(), the metric prefixes,
 run_prompts() (the prompt pasted in each run), failed_by_severity(), severity_table().
 """
@@ -62,6 +68,7 @@ from mlflow.entities import Feedback
 from mlflow.genai.scorers import scorer as mlflow_scorer
 
 EVAL_DIR = Path(__file__).resolve().parent
+CORRECTED_PREFIX = "corrected/"
 NEW_CHECK_PREFIX = "new_checks/"
 OUTCOME_PREFIX = "outcome/"
 CONVENTION_PREFIX = "convention/"
@@ -1046,12 +1053,16 @@ Answer with exactly one word: 'yes' if every guideline is satisfied, otherwise '
 
 # ---- Grouping + severity report (pure) ---------------------------------------------
 
-GROUPS = ("replicated", "new_checks", "outcome", "convention", "judge")
+GROUPS = ("corrected", "replicated", "new_checks", "outcome", "convention", "judge")
+# Groups counted in the severity table: the corrected replicated checks (corrected_checks.py),
+# the new checks and the outcome. "replicated" (the verbatim Sep–Oct 2026 logic) is counted only
+# when asked for, to show Sep–Oct numbers as originally reported.
+COUNTED_GROUPS = ("corrected", "new_checks", "outcome")
 
 
 def metric_group(name: str) -> str:
     """Which reporting group a metric belongs to."""
-    for group, prefix in (("new_checks", NEW_CHECK_PREFIX), ("outcome", OUTCOME_PREFIX),
+    for group, prefix in (("corrected", CORRECTED_PREFIX), ("new_checks", NEW_CHECK_PREFIX), ("outcome", OUTCOME_PREFIX),
                           ("convention", CONVENTION_PREFIX), ("judge", JUDGE_PREFIX)):
         if name.startswith(prefix):
             return group
@@ -1062,23 +1073,35 @@ def metric_group(name: str) -> str:
 SEVERITIES = ("critical", "major", "minor")
 
 
-def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None) -> dict:
+def failed_by_severity(task_id: str, metrics: dict, tasks: dict = None, groups: tuple = COUNTED_GROUPS) -> dict:
     """{"critical"|"major"|"minor": [failed metric names]} for one (run, task), from the
-    `checks` severities in expectations.json. Judge metrics have no severity and convention
-    metrics are reported in their own column, so both are skipped."""
+    `checks` severities in expectations.json; a corrected metric has the severity of the
+    replicated sub-check it corrects. Only metrics of `groups` are counted (judge metrics have no
+    severity and convention metrics are reported in their own column). Verbatim replicated
+    metrics without corrected ones raise unless `groups` asks for "replicated": they would
+    otherwise drop out of the count silently."""
     meta = (tasks or TASKS)[task_id]["checks"]
+    by_group = {}
+    for name in metrics:
+        by_group.setdefault(metric_group(name), []).append(name)
+    if "replicated" in by_group and "corrected" not in by_group and "replicated" not in groups:
+        raise ValueError(f"{task_id}: verbatim replicated metrics without corrected ones; score them with "
+                         "corrected_checks.py, or pass groups=('replicated', ...) for the numbers as originally reported")
     out = {sev: [] for sev in SEVERITIES}
     for name, ok in metrics.items():
-        if name.startswith((JUDGE_PREFIX, CONVENTION_PREFIX)):
+        if metric_group(name) not in groups:
             continue
-        if name not in meta:
+        key = name[len(CORRECTED_PREFIX):] if name.startswith(CORRECTED_PREFIX) else name
+        if metric_group(name) in ("corrected", "replicated"):
+            key = mlflow_metric_name(key)   # a raw Sep–Oct 2026 key ("forbidden_patterns//local_disk0")
+        if key not in meta:
             raise ValueError(f"{task_id}: no severity for metric {name!r} in expectations.json")
         if not ok:
-            out[meta[name]["severity"]].append(name)
+            out[meta[key]["severity"]].append(name)
     return out
 
 
-def severity_table(scores_by_run: dict, pairs: list, tasks: dict = None) -> str:
+def severity_table(scores_by_run: dict, pairs: list, tasks: dict = None, groups: tuple = COUNTED_GROUPS) -> str:
     """Markdown: per pair, per run (or run sample), per task — raw counts of failed checks by
     severity, whether the outcome group passed, and the convention checks on their own
     ("-" if none were scored). No percentages, no single score. `scores_by_run` may hold
@@ -1092,7 +1115,7 @@ def severity_table(scores_by_run: dict, pairs: list, tasks: dict = None) -> str:
             samples = [run] + sorted(k for k in scores_by_run if k.startswith(f"{run} "))
             for sample in samples:
                 for task_id, metrics in sorted(scores_by_run.get(sample, {}).items()):
-                    failed = failed_by_severity(task_id, metrics, tasks)
+                    failed = failed_by_severity(task_id, metrics, tasks, groups)
                     outcome = [ok for name, ok in metrics.items() if name.startswith(OUTCOME_PREFIX)]
                     convention = [ok for name, ok in metrics.items() if name.startswith(CONVENTION_PREFIX)]
                     lines.append(f"| {pair[0]} / {pair[1]} | {sample} | {task_id} | "

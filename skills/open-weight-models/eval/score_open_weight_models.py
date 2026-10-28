@@ -12,9 +12,11 @@
 # MAGIC | replication | `old_prompt_baseline` | built-in skills only | `models/teddy/old_prompt_baseline.md` (Sep–Oct 2026 baseline prompt) |
 # MAGIC | replication | `old_prompt_with_skill` | built-in skills + open-weight-models | `models/teddy/old_prompt_with_skill.md` (Sep–Oct 2026 forced-read prompt) |
 # MAGIC
-# MAGIC Scorers come from `scorers.py`; extraction and the paired comparison from
+# MAGIC Scorers come from `corrected_checks.py` and `scorers.py`; extraction and the paired comparison from
 # MAGIC `skills/skill-eval/scripts/compare_runs.py`. Groups are compared separately: the
-# MAGIC replicated Sep–Oct 2026 checks, the new checks, the outcome checks (measured live by
+# MAGIC replicated Sep–Oct 2026 checks judged by intent (`corrected/…`, the primary result; the
+# MAGIC unchanged Sep–Oct logic is logged too, as `replicated`, a historical record only), the new
+# MAGIC checks, the outcome checks (measured live by
 # MAGIC `check_outcome.py` before teardown and read from the run records), and the optional
 # MAGIC guideline judge — plus the convention check (shared single-cell input format), reported
 # MAGIC on its own. Run only after every run is exported to
@@ -56,6 +58,7 @@ from scorers import (
     GROUPS, guideline_judges, metric_group, run_prompts, scorers as all_scorers, severity_table,
 )
 from check_outcome import outcome_scores
+from corrected_checks import corrected_scorers
 from compare_runs import extract_scores, main as compare_main
 from family_settings import round_dir
 from install_skill_for_run import all_codes, check_notebook, export_file, load_records, protocol_gaps, run_samples
@@ -71,7 +74,7 @@ SCORES_DIR.mkdir(parents=True, exist_ok=True)
 # the judge model must differ from the model that wrote the notebooks.
 USE_GUIDELINE_JUDGE = False
 JUDGE_MODEL = "databricks:/databricks-gpt-5-mini"
-run_scorers = all_scorers + (guideline_judges(JUDGE_MODEL) if USE_GUIDELINE_JUDGE else [])
+run_scorers = corrected_scorers + all_scorers + (guideline_judges(JUDGE_MODEL) if USE_GUIDELINE_JUDGE else [])
 
 # COMMAND ----------
 
@@ -178,8 +181,9 @@ for label in samples:
 # MAGIC ## Paired comparisons
 # MAGIC Within each pair only: `baseline` vs `with_skill`, then `old_prompt_baseline` vs
 # MAGIC `old_prompt_with_skill` (the replication of Sep–Oct 2026). One comparison per group:
-# MAGIC replicated checks, new checks, outcome, convention, and the judge if enabled. Primary
-# MAGIC samples only; extra attempts are in the severity table and their own score files.
+# MAGIC corrected checks, verbatim replicated checks (historical record), new checks, outcome,
+# MAGIC convention, and the judge if enabled. Primary samples only; extra attempts are in the
+# MAGIC severity table and their own score files.
 
 # COMMAND ----------
 
@@ -202,7 +206,8 @@ for reference, candidate in PAIRS:
 # MAGIC %md
 # MAGIC ## Failed checks by severity
 # MAGIC Raw counts per pair, run (and extra attempt) and task (severities from
-# MAGIC `expectations.json` "checks"), next to whether the outcome group passed and, on its
+# MAGIC `expectations.json` "checks"; corrected checks, new checks and outcome — the verbatim
+# MAGIC replicated checks are not counted), next to whether the outcome group passed and, on its
 # MAGIC own, whether the endpoint uses the shared single-cell input format (not counted as a
 # MAGIC failure) — read each failure against whether the run actually worked. No percentages,
 # MAGIC no single score.

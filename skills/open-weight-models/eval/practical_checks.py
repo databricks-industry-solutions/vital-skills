@@ -53,9 +53,12 @@ CHECKS = {
         "goal": "Model files are downloaded and staged where serverless compute can write.",
         "accepts": ["a /tmp path", "tempfile.mkdtemp() / TemporaryDirectory() (both under /tmp)",
                     "a Unity Catalog Volume path (/Volumes/...)",
-                    "the same, as the destination of a download run in a subprocess or shell command"],
-        "fails": "/local_disk0 as a download destination or as the destination of a copy/move of the "
-                 "files (staging); a download destination that is none of the above, including the "
+                    "the same, as the destination of a download run in a subprocess or shell command",
+                    "/local_disk0 when compute-adaptive: the path variable has one of the above assigned in "
+                    "the try handler or other if branch, and that variable is what the download / copy uses "
+                    "(followed into a subprocess script's text)"],
+        "fails": "/local_disk0 without such a fallback, as a download destination or as the destination of "
+                 "a copy/move of the files (staging); a download destination that is none of the above, including the "
                  "default Hugging Face cache (not stated in the code). Other /local_disk0 strings "
                  "(messages, unrelated paths) do not count",
         "evidence": "code",
@@ -71,8 +74,10 @@ CHECKS = {
                     "exported earlier in the cell",
                     "in the notebook: HF_HUB_DISABLE_XET set before the first huggingface_hub import "
                     "and before the download (teddy.md warns this is not reliable on AI Runtime)",
-                    "recorded evidence the download completed: a later cell loads files it wrote "
-                    "(from_pretrained, safetensors load_file, load_state_dict, log_model artifacts) "
+                    "recorded evidence the download completed: a later cell loads files from the "
+                    "download's destination or a copy of it (from_pretrained, safetensors load_file, "
+                    "load_state_dict, log_model artifacts; paths followed through assignments, joins, "
+                    "copies and function parameters, never line order alone) "
                     "and the run record shows the endpoint READY serving the registered version"],
         "fails": "no download call; HF_HUB_DISABLE_XET set only after the download or import, or to a "
                  "value that does not disable Xet ('0', 'false'); a subprocess without it; and no "
@@ -207,7 +212,8 @@ GUIDELINES = {
                 "counted as a failure.",
         "accepts": ["run record endpoint_config: every served entity has a GPU_* workload type "
                     "(recorded settings only; code is never read)"],
-        "context": "on CPU, baseline/teddy-002's endpoint took about 15 s per cell (run record notes)",
+        "context": "CPU endpoints were slower per cell in the recorded runs (round 1 baseline/teddy-002: "
+                   "about 15 s per cell; round 2 baselines: about 1.7-3.3 s per cell, run record notes)",
         "evidence": "record",
     },
 }
@@ -490,8 +496,11 @@ ACCEPTED_LOCATIONS = {"tmp", "volume", "tempfile"}
 class Download:
     """One Hugging Face download: line, how it ran, destination kinds, revision, Xet setting."""
 
-    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple, resolved=None):
+    def __init__(self, line: int, how: str, kinds: set, revision: tuple, xet: tuple, resolved=None,
+                 paths=(), node=None):
         self.line, self.how, self.kinds = line, how, kinds
+        self.paths = [p for p in paths if p.replace("{}", "").strip("/")]   # destination strings
+        self.node = node              # the download call in the notebook (its return value is the path)
         self.revision = revision      # (kind, text): kind "sha" | "resolved" | None
         self.xet = xet                # (ok, reason) for HF_HUB_DISABLE_XET
         # for a resolved commit: is a notebook node the source of that commit? (see _resolved_sources)
@@ -574,7 +583,9 @@ def _direct_downloads(nb: PracticalCode, response: str, how: str = "notebook", l
             setting = xet or _set_before_import(nb, response, call.lineno)
             sources = _resolved_nodes(nb, kwargs.get("revision"))
             out.append(Download(line or call.lineno, how, kinds, _revision(nb, kwargs), setting,
-                                lambda node, s=sources: any(node is x for x in s)))
+                                lambda node, s=sources: any(node is x for x in s),
+                                paths=nb.strings(dest) if dest is not None else [],
+                                node=None if line else call))
     return out
 
 
@@ -636,7 +647,7 @@ def _subprocess_xet(nb: PracticalCode, call: ast.Call, script_nb: PracticalCode,
         if in_dict or on_name:
             return True, f"set in the subprocess env (line {on_name[0] if on_name else call.lineno})"
     ok, why = _set_before_import(script_nb, script, 10 ** 9)
-    return (True, f"set in the subprocess script before its huggingface_hub import") if ok else (
+    return (True, "set in the subprocess script before its huggingface_hub import") if ok else (
         False, f"subprocess without it (script: {why}; env: {'not given' if env is None else 'no disabling ' + XET_VAR})")
 
 
@@ -657,9 +668,11 @@ def _subprocess_downloads(nb: PracticalCode) -> list:
         for script in [t for t in texts if re.search(r"\b(?:snapshot_download|hf_hub_download)\s*\(", t)]:
             script_nb = PracticalCode(script)
             xet = _subprocess_xet(nb, call, script_nb, script)
+            arg_paths = [t for e in elements for t in nb.strings(e) if t.startswith("/")]
             for download in _direct_downloads(script_nb, script, "subprocess", call.lineno, xet):
                 if download.kinds <= {"unknown"} and path_args:
                     download.kinds = path_args
+                download.paths = download.paths + [t for t in arg_paths if t.replace("{}", "").strip("/")]
                 download.resolved = _resolved_sources(nb, call, script_nb, download)
                 out.append(download)
         for command in texts:
@@ -681,7 +694,7 @@ def _cli_download(rest: str, line: int, xet: tuple) -> Download:
     kinds = {_classify(dest)} if dest else {"hf_default_cache"}
     rev = ("sha", revision) if revision and _SHA.match(revision) else (
         None, f"revision {revision!r} is not a commit SHA" if revision else "no revision")
-    return Download(line, "shell", kinds, rev, xet)
+    return Download(line, "shell", kinds, rev, xet, paths=[dest] if dest else [])
 
 
 def _shell_disables(command: str) -> bool:
@@ -854,35 +867,201 @@ def _endpoint_serves_registration(record) -> bool:
 _STAGING_CALLS = ("copytree", "copy", "copy2", "copyfile", "move")
 
 
+def assigned_values(stmts: list) -> dict:
+    """{name: [value nodes]} for plain assignments anywhere inside `stmts`."""
+    out = {}
+    for stmt in stmts:
+        for n in ast.walk(stmt):
+            if isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        out.setdefault(t.id, []).append(n.value)
+    return out
+
+
+def local_disk0_fallbacks(nb) -> dict:
+    """{name: (line of the try / if)} for a path variable set to /local_disk0 on one side and to an
+    accepted location (/tmp, tempfile, Volume) on the other: try body vs a handler, or if vs else.
+    These are the compute-adaptive paths: the alternative is assigned to the same name."""
+    out = {}
+    pairs = [(t.body, [s for h in t.handlers for s in h.body] + t.orelse, t.lineno) for t in nb.nodes(ast.Try)]
+    pairs += [(i.body, i.orelse, i.lineno) for i in nb.nodes(ast.If)] + [(i.orelse, i.body, i.lineno) for i in nb.nodes(ast.If)]
+    for first, other, line in pairs:
+        a, b = assigned_values(first), assigned_values(other)
+        for name in set(a) & set(b):
+            if (any("local_disk0" in _path_kinds(nb, v) for v in a[name])
+                    and any(_path_kinds(nb, v) & ACCEPTED_LOCATIONS for v in b[name])):
+                out[name] = line
+    return out
+
+
+def uses_fallback(nb, node, fallbacks: dict) -> bool:
+    return node is not None and any(isinstance(n, ast.Name) and n.id in fallbacks for n in flow_nodes(nb, node))
+
+
+def download_site(nb, d):
+    """The notebook node a download's destination flows from: its local_dir / cache_dir keyword,
+    or, for a download inside a subprocess script, the subprocess call's arguments (the script
+    text and argv), whose formatted values carry the notebook's path variables. None if unknown."""
+    if d.how == "subprocess":
+        call = next((c for c in nb.calls if c.lineno == d.line
+                     and any(_SUBPROCESS.match(x) for x in nb.dotted(c.func))), None)
+        return ast.Tuple(elts=list(call.args), ctx=ast.Load()) if call is not None else None
+    if d.node is None:
+        return None
+    return next((m.get("local_dir") or m.get("cache_dir") for m in nb.keyword_maps(d.node)
+                 if m.get("local_dir") or m.get("cache_dir")), None)
+
+
+def staging_dst(call: ast.Call):
+    """The destination argument of a shutil copy / move (positional or dst=), or None."""
+    return call.args[1] if len(call.args) > 1 else next((k.value for k in call.keywords if k.arg == "dst"), None)
+
+
+def local_disk0_staging(nb) -> list:
+    """shutil copy / move calls whose destination can be under /local_disk0."""
+    return [c for c in nb.calls if _call_name(c) in _STAGING_CALLS
+            and any(d.startswith("shutil.") for d in nb.dotted(c.func))
+            and staging_dst(c) is not None and "local_disk0" in _path_kinds(nb, staging_dst(c))]
+
+
 def download_location_ok(nb, response, record, task):
     found = downloads(nb, response)
     if not found:
         return False, "no Hugging Face download call found"
-    staging = [c.lineno for c in nb.calls if _call_name(c) in _STAGING_CALLS
-               and any(d.startswith("shutil.") for d in nb.dotted(c.func))
-               and "local_disk0" in _path_kinds(nb, c.args[1] if len(c.args) > 1 else next(
-                   (k.value for k in c.keywords if k.arg == "dst"), ast.Constant("")))]
-    bad = [d for d in found if not d.kinds <= ACCEPTED_LOCATIONS]
+    # /local_disk0 counts only when compute-adaptive: the path variable has an accepted alternative
+    # (try handler / other if branch) that is then used, so serverless gets the alternative
+    fallbacks = local_disk0_fallbacks(nb)
+    staging = [c.lineno for c in local_disk0_staging(nb) if not uses_fallback(nb, staging_dst(c), fallbacks)]
+    bad = [d for d in found if d.kinds - ACCEPTED_LOCATIONS - {"local_disk0"}
+           or ("local_disk0" in d.kinds and not uses_fallback(nb, download_site(nb, d), fallbacks))]
     where = "; ".join(d.describe() for d in found)
     if staging:
         return False, f"files staged to /local_disk0 (lines {staging}); downloads: {where}"
     if bad:
         return False, f"destination not an accepted location: {'; '.join(d.describe() for d in bad)}"
-    return True, f"downloads: {where}"
+    adaptive = f" (/local_disk0 only with a used fallback: {', '.join(sorted(fallbacks))})" if any(
+        "local_disk0" in d.kinds for d in found) or local_disk0_staging(nb) else ""
+    return True, f"downloads: {where}{adaptive}"
 
 
 _WEIGHT_LOADS = ("from_pretrained", "load_file", "load_state_dict")
 
 
-def _later_weight_load(nb: PracticalCode, after: int):
-    for call in sorted(nb.calls, key=lambda c: c.lineno):
-        if call.lineno <= after:
+def _under(path: str, base: str) -> bool:
+    base = base.rstrip("/")
+    return bool(base.replace("{}", "").strip("/")) and (path == base or path.startswith(base + "/"))
+
+
+def _combine(parts: list, sep: str = "") -> list:
+    out = [""]
+    for options in parts:
+        out = [a + (sep if a and sep else "") + b for a in out for b in (options or ["{}"])][:20]
+    return out
+
+
+def _parameter_values(nb: PracticalCode, name: ast.Name) -> list:
+    """Arguments passed for `name` when it is a parameter of a notebook function: one per call site
+    (a method's self / cls is skipped when the call is `x.method(...)`)."""
+    out = []
+    for f in nb.functions.values():
+        params = [a.arg for a in f.args.args]
+        if name.id not in params or not (f.lineno <= name.lineno <= f.end_lineno):
             continue
-        name = _call_name(call)
-        if name in _WEIGHT_LOADS:
-            return call.lineno, name
-        if name == "log_model" and any(k.arg in ("artifacts", "code_paths") for k in call.keywords):
-            return call.lineno, "log_model(artifacts=...)"
+        for call in nb.calls:
+            if _call_name(call) != f.name:
+                continue
+            index = params.index(name.id) - (1 if params[:1] in (["self"], ["cls"]) and isinstance(call.func, ast.Attribute) else 0)
+            if 0 <= index < len(call.args):
+                out.append(call.args[index])
+            out += [k.value for k in call.keywords if k.arg == name.id]
+    return out
+
+
+def path_strings(nb: PracticalCode, node, depth: int = 0) -> list:
+    """Possible string values of a path expression: names followed through assignments and
+    notebook-function parameters (to the call sites), f-strings, `+`, `/` (pathlib),
+    os.path.join(...) and Path(...); an unresolved part becomes '{}'."""
+    if depth > 6 or node is None:
+        return []
+    out = []
+    for v in nb.values(node):
+        if isinstance(v, ast.Constant) and isinstance(v.value, str):
+            out.append(v.value)
+        elif isinstance(v, ast.JoinedStr):
+            out += _combine([[str(p.value)] if isinstance(p, ast.Constant) else path_strings(nb, p.value, depth + 1)
+                             for p in v.values])
+        elif isinstance(v, ast.BinOp) and isinstance(v.op, (ast.Add, ast.Div)):
+            out += _combine([path_strings(nb, v.left, depth + 1), path_strings(nb, v.right, depth + 1)],
+                            "/" if isinstance(v.op, ast.Div) else "")
+        elif isinstance(v, ast.Call) and _call_name(v) in ("join", "Path", "PurePath") and v.args:
+            out += _combine([path_strings(nb, a, depth + 1) for a in v.args], "/")
+        elif isinstance(v, ast.Name):
+            out += [t for arg in _parameter_values(nb, v) for t in path_strings(nb, arg, depth + 1)]
+    return list(dict.fromkeys(out))[:50]
+
+
+def _destination_names(nb: PracticalCode, download) -> set:
+    """Notebook variables a direct download writes into: the names in its local_dir / cache_dir."""
+    if download.node is None or download.how != "notebook":
+        return set()
+    return {n.id for m in nb.keyword_maps(download.node) for key in ("local_dir", "cache_dir")
+            if m.get(key) is not None for n in ast.walk(m[key]) if isinstance(n, ast.Name)}
+
+
+def _staged_paths(nb: PracticalCode, download) -> list:
+    """The download's destination plus where shutil copies / moves it: copytree(local, DEST), or
+    a per-file copy whose source derives from the destination variable (an os.walk over it); the
+    copy target's trailing per-file parts ("/{}") are dropped, so the target folder counts."""
+    paths, names = list(download.paths), _destination_names(nb, download)
+    for call in sorted(nb.calls, key=lambda c: c.lineno):
+        if _call_name(call) in _STAGING_CALLS and len(call.args) >= 2 and any(
+                d.startswith("shutil.") for d in nb.dotted(call.func)):
+            src = call.args[0]
+            if (any(_under(t, b) for t in path_strings(nb, src) for b in paths)
+                    or (download.node is not None and _derives(nb, src, lambda n: n is download.node))
+                    or (names and _derives(nb, src, lambda n: isinstance(n, ast.Name) and n.id in names))):
+                paths += [re.sub(r"(?:/\{\})+$", "", t) for t in path_strings(nb, call.args[1])]
+    return paths
+
+
+def reads_download(nb: PracticalCode, node, download) -> bool:
+    """`node` (a path argument) reads from the download's destination (or a copy of it): one of its
+    string values is that path or a path under it, or it is derived from the download call's
+    return value. Line order alone never links a file use to a download."""
+    if any(_under(t, base) for t in path_strings(nb, node) for base in _staged_paths(nb, download)):
+        return True
+    return download.node is not None and _derives(nb, node, lambda n: n is download.node)
+
+
+def _load_paths(call: ast.Call, nb: PracticalCode) -> list:
+    """Path arguments of a weight load: the first argument / pretrained_model_name_or_path /
+    filename of from_pretrained, load_file and load_state_dict, or the values of a log_model
+    artifacts= dict and code_paths= list."""
+    name = _call_name(call)
+    if name in _WEIGHT_LOADS:
+        return list(call.args[:1]) + [k.value for k in call.keywords
+                                      if k.arg in ("pretrained_model_name_or_path", "filename", "f", "path")]
+    if name == "log_model":
+        out = []
+        for k in call.keywords:
+            if k.arg == "artifacts":
+                out += [v for m in nb.members(k.value) for v in m.values() if v is not None]
+            elif k.arg == "code_paths":
+                out += [e for v in nb.values(k.value) if isinstance(v, (ast.List, ast.Tuple)) for e in v.elts]
+        return out
+    return []
+
+
+def _later_weight_load(nb: PracticalCode, download):
+    """(line, how) of the first weight load after the download that reads from its destination
+    (data flow / path, not line order alone), or None."""
+    for call in sorted(nb.calls, key=lambda c: c.lineno):
+        if call.lineno <= download.line:
+            continue
+        if any(reads_download(nb, arg, download) for arg in _load_paths(call, nb)):
+            name = _call_name(call)
+            return call.lineno, name if name in _WEIGHT_LOADS else "log_model(artifacts=...)"
     return None
 
 
@@ -892,16 +1071,16 @@ def xet_download_ok(nb, response, record, task):
         return False, "no Hugging Face download call found"
     if all(d.xet[0] for d in found):
         return True, "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
-    first = found[0].line
-    used = _later_weight_load(nb, first)
-    if used and _endpoint_serves_registration(record):
-        return True, (f"recorded evidence the download completed: line {used[0]} ({used[1]}) uses files from "
-                      f"the download at line {first}, and the run record shows the endpoint READY serving "
-                      f"the registered version")
+    unset = [d for d in found if not d.xet[0]]
+    uses = [(d, _later_weight_load(nb, d)) for d in unset]
+    if all(used for _, used in uses) and _endpoint_serves_registration(record):
+        return True, "recorded evidence the download completed: " + "; ".join(
+            f"line {used[0]} ({used[1]}) loads files from the destination of the download at line {d.line}"
+            for d, used in uses) + ", and the run record shows the endpoint READY serving the registered version"
     settings = "; ".join(f"line {d.line} ({d.how}): {XET_VAR} {d.xet[1]}" for d in found)
-    return False, (f"{settings}; no recorded evidence the download completed (later file use: "
-                   f"{used and used[0]}; endpoint READY + registered version in run record: "
-                   f"{_endpoint_serves_registration(record)})")
+    return False, (f"{settings}; no recorded evidence the download completed (load from its destination: "
+                   f"{[used and used[0] for _, used in uses]}; endpoint READY + registered version in run "
+                   f"record: {_endpoint_serves_registration(record)})")
 
 
 def _pip_specs(response: str) -> list:
@@ -959,30 +1138,86 @@ def _references_upstream(nb: PracticalCode, packages: tuple) -> bool:
         re.search(rf"\bfrom\s+{p}\.|\bimport\s+{p}\b", s.value) for p in packages for s in nb.string_constants())
 
 
-def model_loads_with_pinned_deps(nb, response, record, task):
-    ready = _measured(record, "outcome/endpoint_ready")
+def _served_classes(nb: PracticalCode) -> list:
+    """The served model's code in the notebook: mlflow PythonModel subclasses, plus the notebook
+    functions and classes they reference by name (followed recursively)."""
+    classes = {c.name: c for c in nb.nodes(ast.ClassDef)}
+    defs = {**nb.functions, **classes}
+    todo = [c for c in classes.values() if any(d.endswith("PythonModel") for b in c.bases for d in nb.dotted(b))]
+    seen = {}
+    while todo:
+        node = todo.pop()
+        if node.name in seen:
+            continue
+        seen[node.name] = node
+        todo += [defs[n.id] for n in ast.walk(node) if isinstance(n, ast.Name) and n.id in defs and n.id not in seen]
+    return list(seen.values())
+
+
+def _served_uses(nb: PracticalCode, packages: tuple):
+    """Whether the served model needs transformers or the upstream package: the served classes
+    import one or use a name the notebook imports from one; a wrapper written as a source file
+    imports one; a log_model code_paths entry ships the upstream package; or the model is logged
+    with the mlflow.transformers flavor. None when the notebook defines no PythonModel class
+    (then the notebook-wide rule applies)."""
+    roots = packages + ("transformers",)
+    served = _served_classes(nb)
+    calls = _mlflow_log_model_calls(nb)
+    if any(".transformers." in d for c in calls for d in nb.dotted(c.func)):
+        return True
+    wrapper_files = [t.value for t in nb.string_constants() if "PythonModel" in t.value]
+    if any(re.search(rf"\bfrom\s+{p}\b|\bimport\s+{p}\b", t) for p in roots for t in wrapper_files):
+        return True
+    shipped = [t for c in calls for k in c.keywords if k.arg == "code_paths"
+               for v in nb.values(k.value) for e in (v.elts if isinstance(v, (ast.List, ast.Tuple)) else [v])
+               for t in path_strings(nb, e)]
+    if any(re.search(rf"(?:^|/){p}(?:/|$)", t) for p in packages for t in shipped):
+        return True
+    if not served and not wrapper_files:
+        return None
+    for node in served:
+        for n in ast.walk(node):
+            if isinstance(n, ast.Import) and any(a.name.split(".")[0] in roots for a in n.names):
+                return True
+            if isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] in roots:
+                return True
+            if isinstance(n, ast.Name) and nb.imports.get(n.id, "").split(".")[0] in roots:
+                return True
+    return False
+
+
+def transformers_pin(nb: PracticalCode, response: str, task: dict) -> tuple:
+    """(ok, reason): transformers 5.x is excluded from the serving requirements (or %pip when
+    there is no serving pin), or the served model does not use transformers at all — judged on the
+    served code (PythonModel classes and what they use, wrapper files, code_paths), so an upstream
+    import used only to compare against upstream does not count. Shared by
+    model_loads_with_pinned_deps and the corrected download_staging/deps_pinned check."""
     packages = UPSTREAM_PACKAGES.get(task.get("model_family"), ())
     pip, serving = _pip_specs(response), _serving_specs(nb)
-    uses_transformers = (nb.imports_package(packages + ("transformers",)) or bool(serving)
-                         or _references_upstream(nb, packages))
-    if not uses_transformers:
-        deps_ok, deps = True, ("model path does not use transformers (no transformers or upstream-package "
-                               "import, none in the serving requirements)")
-    else:
-        specs = serving or pip
-        source = "serving requirements" if serving else "%pip (no serving pin)"
-        if not specs:
-            deps_ok, deps = False, "transformers is used but never pinned"
-        else:
-            verdicts = [(line, spec, _excludes_5(spec)) for line, spec in specs]
-            pip_excludes = any(_excludes_5(spec) is True for _, spec in pip)
-            deps_ok = all(v is True or (v == "installed" and pip_excludes) for _, _, v in verdicts)
-            deps = f"{source}: " + "; ".join(
-                f"line {line} {spec!r} " + ("excludes 5.x" if v is True else
-                                            "pins the installed version" + (", which %pip limits to <5"
-                                                                            if pip_excludes else ", not limited by %pip")
-                                            if v == "installed" else "allows 5.x")
-                for line, spec, v in verdicts)
+    served = _served_uses(nb, packages)
+    if served is None:
+        served = nb.imports_package(packages + ("transformers",)) or _references_upstream(nb, packages)
+    if not (served or serving):
+        return True, ("the served model does not use transformers (no transformers or upstream-package "
+                      "use in the served code, none in the serving requirements)")
+    specs = serving or pip
+    source = "serving requirements" if serving else "%pip (no serving pin)"
+    if not specs:
+        return False, "transformers is used but never pinned"
+    verdicts = [(line, spec, _excludes_5(spec)) for line, spec in specs]
+    pip_excludes = any(_excludes_5(spec) is True for _, spec in pip)
+    ok = all(v is True or (v == "installed" and pip_excludes) for _, _, v in verdicts)
+    return ok, f"{source}: " + "; ".join(
+        f"line {line} {spec!r} " + ("excludes 5.x" if v is True else
+                                    "pins the installed version" + (", which %pip limits to <5"
+                                                                    if pip_excludes else ", not limited by %pip")
+                                    if v == "installed" else "allows 5.x")
+        for line, spec, v in verdicts)
+
+
+def model_loads_with_pinned_deps(nb, response, record, task):
+    ready = _measured(record, "outcome/endpoint_ready")
+    deps_ok, deps = transformers_pin(nb, response, task)
     ok = deps_ok and bool(ready)
     return ok, f"{deps}; endpoint READY in run record: {ready}"
 
@@ -1015,23 +1250,34 @@ def fidelity_verified(nb, response, record, task):
 _SIGNATURE_BUILDERS = ("infer_signature", "ModelSignature")
 
 
-def signature_and_example(nb, response, record, task):
-    seen = []
+def logged_signatures(nb: PracticalCode) -> list:
+    """One entry per MLflow log_model call (and **kwargs option): {"line", "builders" (the
+    signature builders used: infer_signature / ModelSignature), "has_signature" (a signature
+    that is not None), "has_example" (input_example given), "text" (for reasons)}."""
+    out = []
     for call in _mlflow_log_model_calls(nb):
         for kwargs in nb.keyword_maps(call):
             signature, example = kwargs.get("signature"), kwargs.get("input_example")
             values = [v for v in nb.values(signature) if not (isinstance(v, ast.Constant) and v.value is None)] \
                 if signature is not None else []
             builders = sorted({_call_name(v) for v in values if isinstance(v, ast.Call)} & set(_SIGNATURE_BUILDERS))
-            seen.append(f"line {call.lineno}: signature {builders or ('other expression' if values else 'missing')}, "
-                        f"input_example {'given' if example is not None else 'missing'}")
-            if not values or example is None:
-                continue
-            if builders:
-                return True, seen[-1]
-            if _endpoint_serves_registration(record):
-                return True, seen[-1] + "; run record: endpoint READY serving the registered version"
-    return False, "; ".join(seen) or "no MLflow log_model call"
+            out.append({"line": call.lineno, "builders": builders, "has_signature": bool(values),
+                        "has_example": example is not None,
+                        "text": f"line {call.lineno}: signature {builders or ('other expression' if values else 'missing')}, "
+                                f"input_example {'given' if example is not None else 'missing'}"})
+    return out
+
+
+def signature_and_example(nb, response, record, task):
+    seen = logged_signatures(nb)
+    for entry in seen:
+        if not entry["has_signature"] or not entry["has_example"]:
+            continue
+        if entry["builders"]:
+            return True, entry["text"]
+        if _endpoint_serves_registration(record):
+            return True, entry["text"] + "; run record: endpoint READY serving the registered version"
+    return False, "; ".join(e["text"] for e in seen) or "no MLflow log_model call"
 
 
 def registered_in_uc(nb, response, record, task):

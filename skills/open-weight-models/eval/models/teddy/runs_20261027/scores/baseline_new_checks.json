@@ -1,0 +1,18 @@
+{
+  "teddy-001": {
+    "new_checks/ai_gateway/inference_table": false,
+    "new_checks/ai_gateway/usage_tracking": false,
+    "new_checks/uc_provenance/uc_registry": true,
+    "new_checks/uc_provenance/provenance_tags": false,
+    "new_checks/existing_resources/endpoint": true
+  },
+  "teddy-002": {
+    "new_checks/ai_gateway/inference_table": false,
+    "new_checks/ai_gateway/usage_tracking": false,
+    "new_checks/uc_provenance/uc_registry": true,
+    "new_checks/uc_provenance/provenance_tags": false,
+    "new_checks/existing_resources/endpoint": true,
+    "new_checks/existing_resources/table": true,
+    "new_checks/existing_resources/index": true
+  }
+}

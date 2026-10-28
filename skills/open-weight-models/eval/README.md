@@ -2,8 +2,9 @@
 
 Paired evaluation of the `open-weight-models` skill. The harness in this folder is
 shared and model-agnostic; each model family has its own settings and runs under
-`models/<family>/`. Current round: **TEDDY** (teddy-001, teddy-002) in
-`models/teddy/runs_20261026/`. Geneformer tasks come later.
+`models/<family>/`. **TEDDY** (teddy-001, teddy-002): round 1 in `models/teddy/runs_20261026/`
+(before the skill fixes), round 2 in `models/teddy/runs_20261027/` (clean rerun with the updated
+skill). Geneformer tasks come later.
 
 ```text
 eval/
@@ -13,7 +14,8 @@ eval/
   models/teddy/
     family.json            names per run, outcome settings (dim 512, which tasks have search)
     fixtures/teddy_request.json, answer_sheet.md, old_prompt_baseline.md, old_prompt_with_skill.md
-    runs_20261026/         this round: run_records.json, exported notebooks, screenshots, scores
+    runs_20261026/         round 1: run_records.json, exported notebooks, screenshots, scores
+    runs_20261027/         round 2 (same layout; tools take --round runs_20261027)
   runs_20260924/           the frozen Sep 24 – Oct 7, 2026 sprint (old task IDs)
 ```
 
@@ -107,10 +109,10 @@ never a run of one pair against a run of the other.
 | `expectations.json` | answer key: difficulty, model family, variant, capability, expected facts, checks, new checks, outcome checks, per-check severity / source / environment dependence | scoring only |
 | `scorers.py` | MLflow scorers (exports `scorers`) | scoring only |
 | `score_open_weight_models.py` | Databricks scoring notebook | scoring only |
-| `models/teddy/runs_20261026/<run_id>/<task_id>.py` | exported notebooks (after the runs; `<task_id>_attempt<n>.py` for a run repeated as attempts) | scoring only |
-| `models/teddy/runs_20261026/run_records.json` | one record per run: skill state, environment, hidden codes if opted in, backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, endpoint config, attempt, discarded / reason, notes | scoring only |
-| `models/teddy/runs_20261026/RESULTS.md` | results of the 2026-10-27 runs (draft) | — |
-| `models/teddy/runs_20261026/scores/` | per-task scores (after scoring) | — |
+| `models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>.py` | exported notebooks (after the runs; the record's `export_file` names the file when set, else `<task_id>_attempt<n>.py` for a run repeated as attempts) | scoring only |
+| `models/teddy/runs_<YYYYMMDD>/run_records.json` | one record per run: skill state, environment, hidden codes if opted in, backup, commit, Skills panel, visible steps, skill self-report, compute, resources created, outcome, endpoint config, attempt, discarded / reason, notes | scoring only |
+| `models/teddy/runs_<YYYYMMDD>/RESULTS.md` | results of that round | — |
+| `models/teddy/runs_<YYYYMMDD>/scores/` | per-task scores (after scoring) | — |
 | `eval_report.md` | results | — |
 | `README_environments.md` | known Genie Code runtime snapshots | — |
 
@@ -125,15 +127,17 @@ runs are done (step 13).
 replication pair (`old_prompt_baseline`, then `old_prompt_with_skill`). The standard pair
 of round `runs_20261026` was run on 2026-10-27 (results:
 `models/teddy/runs_20261026/RESULTS.md`; the replication pair was not run). Deviations from plan are recorded in
-`models/teddy/runs_20261026/README.md`.
+`models/teddy/runs_20261026/README.md`. Round `runs_20261027` reran all four runs on 2026-10-27/28 with the
+updated skill (results: `models/teddy/runs_20261027/RESULTS.md`).
 A skill-off run never follows a with-skill run in the same pair, so nothing about the
 skill is in a chat or memory before its baseline. Between a with-skill run and the next
 skill-off run, step 1 (`--state off`) removes the skill and step 2 clears memory. One
 task at a time, one fresh chat per task per run.
 
 Each run's notebooks live in its own run folder:
-`/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/`
-(the replication prompts also export there).
+`/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-<date>/<run_id>/`, one
+`teddy-eval-<date>` folder per round (round 1: `teddy-eval-2026-10-26`, round 2: `teddy-eval-2026-10-27`;
+the replication prompts also export there).
 
 Checklist for **each** (run, task):
 
@@ -150,10 +154,10 @@ Checklist for **each** (run, task):
    - It stops if `.assistant/skills/open-weight-models` already exists — for example
      the copy from the previous with-skill task, or the user's own install before the
      eval. To replace it, add `--replace-existing`: the script exports the existing copy
-     to `models/teddy/runs_20261026/<run_id>/backup/<task_id>-<timestamp>/` (not committed), then deletes
+     to `models/teddy/runs_<YYYYMMDD>/<run_id>/backup/<task_id>-<timestamp>/` (not committed), then deletes
      it, then installs the new copy. If creating the folder or the import fails, it
      prints the commands that restore the backup.
-   - It appends a record to `models/teddy/runs_20261026/run_records.json` with the environment Genie Code
+   - It appends a record to `models/teddy/runs_<YYYYMMDD>/run_records.json` with the environment Genie Code
      will see: the user skills folder (each `SKILL.md` with size and sha256), the
      sha256 of `/Workspace/Users/<workspace-user>/.assistant_instructions.md` if present,
      and whether `/Workspace/.assistant/skills` and
@@ -174,7 +178,7 @@ Checklist for **each** (run, task):
    evaluation, TEDDY, or the open-weight-models skill. Close that chat.
 3. **Check the Skills panel — before pasting the prompt.** Hard refresh the browser
    (Cmd+Shift+R), open Genie Code → **Customizations → Skills**, and screenshot both the
-   **User** and the **All skills** tabs (save as `models/teddy/runs_20261026/<run_id>/<task_id>_skills_panel.png`;
+   **User** and the **All skills** tabs (save as `models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>_skills_panel.png`;
    add `_user` / `_all` if they need two images). Record the filename(s) and the skills
    listed on each tab in the record's `skills_panel` (`screenshot`,
    `observed_user_tab`, `observed_all_skills_tab`). Expected (`skills_panel.expected`,
@@ -190,23 +194,23 @@ Checklist for **each** (run, task):
    `family_settings.py prompt`; fill `<catalog>`/`<workspace-user>`). Answer questions
    **only** from `models/teddy/answer_sheet.md`. Do not steer, hint or correct. Let it run
    to the end.
-6. **Export the notebook** as source to `models/teddy/runs_20261026/<run_id>/<task_id>.py`:
+6. **Export the notebook** as source to `models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>.py`:
    ```bash
    databricks workspace export \
-       /Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10/<run_id>/<task_id> \
-       --format SOURCE --file skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py -p <profile>
+       /Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-<date>/<run_id>/<task_id> \
+       --format SOURCE --file skills/open-weight-models/eval/models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>.py -p <profile>
    ```
    A repeat of the same (run, task) is exported as `<task_id>_attempt<n>.py` with
    `"attempt": n` in its record; the latest attempt is the primary sample, earlier ones are
    scored as extra samples. Only for runs installed with `--hidden-codes`, check the codes:
    ```bash
    python3 skills/open-weight-models/eval/install_skill_for_run.py --run-id <run_id> \
-       --task-id <task_id> --check-notebook skills/open-weight-models/eval/models/teddy/runs_20261026/<run_id>/<task_id>.py
+       --task-id <task_id> --check-notebook skills/open-weight-models/eval/models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>.py
    ```
 7. **Visible steps and skill self-report — after the task is complete and exported.**
    - Copy the chat's visible step list (for example "Searched documentation", file
      reads) into the record's `visible_steps.text` and save a screenshot
-     (`models/teddy/runs_20261026/<run_id>/<task_id>_steps.png`, filename in `visible_steps.screenshot`).
+     (`models/teddy/runs_<YYYYMMDD>/<run_id>/<task_id>_steps.png`, filename in `visible_steps.screenshot`).
      Step 11 (leak check) reads this list.
    - **Standard pair only:** send this as a separate message, identical in both runs:
      "List every skill from the Skill Registry that you loaded or consulted while
@@ -224,7 +228,7 @@ Checklist for **each** (run, task):
      notebook (for example the `teddy.md` input format, the pinned Hugging Face revision,
      the `run_go` gate). Write them up per run in the round's results.
 8. **Check `resources_created`, fill `uc_model_version` and `compute`** in the run's
-   record in `models/teddy/runs_20261026/run_records.json`. Step 1 pre-fills
+   record in `models/teddy/runs_<YYYYMMDD>/run_records.json`. Step 1 pre-fills
    `resources_created` with the names the prompt asked for (`family.json`, `<catalog>`
    left as a placeholder); correct any name the notebook actually used differently, and
    add `uc_model_version` from the notebook. Fill `compute.type` and
@@ -313,8 +317,8 @@ sub-check is its own pass/fail metric. The replicated set and `provenance_tags` 
 `ast` module (`# MAGIC` cells and `%`/`!` lines removed); a cell that does not parse is
 checked with the older text patterns instead, and the result's rationale says so.
 
-**Replicated set** — the Sep–Oct 2026 checks, logic unchanged, so the counts can be put next
-to the Sep–Oct 2026 counts. 8 groups: `download_staging` (temp path, XET off, pinned
+**Replicated set ("verbatim")** — the Sep–Oct 2026 checks, logic unchanged, so they reproduce the
+Sep–Oct 2026 counts as originally reported. 8 groups: `download_staging` (temp path, XET off, pinned
 `transformers`), `pyfunc_quality` (PyFunc class, imports, `load_context`, `sys.modules`
 purge, `io.StringIO`, `artifacts=`, real gene IDs from `vocab.txt`),
 `model_registration` (signature, input example, pip requirements, 70M variant),
@@ -328,6 +332,45 @@ workload type). teddy-001 has 27 sub-checks (+2 not-applicable groups), teddy-00
 Sep–Oct 2026 scores from the recorded Sep–Oct 2026 notebooks. Metric names match the Sep–Oct 2026
 files except forbidden-pattern names, which MLflow does not allow as written: use
 `scorers.mlflow_metric_name()` on an old key to get the new name.
+
+**The Sep–Oct 2026 logic is flawed, so it is kept only as a historical record** ("verbatim"
+below): it reproduces the numbers as originally reported, and nothing is counted from it.
+Thirteen of its sub-checks match literal text from `teddy.md` instead of judging their goal
+(twelve found on the Sep–Oct records, `smoke_tests/endpoint_query` on round 2):
+a notebook that reaches the goal another valid way fails (e.g. `tempfile.mkdtemp()` fails
+`uses_tmp`), and a mention in markdown, a comment, a download filter or the task prompt
+quoted in the first cell passes (e.g. "HF_HUB_DISABLE_XET … Not set" passes
+`hf_xet_disabled`).
+
+**Corrected set — the scorer of record** (`corrected_checks.py`, metric names
+`corrected/<phase>/<check>`): the same sub-checks, with each of the thirteen flawed ones
+judged by its intent; the others keep the Sep–Oct logic. It reads the notebook's Python
+cells with `ast`, reusing the reviewed goal logic of `practical_checks.py` (download
+location, Xet, the `transformers` pin, the signature), and for two checks the measured
+outcome (endpoint READY serving the registered version). Severities are those of the
+sub-check it corrects (`corrected_checks.SEVERITY_NOTE`). Headline counts, the severity
+table and the ship gate use it. Wherever the verbatim result differs, reports show it as
+a ⚑ flag with the reason. `corrected_checks.py --sep-oct --write` re-scored the Sep–Oct
+2026 exports into `runs_20260924/scores_corrected/` (new files; the recorded files are
+untouched), so rounds are compared corrected against corrected.
+
+| Sub-check | Verbatim flaw | Corrected: passes when |
+|---|---|---|
+| `download_staging/uses_tmp` | any `/tmp` text passes; `tempfile` / a Volume fails | the download (and any staging copy) goes to `/tmp`, a `tempfile` folder or a Volume, never `/local_disk0` |
+| `download_staging/hf_xet_disabled` | the name anywhere passes (even "not set"); a completed download without it fails | Xet disabled with a disabling value before the download, or recorded evidence the download completed: a later load reads from the download's destination (or a copy of it; paths followed through joins, copies and function parameters, never line order alone) and the endpoint was READY serving the registered version |
+| `download_staging/deps_pinned` | needs `transformers==<digit>`, fails any `>=` | `transformers` 5.x excluded from the serving requirements, or no `transformers` on the model path |
+| `forbidden_patterns/transformers>=` | fails `>=4.41,<5` | no `transformers` requirement allows 5.x |
+| `model_registration/infer_signature` | the word only: `ModelSignature(...)` fails, a comment passes | `log_model` gets a signature built by `infer_signature` or `ModelSignature` (or another, with recorded serving evidence) |
+| `pyfunc_quality/real_gene_ids` | the text `vocab.txt` (a download list passes) | the logged input example / endpoint payload derives by data flow from real gene data: the vocabulary, a real `.h5ad` file, an upstream tokenizer call, or files that tokenizer wrote (read back from its save path); a typed-in ID list does not count |
+| `model_registration/pip_reqs_from_source` | the text `pyproject.toml` (a download filter passes) | the notebook reads the MODEL's dependency file (under the downloaded snapshot or a copy) and its parsed contents flow into `pip_requirements`, or the serving pins agree with it (`models/teddy/family.json` `upstream_dependencies`, TEDDY `pyproject.toml` at commit `8c880aa`) |
+| `forbidden_patterns//local_disk0` | any `/local_disk0` text in code, even a message or a fallback | no download, copy or write to `/local_disk0`, unless the path variable gets an alternative (`/tmp`, `tempfile`, Volume) in the try handler / other `if` branch and that variable is what is used (a try with any handler, even `except: pass`, is not a fallback) |
+| `endpoint_deployment/sdk_enums` | needs the enum name; a REST body fails | no plain-string `workload_type` passed to an SDK constructor (keywords or `**kwargs`); a string only in a body actually sent to the REST API |
+| `endpoint_deployment/ai_gateway_config` | the class name (even an import); a REST body fails | an inference table enabled on an attached AI Gateway config, no `AutoCaptureConfigInput` |
+| `ai_search/graceful_skip` | words such as "table … not … exist" anywhere (the quoted prompt, `CREATE TABLE IF NOT EXISTS`) | an existence check on the table the index is built from whose missing branch does not raise, or the read of that table inside try/except that does not re-raise |
+| `endpoint_deployment/run_go_gate` | the names `run_go` / `SKIP_DEPLOY` anywhere | every serving-endpoint deploy call runs only when a user flag (widget, notebook / environment parameter, or True/False constant) is on — in its flag-on branch, or after a top-level `if` that stops the notebook when the flag is off — and the flag defaults to off (widget default `"false"`, constant `False`); a flag set from endpoint state is idempotency, not a gate, and a default that cannot be read from the code fails |
+
+The Sep–Oct 2026 runs have no run records, so the record-based alternatives (Xet, signature)
+cannot be credited for them.
 
 **New checks** (metric names start with `new_checks/`, scored and compared separately;
 each result's rationale says why it passed or failed):
@@ -390,11 +433,12 @@ of failed checks per severity**, whether the **outcome group passed**, and the c
 check on its own — no percentages and no single score — so every failure can be read
 against whether the run actually worked.
 
-### Known false negatives in the replicated set
+### Known false negatives in the verbatim replicated set
 
-The replicated checks are kept unchanged so they stay comparable with Sep–Oct 2026. These
-valid alternatives fail them anyway; read such failures by hand.
-`tests/test_eval_scorers.py::test_known_false_negatives` keeps this list true.
+The verbatim checks are kept unchanged so they keep reproducing the Sep–Oct 2026 numbers.
+These valid alternatives fail them; the corrected set (above) accepts them.
+`tests/test_eval_scorers.py::test_known_false_negatives` keeps this list true for the
+verbatim logic, `tests/test_corrected_checks.py` tests the corrected one.
 
 | Check | Valid alternative that fails | Where it is documented |
 |---|---|---|
@@ -413,11 +457,12 @@ Checked and **not** false negatives:
 
 - the subprocess download in `teddy.md:137-154` contains `HF_HUB_DISABLE_XET` and passes
   `download_staging/hf_xet_disabled`;
-- a range pin such as `transformers>=4.30.0,<4.52.0` correctly fails
-  `download_staging/deps_pinned` and `forbidden_patterns/transformers` for TEDDY. That
-  range in `SKILL.md:242` is the BioNeMo Geneformer `get_head_mask` workaround
-  (`SKILL.md:241-242`), not a TEDDY option; TEDDY needs exactly `transformers==4.41.0`
-  (`teddy.md:170`, `teddy.md:177`).
+- a range pin such as `transformers>=4.30.0,<4.52.0` fails the verbatim
+  `download_staging/deps_pinned` and `forbidden_patterns/transformers`. That range in
+  `SKILL.md:242` is the BioNeMo Geneformer `get_head_mask` workaround
+  (`SKILL.md:241-242`); `teddy.md:170` asks for exactly `transformers==4.41.0`. The
+  corrected checks pass any range that excludes 5.x (the failure `teddy.md:177`
+  describes): baseline/teddy-001 attempt 2 served TEDDY with `transformers` 4.57.6.
 
 ## Scoring and ship gate
 
@@ -427,16 +472,16 @@ or the `old_prompt_*.md` text with placeholders as written); it stops if the lat
 scores only the pairs that were run (a pair whose records are all discarded is skipped)
 and stops if a counted record has no recorded outcome or a protocol gap. Discarded
 records are left out. It extracts scores with `compare_runs.extract_scores()`, writes
-`models/teddy/runs_20261026/scores/<run_id>_scores.json` (all metrics; extra attempts as
+`models/teddy/runs_<YYYYMMDD>/scores/<run_id>_scores.json` (all metrics; extra attempts as
 `<run_id>_attempt_<n>_scores.json`) and `<run_id>_<group>.json`, runs
 `compare_runs.main()` within each pair only — `baseline` vs `with_skill`,
 `old_prompt_baseline` vs `old_prompt_with_skill`, primary samples — once per group
-(replicated, new checks, outcome, convention, and the judge if enabled), and prints the
-severity table.
+(corrected, verbatim replicated, new checks, outcome, convention, and the judge if
+enabled), and prints the severity table (corrected, new checks and outcome counted).
 
 A task passes a group only if every check in that group passes. Ship gate (skill-eval
 default): at least one task-level win and zero regressions, judged on the standard pair,
-for the replicated set, the new checks and the outcome group each. The replication pair
+for the corrected set, the new checks and the outcome group each. The replication pair
 is reported next to the Sep–Oct 2026 results, not used for the gate. Two tasks show
 direction, not statistical significance; report raw counts, never percentages.
 

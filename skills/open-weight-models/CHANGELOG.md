@@ -7,6 +7,41 @@ frontmatter `version` is the source of truth for releases.
 ## [Unreleased]
 
 ### Added
+- `eval/corrected_checks.py` — the scorer of record for the replicated Sep–Oct 2026
+  sub-checks: twelve of them matched literal text and were wrong both ways (valid
+  alternatives failed; mentions in markdown, download filters or the quoted prompt passed),
+  so each is judged by its intent (download location, Xet or a completed download, a
+  `transformers` pin excluding 5.x, a real signature, real gene data in the example,
+  serving pins that agree with the model's `pyproject.toml` — recorded in
+  `models/teddy/family.json` `upstream_dependencies` —, no unguarded `/local_disk0` write,
+  no string workload type for the SDK, an attached inference table, a missing-table guard,
+  a user-set deploy gate). Metric names `corrected/<phase>/<check>`; severities unchanged.
+  `score_open_weight_models.py` logs it as the primary group; the severity table and ship
+  gate count it, not the verbatim logic, which is kept as a historical record shown as ⚑
+  flags. Corrected score files for the 2026-10-27 round (`scores/<run>_corrected.json`)
+  and a corrected re-score of the Sep–Oct 2026 exports
+  (`runs_20260924/scores_corrected/`, new files; recorded files untouched). `RESULTS.md`,
+  the round README, `eval/README.md` and a note in `runs_20260924/README.md` explain the
+  flaws. Tests in `tests/test_corrected_checks.py`. The corrected `run_go_gate` needs
+  every serving-endpoint deploy call to be reachable only with the user's flag on, and
+  the flag to default to off (a widget default of "true", a constant `True` or a default
+  that cannot be read from the code fails). After review, the other corrections need data
+  flow or file relationships, not presence or line order: the gene IDs of the logged
+  example, the model's own dependency file flowing into `pip_requirements`, a fallback
+  path that is actually used, a REST body actually sent, the guard on the index's source
+  table, and (also in `practical_checks.py`) a weight load that reads the download's
+  destination.
+- Round 2 of the TEDDY runs (`eval/models/teddy/runs_20261027/`): a clean rerun of all
+  four runs with the updated skill — run records, exported notebooks (and the notebook as it
+  stood before each go-ahead), scores, `RESULTS.md` and a round README. Run records now name
+  their export (`export_file`). While scoring it, six checks were fixed, each with tests and
+  none changing a round-1 or Sep–Oct result: an `assert FLAG` counts as a deploy gate; a
+  download run in a subprocess script is followed back to the notebook's path variables, and
+  a `/local_disk0` path with a used fallback is accepted by both `uses_tmp` and `local_disk0`
+  (the fallback helpers now live once, in `practical_checks.py`); a corrected
+  `smoke_tests/endpoint_query` (a request actually sent, SDK or REST POST to `/invocations`;
+  thirteen corrected sub-checks); `deps_pinned` judged on the served model's code only; and the
+  completed-download evidence follows a per-file copy from the download folder.
 - TRIAL, not adopted: `eval/practical_checks.py` — goal-based "practical" checks that
   accept any valid way of reaching each goal (parsed code + recorded outcome), with
   tests in `tests/test_practical_checks.py`, and

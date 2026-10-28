@@ -74,3 +74,35 @@ still imports this folder's `scorers.py` and `compare_runs.py` and never points 
 
 Its logic was not edited. To re-check the recorded scores, run
 `tests/test_eval_scorers.py`, which re-scores `results/` with this `scorers.py`.
+
+## Note added 2026-10-27: these checks were flawed; corrected re-scores alongside
+
+Everything above, and every file listed in "Files", is kept exactly as recorded. This
+note is the only addition.
+
+The Sep–Oct 2026 checks in `scorers.py` match literal text instead of judging their goal,
+so the recorded numbers are partly wrong in both directions. Examples from these runs:
+`graceful_skip` passed both oss-002 notebooks because the task prompt, quoted in the first
+cell, contains "table … not … exist"; `hf_xet_disabled` passed the oss-002 baseline because
+its development log says `HF_HUB_DISABLE_XET` was "Not set"; `real_gene_ids` passed the
+oss-001 baseline because `vocab.txt` is in a download file list, while its input example is
+hand-written token IDs. The full list of flawed sub-checks and the corrected rules are in
+[`../README.md`](../README.md) ("Corrected set").
+
+- **Recorded numbers are kept as reported** (`baseline_scores.json`,
+  `with_skill_scores.json`, `reports/`, `eval_report.md`); `tests/test_eval_scorers.py`
+  still proves they came from this `scorers.py`.
+- **Corrected re-scores are provided alongside**, as new files in `scores_corrected/`
+  (`baseline_corrected.json`, `with_skill_corrected.json`), written by
+  `../corrected_checks.py --sep-oct --write` from the same `results/<arm>/<task>.txt`
+  exports. These runs have no run records, so only their code could be judged.
+
+Replicated sub-checks passed, as originally reported → re-scored with corrected logic:
+
+| Task | Baseline | With skill |
+|---|---|---|
+| oss-001 (teddy-001) | 21 / 29 → 18 / 29 | 29 / 29 → 28 / 29 |
+| oss-002 (teddy-002) | 27 / 31 → 22 / 31 | 31 / 31 → 29 / 31 (the "v2" run) |
+
+Counts as in the score files (a not-applicable group counts as one pass). The direction is
+unchanged: the with-skill runs pass more sub-checks than the baselines on both tasks.

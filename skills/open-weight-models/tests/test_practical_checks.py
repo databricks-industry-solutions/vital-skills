@@ -187,6 +187,13 @@ def test_xet_recorded_evidence(pc):
     assert ok and "recorded evidence" in reason
     assert not _check(pc, "xet_download_ok", source, NOT_READY)[0]                  # files used, never READY
     assert not _check(pc, "xet_download_ok", _nb(IMPORT, DOWNLOAD), READY)[0]       # nothing uses the files
+    # Codex review of 117ac56: a later load of files from elsewhere is not the download's files
+    other = _nb(IMPORT, DOWNLOAD, "model = Model.from_pretrained('/Volumes/c/s/v/elsewhere')")
+    assert not _check(pc, "xet_download_ok", other, READY)[0]
+    # ... but a copy of the download, loaded through a function parameter, is
+    staged = _nb(IMPORT, "import shutil\nlocal = snapshot_download('r', local_dir='/tmp/t')\nshutil.copytree(local, '/Volumes/c/s/v/r')",
+                 "def load(d):\n    return Model.from_pretrained(f'{d}/70M')\nm = load('/Volumes/c/s/v/r')")
+    assert _check(pc, "xet_download_ok", staged, READY)[0]
 
 
 # ---- model_loads_with_pinned_deps -----------------------------------------------------------
