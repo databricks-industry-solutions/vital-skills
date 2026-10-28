@@ -155,15 +155,17 @@ Not counted, but also with the skill only: GPU serving and the shared request fo
 
 ### Problems found in the skill, and where they are fixed
 
-| Problem | Found | Fixed in | Seen in the latest round |
-|---|---|---|---|
-| Inference controls sent with the SDK's `extra_params`, which a custom model silently ignores | with skill, round 1 | `SKILL.md` Troubleshooting #13; `teddy.md` "Sending inference controls" | both with-skill runs sent them in the REST body and showed a changed value changes the output |
-| Wrapper compared only with itself, not with upstream TEDDY | with skill, round 1 | `teddy.md` "Upstream-parity test" | both matched upstream (cosine ≥ 0.99999) |
-| `EndpointCoreConfigInput` needs `name=` (databricks-sdk 0.71.0+) | most round-1 runs | the skill's examples | with-skill runs right first time; both baselines hit the error |
-| Genes outside TEDDY's vocabulary mapped to `<unk>` (upstream drops them) | `teddy.md`, round 1 | `teddy.md` "Out-of-vocabulary (OOV) genes" | both with-skill models reject a request with no known gene |
-| Drop and recreate an index on a dimension mismatch | `teddy.md`, round 1 | `SKILL.md` Best Practices #15 (write additively, ask before replacing) | nothing replaced in either with-skill run |
-| Licence ambiguous upstream: model card Apache-2.0, bundled package MIT | round 1 | the skill records both and asks the user to confirm | both with-skill runs recorded both |
-| "Deploy … Write the code." read as code only, so it stopped to ask | — | prompt wording, next round | with skill teddy-002; reported, not scored |
+Ordered by how much each one matters for deploying and serving.
+
+| | Problem | Effect on deploying / serving | Found | Fixed in | Seen in the latest round |
+|---|---|---|---|---|---|
+| 🔴 | `EndpointCoreConfigInput` needs `name=` (databricks-sdk 0.71.0+) | endpoint creation fails with an error until it is added | most round-1 runs | the skill's examples | with-skill runs right first time; both baselines hit the error and fixed it |
+| 🔴 | Genes outside TEDDY's vocabulary mapped to `<unk>` (upstream drops them) | the endpoint works but its embeddings differ from what TEDDY produces | `teddy.md`, round 1 | `teddy.md` "Out-of-vocabulary (OOV) genes" | both with-skill models drop them and reject a request with no known gene |
+| 🟠 | Inference controls sent with the SDK's `extra_params`, which a custom model silently ignores | the call succeeds but a requested setting (e.g. `max_seq_len`) is not applied, with no error | with skill, round 1 | `SKILL.md` Troubleshooting #13; `teddy.md` "Sending inference controls" | both sent them in the REST body and showed a changed value changes the output |
+| 🟠 | Wrapper compared only with itself, not with upstream TEDDY | a wrapper that drifts from TEDDY would deploy without anyone noticing | with skill, round 1 | `teddy.md` "Upstream-parity test" | both matched upstream (cosine ≥ 0.99999) |
+| 🟠 | Drop and recreate an index on a dimension mismatch | serving unaffected; risk of deleting someone's existing index | `teddy.md`, round 1 | `SKILL.md` Best Practices #15 (write additively, ask before replacing) | nothing replaced in either with-skill run |
+| 🟡 | Licence ambiguous upstream: model card Apache-2.0, bundled package MIT | none technically; matters before redistributing the model | round 1 | the skill records both and asks the user to confirm | both with-skill runs recorded both |
+| 🟡 | "Deploy … Write the code." read as code only, so it stopped to ask | none; one extra confirmation | with skill teddy-002, latest round | prompt wording, next round | reported, not scored |
 
 The scorer had problems too: literal-text matches and path-tracing gaps that failed valid code.
 13 replicated checks are now judged by intent (one added in round 2) and five more were corrected
@@ -195,8 +197,12 @@ they work. Follow-ups, in order:
 
 ## Geneformer
 
-**Pending.** Not evaluated yet (geneformer-001 / -002 planned). The Sep–Oct 2026 Geneformer
-notebooks and one with-skill output are kept, unscored, in `runs_20260924/`.
+**Pending.** Not evaluated yet (geneformer-001 / -002 planned). Starting point, as for TEDDY:
+the hand-built, working reference notebooks the model reference was written from —
+`gt_geneformer` (Hugging Face path) and `gt_geneformer_bionemo` (NVIDIA BioNeMo path), named in
+`references/models/geneformer.md` — from which the tasks and checks are drawn; the runs must not
+be able to read them. The Sep–Oct 2026 Geneformer notebooks and one with-skill output are kept,
+unscored, in `runs_20260924/`.
 
 ## Reproduce
 
