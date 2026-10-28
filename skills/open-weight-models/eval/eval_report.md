@@ -124,9 +124,18 @@ the row in [`CHECKS.md`](CHECKS.md)):
 | Sep–Oct, teddy-001 (10) | files saved where serverless can write (`uses_tmp`), the Xet download setting handled (`hf_xet_disabled`), `transformers` pinned below 5 (`deps_pinned`), no open-ended `transformers>=` pin (`transformers`), weights and code declared as model artifacts (`artifacts_declared`), real gene IDs in the test input (`real_gene_ids`), registered model called before serving (`registration_smoke`), request logging configured, serving pins from the dependency file, module clean-up |
 | Sep–Oct, teddy-002 (7) | the Xet setting, the `transformers` pin, no open-ended pin, real gene IDs, registered model called before serving, request logging configured, serving pins from the dependency file |
 
-No sub-check passed without the skill and failed with it, in any round. Sep–Oct as originally
-reported (the old literal-text logic, and a with-skill prompt that told Genie Code to read the
-skill): [`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
+No sub-check passed without the skill and failed with it, in any round.
+
+**Sep–Oct as originally reported** (old literal-text logic): oss-001 baseline 19, with skill 27
+(of 27); oss-002 baseline 26, with skill 30 (of 30). The corrected logic lowers the baseline to 16
+and 21 because some old checks passed on a word, not on what the code does: the gene vocabulary
+file was named but the test input was not real gene data; a deploy-switch word appeared but the
+deploy calls were not behind it; there was no `transformers>=` text, yet the serving pins allowed
+5.x (oss-002 also: the Xet setting named but not set, and no guard on the cell table; one check
+went the other way, `sdk_enums`). With the skill, 27 → 26 and 30 → 28: the deploy switch (its
+saved default could not be read, or it was missing) and, on oss-002, the cell-table guard. Detail
+and the original caveats (the with-skill prompt told Genie Code to read the skill):
+[`runs_20260924/eval_report.md`](runs_20260924/eval_report.md).
 
 ### Where the skill helps — by category
 
@@ -157,7 +166,7 @@ Sep–Oct setup also differed. The skill's lasting help is in **governance** (re
 provenance), **deployment safety** (a deploy switch saved off) and **reproducibility** (pins from
 the model's own dependency file). Not counted, but also with the skill only: GPU serving and the shared request format.
 
-### Problems found in the skill, and where they are fixed
+### Problems the 2026-10-27 runs found in the skill, and where they are fixed
 
 Ordered by how much each one matters for deploying and serving.
 
