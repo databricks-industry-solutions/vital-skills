@@ -186,7 +186,9 @@ repo's ship rule (`skill-eval`: the skill must win at least one task and make no
 endpoints worked with and without the skill, so the gain is in how they are built, not whether
 they work. Follow-ups, in order:
 1. **Automate the runs.** Hand-driven runs in the workspace UI were slow and error-prone (wrong
-   chat tab, compute not selected, a stale prompt path); each slip cost a rerun. The Genie Code
+   chat tab, compute not selected, a stale prompt path); each slip cost a rerun. Genie Code's
+   memories also had to be checked and cleared by hand before every run: they are saved on the
+   service side with no off switch, and in Sep–Oct they carried eval details into later chats. The Genie Code
    CLI harness in `benchmarks/biomnibench/` already switches skills and memories by config and
    runs replicates unattended; adapt it for these tasks, with outcome checks and teardown
    scripted per run, and report it next to the workspace runs (as `accelerators` does).
@@ -197,9 +199,10 @@ they work. Follow-ups, in order:
 
 - **One sample per (run, task) in each round, run by hand:** directional, not statistical. Manual
   runs in the workspace UI are slow and prone to the same mistakes repeating (wrong chat tab,
-  compute not selected, a stale prompt, a go-ahead timed wrong); several runs had to be redone. Running
-  the tasks through the Genie Code CLI (follow-up 1 above) would allow repeats and remove those
-  steps.
+  compute not selected, a stale prompt, a go-ahead timed wrong, memories to clear before each run);
+  several runs had to be redone. Running the tasks through the Genie Code CLI (follow-up 1 above)
+  would allow repeats and remove those steps: its config profile switches skills and memories off
+  per run.
 - Checks come from the skill's own references, so they can favour it; the corrected checks and the
   practical-checks trial (reported in each round) judge goals instead of text.
 - Built-in skills are always on, so the result is the skill's value on top of them.
