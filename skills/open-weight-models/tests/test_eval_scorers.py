@@ -687,7 +687,7 @@ def test_update_family_scores_adds_a_round_and_keeps_the_others(scorers, tmp_pat
         "outcome/endpoint_ready": True, "pyfunc_quality/load_context": False}}})
     body = json.loads(path.read_text())
     assert list(body["rounds"]) == ["runs_20991231", "runs_20990101"]            # newest first, old round kept
-    assert body["rounds"]["runs_20991231"] == {"notes": "notes_20991231.md",
+    assert body["rounds"]["runs_20991231"] == {"notes": "ROUNDS.md",
                                                 "samples": {"baseline": {"teddy-001": {"outcome/endpoint_ready": True}}}}
     assert body["counted_groups"] == list(scorers.COUNTED_GROUPS)
 
@@ -699,8 +699,11 @@ def test_latest_round_scores_agree_with_the_summary_pair():
 
 
 def test_every_round_in_scores_json_has_its_notes():
+    """Each round's "notes" points to its folded section in ROUNDS.md (file#anchor) and that section exists."""
     for name, entry in json.loads((TEDDY_DIR / "scores.json").read_text())["rounds"].items():
-        assert (TEDDY_DIR / entry["notes"]).is_file(), name
+        file, _, anchor = entry["notes"].partition("#")
+        assert (TEDDY_DIR / file).is_file(), name
+        assert f'<a id="{anchor}"></a>' in (TEDDY_DIR / file).read_text(), name
 
 
 @pytest.mark.skipif(not (ROUND_2.is_dir() and ROUND_1.is_dir()),
@@ -721,8 +724,7 @@ def test_eval_docs_link_only_to_files_in_the_repo():
     import subprocess
 
     tracked = set(subprocess.run(["git", "ls-files"], cwd=SKILL_DIR, capture_output=True, text=True).stdout.split())
-    docs = [EVAL_DIR / "eval_report.md", EVAL_DIR / "README.md", TEDDY_DIR / "ROUNDS.md",
-            *sorted(TEDDY_DIR.glob("notes_*.md"))]
+    docs = [EVAL_DIR / "eval_report.md", EVAL_DIR / "README.md", TEDDY_DIR / "ROUNDS.md"]
     for doc in docs:
         for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", doc.read_text()):
             if target.startswith(("http://", "https://", "mailto:")):

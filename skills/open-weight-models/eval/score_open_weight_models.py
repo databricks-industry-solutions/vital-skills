@@ -182,7 +182,7 @@ for run in SUMMARY_FILES:
     if run in scores:
         print(f"updated {update_summary(EVAL_DIR, run, scores[run])}")
 # This round's counted scores, every sample, in the family's scores.json, kept in the repo next to the round's
-# notes (copy the round folder's RESULTS.md to models/<family>/notes_<YYYYMMDD>.md once it is final).
+# notes (once final, add the round folder's RESULTS.md to models/<family>/ROUNDS.md, folded, under "Round details").
 print("updated", update_family_scores(RUN_DIR.parent / "scores.json", RUN_DIR.name, scores))
 
 # COMMAND ----------

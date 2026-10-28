@@ -1,6 +1,6 @@
 {
   "family": "teddy",
-  "about": "Counted scores of every TEDDY round, every sample: task -> check -> passed. Round notes: notes_<YYYYMMDD>.md.",
+  "about": "Counted scores of every TEDDY round, every sample: task -> check -> passed. Each round's notes: ROUNDS.md, Round details.",
   "counted_groups": [
     "corrected",
     "new_checks",
@@ -9,7 +9,7 @@
   "rounds": {
     "runs_20261027": {
       "label": "round 2 (latest)",
-      "notes": "notes_20261027.md",
+      "notes": "ROUNDS.md#round-2",
       "samples": {
         "baseline": {
           "teddy-001": {
@@ -193,7 +193,7 @@
     },
     "runs_20261026": {
       "label": "round 1",
-      "notes": "notes_20261026.md",
+      "notes": "ROUNDS.md#round-1",
       "samples": {
         "baseline": {
           "teddy-001": {
@@ -419,7 +419,7 @@
     },
     "runs_20260924": {
       "label": "Sep\u2013Oct 2026",
-      "notes": "notes_20260924.md",
+      "notes": "ROUNDS.md#sep-oct-2026",
       "task_ids": "Sep\u2013Oct 2026 IDs: oss-001 = teddy-001, oss-002 = teddy-002",
       "samples_original_checks": {
         "baseline": {

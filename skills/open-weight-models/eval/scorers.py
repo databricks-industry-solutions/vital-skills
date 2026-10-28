@@ -1098,13 +1098,14 @@ def update_family_scores(path, round_name: str, scores_by_sample: dict, notes: s
     models/<family>/scores.json under "rounds" -> round_name; the other rounds in the file are kept.
 
     The round folder itself (exported notebooks, run records, per-group score files) is git-ignored; this file
-    and the round's notes (models/<family>/notes_<YYYYMMDD>.md) are what the repo keeps of each round.
+    and the round's notes (folded under "Round details" in models/<family>/ROUNDS.md) are what the repo keeps
+    of each round. `notes` names that section, e.g. "ROUNDS.md#round-2"; it defaults to ROUNDS.md.
     """
     path = Path(path)
     body = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"rounds": {}}
     body["counted_groups"] = list(COUNTED_GROUPS)
     entry = body["rounds"].get(round_name, {})
-    entry.update({"notes": notes or f"notes_{round_name.removeprefix('runs_')}.md",
+    entry.update({"notes": notes or entry.get("notes", "ROUNDS.md"),
                   "samples": {label: counted_scores(s) for label, s in scores_by_sample.items()}})
     body["rounds"][round_name] = entry
     body["rounds"] = dict(sorted(body["rounds"].items(), reverse=True))        # newest round first
