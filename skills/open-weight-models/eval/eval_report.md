@@ -38,9 +38,21 @@ minor checks (counted checks only, [`CHECKS.md`](CHECKS.md)).
 
 ## TEDDY
 
-Two tasks: **teddy-001** (deploy TEDDY-70M as a serving endpoint) and **teddy-002** (deploy it
-and build a nearest-neighbour cell search). One fresh chat per run on serverless GPU notebooks,
-memories checked before each run, the skill installed only for the with-skill runs. Detail:
+### Tasks
+
+| ID (Sep–Oct ID) | The request, as pasted (names and paths per run, from `evalset.json`) | What a run has to build | Sub-checks | Difficulty |
+|---|---|---|---|---|
+| teddy-001 (oss-001) | "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY … Use these names: model …, serving endpoint …, and store downloaded files under … Write the code and explain your decisions." | a UC-registered TEDDY-70M model and a serving endpoint that returns one 512-number embedding per cell | 38 | hard |
+| teddy-002 (oss-002) | "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. … Use these names: model …, serving endpoint …, Vector Search endpoint …, embeddings table …, index … Write the code." | the same, plus a table of reference-cell embeddings, a Vector Search endpoint and index, and a query that returns the nearest cells' types | 45 | hard |
+| geneformer-001 (oss-005), geneformer-002 (oss-006) | Geneformer V1-10M deploy; Geneformer V2 (BioNeMo) deploy | — | — | planned |
+
+Sub-checks per task are listed in [`CHECKS.md`](CHECKS.md) (the outcome check needs the endpoint
+— and for teddy-002 the search — to work when measured).
+
+### How it was run
+
+One fresh chat per run on serverless GPU notebooks, memories checked before each run, the skill
+installed only for the with-skill runs. Detail:
 [round 2 `RESULTS.md`](models/teddy/runs_20261027/RESULTS.md) (current),
 [round 1 `RESULTS.md`](models/teddy/runs_20261026/RESULTS.md) (before the skill fixes),
 [Sep–Oct 2026](runs_20260924/eval_report.md) (historical, pre-rename skill).
@@ -173,9 +185,4 @@ uv run --isolated --with-requirements skills/open-weight-models/tests/requiremen
 Score files: `models/<family>/runs_<date>/scores/`; run records (environment, outcome, skill-use
 evidence): `models/<family>/runs_<date>/run_records.json`.
 
-| ID | Sep–Oct 2026 ID | Task |
-|---|---|---|
-| teddy-001 | oss-001 | TEDDY-70M deploy |
-| teddy-002 | oss-002 | TEDDY-70M deploy + nearest-neighbour cell search |
-| geneformer-001 | oss-005 | Geneformer V1-10M deploy (later) |
-| geneformer-002 | oss-006 | Geneformer V2 BioNeMo deploy (later) |
+Task list: "TEDDY → Tasks" above.
