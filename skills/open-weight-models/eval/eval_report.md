@@ -11,7 +11,7 @@
 3. **The evaluation found real problems in the skill and they are fixed:** six, for example
    settings that a custom model silently ignored. The second round shows the fixes work.
 4. **Limits:** one run per task per arm, driven by hand in the workspace, so read this as
-   direction, not statistics; automated runs are the next step (see Verdict). The checks were
+   direction, not statistics; automated runs are the next step ("Limitations and next steps"). The checks were
    corrected along the way (some had failed valid code); the numbers below use the corrected
    checks.
 
@@ -181,38 +181,21 @@ none of their results changed (round 2 `RESULTS.md`, "How scored").
 ### Verdict
 
 **Ship with follow-ups.** In the latest round, with the skill both tasks passed every sub-check and
-without it neither did, and no sub-check got worse with the skill (in any round). That meets the
-repo's ship rule (`skill-eval`: the skill must win at least one task and make none worse). The
-endpoints worked with and without the skill, so the gain is in how they are built, not whether
-they work. Follow-ups, in order:
-1. **Automate the runs.** Hand-driven runs in the workspace UI were slow and error-prone (wrong
-   chat tab, compute not selected, a stale prompt path); each slip cost a rerun. Genie Code's
-   memories also had to be checked and cleared by hand before every run: they are saved on the
-   service side with no off switch, and in Sep–Oct they carried eval details into later chats. The Genie Code
-   CLI harness in `benchmarks/biomnibench/` already does the setup by script: it runs
-   `genie exec` once per task, arm and repeat in a fresh folder, with a config profile that turns
-   memories and personal skills off, copies the skills at a pinned commit into that folder for the
-   skills arm, and logs which skills were opened (its `README.md`, "How it works"). Adapt it for
-   these tasks, with outcome checks and teardown scripted per run, and report it next to the
-   workspace runs (as `accelerators` does). The CLI works from a local folder, not a serverless
-   GPU notebook, so it complements the workspace runs rather than replacing them.
-2. Reword the prompts so "deploy" and "write the code only" are distinct — not done yet: the prompts
-   in `evalset.json` were kept word for word so rounds 1 and 2 stay comparable, and the skill has
-   no line yet for a request that mixes the two.
-3. Geneformer.
+without it neither did; no sub-check got worse with the skill in any round. That meets the repo's
+ship rule (`skill-eval`: win at least one task, make none worse). The endpoints worked with and
+without the skill, so the gain is in how they are built, not whether they work.
 
-### Limitations
+### Limitations and next steps
 
-- **One sample per (run, task) in each round, run by hand:** directional, not statistical. Manual
-  runs in the workspace UI are slow and prone to the same mistakes repeating (wrong chat tab,
-  compute not selected, a stale prompt, a go-ahead timed wrong, memories to clear before each run);
-  several runs had to be redone. Running the tasks through the Genie Code CLI (follow-up 1 above)
-  would allow repeats and remove those steps: its config profile switches skills and memories off
-  per run.
-- Checks come from the skill's own references, so they can favour it; the corrected checks and the
-  practical-checks trial (reported in each round) judge goals instead of text.
-- Built-in skills are always on, so the result is the skill's value on top of them.
-- Each round's `RESULTS.md` records the setup and any slips.
+| Limitation | Next step |
+|---|---|
+| One run per task per arm, by hand in the workspace UI: slow, and the same mistakes kept repeating (wrong chat tab, compute not selected, a stale prompt, a go-ahead timed wrong); Genie Code's memories had to be cleared by hand before every run (saved on the service side, no off switch; in Sep–Oct they carried eval details into later chats). Several runs had to be redone. Directional, not statistical. | **Automate the runs** with the Genie Code CLI harness in `benchmarks/biomnibench/`: it runs `genie exec` once per task, arm and repeat in a fresh folder, with a config profile that turns memories and personal skills off, copies the skills in at a pinned commit, and logs which skills were opened. Add outcome checks and teardown per run, and report it next to the workspace runs (as `accelerators` does); the CLI works from a local folder, not a serverless GPU notebook, so it complements the workspace runs. |
+| The prompt "Deploy … Write the code." can be read as code only (one with-skill run stopped to ask). | **Reword the prompts** so "deploy" and "write the code only" are distinct, and add a skill line for a request that mixes them. Not done yet: the prompts were kept word for word so rounds 1 and 2 compare. |
+| The checks come from the skill's own references, so they can favour it. | The corrected checks and the practical-checks trial judge goals instead of text; keep fixing checks as runs show them failing valid code. |
+| Built-in skills are always on. | None: the result is the skill's value on top of them. |
+| One model family so far. | **Geneformer** (below). |
+
+Each round's `RESULTS.md` records its setup and any slips.
 
 ## Geneformer
 
