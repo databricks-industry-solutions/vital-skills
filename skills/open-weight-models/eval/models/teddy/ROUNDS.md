@@ -9,15 +9,16 @@ installed only for the with-skill runs.
 
 **Rounds**, newest first:
 
-| Round | When | What it is | Notes and scores |
+| Round | When | What it is | Notes |
 |---|---|---|---|
-| **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) | [notes](../../results/teddy_20261027.md) · [scores](../../results/teddy_20261027_scores.json) |
-| Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists | [notes](../../results/teddy_20261026.md) · [scores](../../results/teddy_20261026_scores.json) |
-| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [notes](../../results/teddy_20260924.md) · [scores](../../results/teddy_20260924_scores.json) |
+| **Round 2 — the latest** | 2026-10-27/28 | a clean rerun of all four runs with the fixed skill (`7ca4eee`) | [notes](notes_20261027.md) |
+| Round 1 | 2026-10-27 | the same tasks, before the skill fixes this report lists | [notes](notes_20261026.md) |
+| Sep–Oct 2026 | 2026-09-24 to 10-07 | the original sprint, on the skill before its rename from `oss-models` | [notes](notes_20260924.md) |
 
-"Latest round" below means round 2. Each round's notes and counted scores are in `eval/results/`; the round
-folders themselves (`runs_<date>/`: exported notebooks, run records, per-group score files) are git-ignored.
-The latest round's scores are also in `eval/baseline_scores.json` and `eval/with_skill_scores.json`.
+"Latest round" below means round 2. Counted scores of every round, every sample, are in one file,
+[`scores.json`](scores.json); the latest round's are also in `eval/baseline_scores.json` and
+`eval/with_skill_scores.json`. The round folders themselves (`runs_<date>/`: exported notebooks, run records,
+per-group score files) are git-ignored.
 
 ## Results by round
 
@@ -59,7 +60,7 @@ deploy calls were not behind it; there was no `transformers>=` text, yet the ser
 5.x (oss-002 also: the Xet setting named but not set, and no guard on the cell table; one check
 went the other way, `sdk_enums`). With the skill, 27 → 26 and 30 → 28: the deploy switch (its
 saved default could not be read, or it was missing) and, on oss-002, the cell-table guard. Detail and the
-original caveats (the with-skill prompt told Genie Code to read the skill): [notes](../../results/teddy_20260924.md).
+original caveats (the with-skill prompt told Genie Code to read the skill): [notes](notes_20260924.md).
 
 ## Where the skill helps — by category
 

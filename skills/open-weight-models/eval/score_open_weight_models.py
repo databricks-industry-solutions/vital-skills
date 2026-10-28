@@ -55,8 +55,8 @@ for directory in (EVAL_DIR, SCRIPTS_DIR):
         sys.path.insert(0, str(directory))
 
 from scorers import (
-    GROUPS, SUMMARY_FILES, guideline_judges, metric_group, round_results_path, run_prompts, scorers as all_scorers,
-    severity_table, update_summary, write_round_results,
+    GROUPS, SUMMARY_FILES, guideline_judges, metric_group, run_prompts, scorers as all_scorers, severity_table,
+    update_family_scores, update_summary,
 )
 from check_outcome import outcome_scores
 from corrected_checks import corrected_scorers
@@ -181,9 +181,9 @@ for label in samples:
 for run in SUMMARY_FILES:
     if run in scores:
         print(f"updated {update_summary(EVAL_DIR, run, scores[run])}")
-# This round's counted scores, every sample, kept in the repo next to the round's notes
-# (copy the round folder's RESULTS.md to results/<family>_<YYYYMMDD>.md once it is final).
-print("wrote", write_round_results(round_results_path(EVAL_DIR, FAMILY, RUN_DIR), FAMILY, RUN_DIR.name, scores))
+# This round's counted scores, every sample, in the family's scores.json, kept in the repo next to the round's
+# notes (copy the round folder's RESULTS.md to models/<family>/notes_<YYYYMMDD>.md once it is final).
+print("updated", update_family_scores(RUN_DIR.parent / "scores.json", RUN_DIR.name, scores))
 
 # COMMAND ----------
 

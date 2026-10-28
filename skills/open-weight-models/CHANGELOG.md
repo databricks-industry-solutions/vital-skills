@@ -107,13 +107,13 @@ frontmatter `version` is the source of truth for releases.
 ### Changed
 - Round folders (`eval/models/<family>/runs_<date>/`: exported notebooks, run records, per-run scores) are
   no longer kept in the repository (reviewer request): they are git-ignored. The repo keeps the summary, as
-  other skills do: `eval/eval_report.md`, `eval/models/teddy/ROUNDS.md`, `eval/results/` (each round's notes,
-  `teddy_<YYYYMMDD>.md`, and counted scores of every sample, `teddy_<YYYYMMDD>_scores.json`, written by
-  `scorers.write_round_results`; `ROUNDS.md` links to them), and `eval/baseline_scores.json` /
+  other skills do: `eval/eval_report.md`; in `eval/models/teddy/`, `ROUNDS.md`, each round's notes
+  (`notes_<YYYYMMDD>.md`, linked from `ROUNDS.md`) and one `scores.json` with the counted scores of every round
+  and sample (written by `scorers.update_family_scores`); and `eval/baseline_scores.json` /
   `eval/with_skill_scores.json` (latest round, counted checks — corrected, new checks, outcome — in
   skill-eval's format; `compare_runs.py` on them gives the report's verdict), written by the scoring notebook
   (`scorers.update_summary`). The Sep–Oct notebooks and score files that `main` kept in `tests/` and
-  `tests/results/` go with the round folders; their notes and scores are `eval/results/teddy_20260924*`. Tests
+  `tests/results/` go with the round folders; their notes and scores are `notes_20260924.md` and `scores.json`. Tests
   that replay round
   records skip where the folders are absent (e.g. CI); `test_metric_names_are_valid_mlflow_names` no longer
   needs them.

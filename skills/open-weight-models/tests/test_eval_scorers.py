@@ -675,32 +675,40 @@ def test_committed_summary_matches_round_2_scores(scorers):
         assert json.loads((EVAL_DIR / name).read_text()) == scorers.counted_scores(full), name
 
 
-# ---- per-round results kept in the repo (eval/results/) ----------------------------------------------
-RESULTS = EVAL_DIR / "results"
-ROUND_1 = EVAL_DIR / "models" / "teddy" / "runs_20261026"
+# ---- per-round scores kept in the repo (eval/models/teddy/scores.json) ------------------------------
+TEDDY_DIR = EVAL_DIR / "models" / "teddy"
+ROUND_1 = TEDDY_DIR / "runs_20261026"
 
 
-def test_write_round_results_keeps_counted_groups_per_sample(scorers, tmp_path):
-    path = scorers.write_round_results(scorers.round_results_path(tmp_path, "teddy", "x/runs_20991231"), "teddy",
-                                       "runs_20991231", {"baseline": {"teddy-001": {"outcome/endpoint_ready": True,
-                                                                                    "pyfunc_quality/load_context": False}}})
-    assert path == tmp_path / "results" / "teddy_20991231_scores.json"
+def test_update_family_scores_adds_a_round_and_keeps_the_others(scorers, tmp_path):
+    path = tmp_path / "scores.json"
+    path.write_text(json.dumps({"rounds": {"runs_20990101": {"label": "old", "samples": {}}}}))
+    scorers.update_family_scores(path, "runs_20991231", {"baseline": {"teddy-001": {
+        "outcome/endpoint_ready": True, "pyfunc_quality/load_context": False}}})
     body = json.loads(path.read_text())
-    assert body["samples"] == {"baseline": {"teddy-001": {"outcome/endpoint_ready": True}}}
+    assert list(body["rounds"]) == ["runs_20991231", "runs_20990101"]            # newest first, old round kept
+    assert body["rounds"]["runs_20991231"] == {"notes": "notes_20991231.md",
+                                                "samples": {"baseline": {"teddy-001": {"outcome/endpoint_ready": True}}}}
     assert body["counted_groups"] == list(scorers.COUNTED_GROUPS)
 
 
-def test_latest_round_results_agree_with_the_summary_pair():
-    samples = json.loads((RESULTS / "teddy_20261027_scores.json").read_text())["samples"]
+def test_latest_round_scores_agree_with_the_summary_pair():
+    samples = json.loads((TEDDY_DIR / "scores.json").read_text())["rounds"]["runs_20261027"]["samples"]
     for run in ("baseline", "with_skill"):
         assert json.loads((EVAL_DIR / f"{run}_scores.json").read_text()) == samples[run], run
 
 
+def test_every_round_in_scores_json_has_its_notes():
+    for name, entry in json.loads((TEDDY_DIR / "scores.json").read_text())["rounds"].items():
+        assert (TEDDY_DIR / entry["notes"]).is_file(), name
+
+
 @pytest.mark.skipif(not (ROUND_2.is_dir() and ROUND_1.is_dir()),
                     reason="run records not in this checkout (round folders are kept outside the repository)")
-def test_round_results_match_their_round_folders(scorers):
+def test_round_scores_match_their_round_folders(scorers):
+    rounds = json.loads((TEDDY_DIR / "scores.json").read_text())["rounds"]
     for folder, labels in ((ROUND_2, ["baseline", "with_skill"]), (ROUND_1, ["baseline", "baseline_attempt_1", "with_skill"])):
-        samples = json.loads(scorers.round_results_path(EVAL_DIR, "teddy", folder).read_text())["samples"]
+        samples = rounds[folder.name]["samples"]
         for label in labels:
             full = json.loads((folder / "scores" / f"{label}_scores.json").read_text())
             corrected = json.loads((folder / "scores" / f"{label}_corrected.json").read_text())
@@ -713,8 +721,8 @@ def test_eval_docs_link_only_to_files_in_the_repo():
     import subprocess
 
     tracked = set(subprocess.run(["git", "ls-files"], cwd=SKILL_DIR, capture_output=True, text=True).stdout.split())
-    docs = [EVAL_DIR / "eval_report.md", EVAL_DIR / "README.md", EVAL_DIR / "models" / "teddy" / "ROUNDS.md",
-            *sorted(RESULTS.glob("*.md"))]
+    docs = [EVAL_DIR / "eval_report.md", EVAL_DIR / "README.md", TEDDY_DIR / "ROUNDS.md",
+            *sorted(TEDDY_DIR.glob("notes_*.md"))]
     for doc in docs:
         for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", doc.read_text()):
             if target.startswith(("http://", "https://", "mailto:")):

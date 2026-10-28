@@ -73,8 +73,8 @@ ship rule (`skill-eval`: at least one win, no regressions).
 
 - **All rounds** (Sep–Oct 2026, round 1, round 2), results per round, and where the skill helps by
   category: [`models/teddy/ROUNDS.md`](models/teddy/ROUNDS.md).
-- **Each round's notes and counted scores:** [`results/`](results/) — `teddy_<YYYYMMDD>.md` and
-  `teddy_<YYYYMMDD>_scores.json` per round.
+- **Each round's notes and counted scores:** `models/teddy/notes_<YYYYMMDD>.md` (linked from `ROUNDS.md`) and
+  [`models/teddy/scores.json`](models/teddy/scores.json) (every round in one file).
 - **Every check:** [`CHECKS.md`](CHECKS.md). **Protocol and scorers:** [`README.md`](README.md).
 
 ## Reproduce
