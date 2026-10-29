@@ -56,10 +56,12 @@ def nest_lists(markdown):
     return "".join(lines)
 
 
-def absolute_links(markdown, rel_dir=""):
+def absolute_links(markdown, rel_dir="", page_dir=None):
     """Rewrite relative links in `markdown`, which lives in `rel_dir` of the repository.
 
     Links go to the GitHub file view; images go to the raw file so they render.
+    With `page_dir` (the page's folder under docs/), images that live under docs/
+    are already on the site, so they link there instead, relative to the page.
     Fenced code is left alone.
     """
     prefix = f"{rel_dir.strip('/')}/" if rel_dir.strip("/") else ""
@@ -68,9 +70,12 @@ def absolute_links(markdown, rel_dir=""):
         target = m.group(2)
         if EXTERNAL.match(target):
             return m.group(0)
-        view = "raw" if m.group(1).startswith("!") else "blob"
+        image = m.group(1).startswith("!")
         # normpath folds `../` so a link out of the source's folder stays a clean URL.
-        url = f"{REPO}/{view}/{BRANCH}/{posixpath.normpath(prefix + target)}"
+        path = posixpath.normpath(prefix + target)
+        if image and page_dir is not None and path.startswith("docs/"):
+            return f"{m.group(1)}{posixpath.relpath(path[5:], page_dir or '.')}{m.group(3)}"
+        url = f"{REPO}/{'raw' if image else 'blob'}/{BRANCH}/{path}"
         return f"{m.group(1)}{url}{m.group(3)}"
 
     lines, fenced = [], False

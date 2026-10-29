@@ -24,12 +24,14 @@ The source file stays the only copy, so edit it there, not on the site.
 - Headings are shifted so the copied text's top level is `##`. Add `level=N` for
   another level: `<!-- include: README.md#Setup level=3 -->`.
 - Relative links point at GitHub, because their targets are not on the site.
+  Images under docs/ are the exception: they are on the site, so they link there.
 - GitHub alerts (`> [!NOTE]`, `> [!WARNING]`, ...) become admonitions, so the
   same box renders on GitHub and on the site.
 - A missing file, a missing or repeated heading, or nothing left to copy fails
   the build.
 """
 
+import posixpath
 import re
 from pathlib import Path
 
@@ -169,7 +171,7 @@ def _source(rel_path):
     return path
 
 
-def _include(m):
+def _include(m, page_dir=None):
     """(markdown, source path) for one include marker match."""
     path, source = _source(m["path"]), m["path"]
     level, omit, replace = 2, [], []
@@ -191,20 +193,23 @@ def _include(m):
     text = shift_headings(_nonempty(text, "included text", source), level)
     text = alerts_to_admonitions(text)
     rel_dir = path.parent.relative_to(REPO_ROOT).as_posix()
-    text = nest_lists(absolute_links(text, "" if rel_dir == "." else rel_dir))
+    text = nest_lists(absolute_links(text, "" if rel_dir == "." else rel_dir, page_dir))
     for heading, body in replace:
         text = replace_section(text, heading, body, source)
     return text, path
 
 
-def expand_includes(markdown):
-    """Replace every include marker outside fenced code; return (markdown, source paths)."""
+def expand_includes(markdown, page_dir=None):
+    """Replace every include marker outside fenced code; return (markdown, source paths).
+
+    `page_dir` is the including page's folder under docs/ (see absolute_links).
+    """
     lines, used, fenced = [], set(), False
     for line in markdown.splitlines():
         if is_fence(line):
             fenced = not fenced
         elif not fenced and (m := MARKER.match(line)):
-            line, path = _include(m)
+            line, path = _include(m, page_dir)
             used.add(path)
         lines.append(line)
     tail = "\n" if markdown.endswith("\n") else ""
@@ -216,7 +221,7 @@ def on_page_markdown(markdown, page, **kwargs):
     from mkdocs.exceptions import PluginError
 
     try:
-        markdown, used = expand_includes(markdown)
+        markdown, used = expand_includes(markdown, posixpath.dirname(page.file.src_uri))
     except SectionError as e:
         raise PluginError(f"{page.file.src_uri}: {e}") from e
     _sources.update(used)

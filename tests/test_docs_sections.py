@@ -179,10 +179,21 @@ def test_marker_inside_fenced_code_is_left_alone():
     assert expand_includes(md) == (md, set())
 
 
+def test_images_under_docs_use_the_site_copy_on_a_page():
+    md = "![g](./docs/guide/assets/setup.gif) ![o](skills/x/plot.png) [d](docs/guide/faq.md)"
+    out = absolute_links(md, "", page_dir="guide")
+    assert "![g](assets/setup.gif)" in out
+    assert f"![o]({REPO}/raw/main/skills/x/plot.png)" in out
+    assert f"[d]({REPO}/blob/main/docs/guide/faq.md)" in out
+    assert "![g](guide/assets/setup.gif)" in absolute_links(md, "", page_dir="")
+
+
 def test_readme_setup_expands_with_absolute_links():
-    out, used = expand_includes("<!-- include: README.md#Setup -->\n")
+    out, used = expand_includes("<!-- include: README.md#Setup -->\n", page_dir="guide")
     assert used == {REPO_ROOT / "README.md"}
     assert f"]({REPO}/blob/main/sync_skills_git2unity.py)" in out
+    assert "![setup](assets/setup.gif)" in out
+    assert (REPO_ROOT / "docs" / "guide" / "assets" / "setup.gif").is_file()
     assert "<!-- include:" not in out
 
 
