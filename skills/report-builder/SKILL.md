@@ -4,7 +4,7 @@ description: Generate a structured LaTeX report (methods, key results, figures) 
 category: Others
 summary: LaTeX report generation and PDF compilation from analysis notebooks via Tectonic.
 author: Peter Hawkins
-version: 0.5
+version: 1.0.0
 license: Databricks
 ---
 

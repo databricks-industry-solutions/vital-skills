@@ -16,7 +16,8 @@ catalog, and a docs site. Clone the repo into Databricks, point Genie Code at
 
 - Bioinformatics: `bulk-rnaseq`, `open-weight-models`, `pathway-enrichment-analysis`, `sc-rnaseq`
 - Clinical: `cohort-builder`, `phi-deidentifier`, `rwe-cohortstudy`, `semantic-builder`
-- Others: `accelerators`, `presentation-builder`, `scientific-figures`, `skill-eval`
+- Others: `accelerators`, `presentation-builder`, `report-builder`, `scientific-figures`, `skill-eval`
+- Every skill's frontmatter `version` is `1.0.0`
 
 **Catalog and site**
 
@@ -24,6 +25,9 @@ catalog, and a docs site. Clone the repo into Databricks, point Genie Code at
 - GitHub Pages landing page plus MkDocs Material guide under `/guide/` (one page per skill)
 - Categories: Bioinformatics, Clinical, Others
 - Dark/light theme (persists in `localStorage`; follows the OS until the visitor chooses)
+- Google Analytics 4 on the landing page and guide, loaded only after the visitor accepts the cookie banner; one choice covers both, and "Cookies" / "Cookie settings" in the footers change it
+- Links page: launch blog post, and a link to this changelog (the changelog is no longer a site tab)
+- README Setup: a setup GIF, links to the Databricks clone and Genie Code customization docs, and Unity Gateway registration folded into an optional section
 
 **Authoring and CI**
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mkdocs.structure.files import File
 from repo_links import BRANCH, REPO, absolute_links, nest_lists
-from skill_catalog import inject_landing_page, load_skills
+from skill_catalog import fill_ga_id, inject_landing_page, load_skills
 
 _skills = []
 
@@ -26,11 +26,11 @@ def _eval_link(skill):
     return None
 
 
-def _summary(description, limit=160):
-    first = description.split(". ")[0].rstrip(".")
-    if len(first) > limit:
-        first = first[:limit].rsplit(" ", 1)[0] + "…"
-    return first.replace("|", "\\|")
+def _summary(summary, limit=160):
+    text = summary.strip().rstrip(".")
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0] + "…"
+    return text.replace("|", "\\|")
 
 
 def _skill_page(skill):
@@ -52,7 +52,7 @@ def _skill_page(skill):
         links.append(f"[Evaluation {evaluation[0].lower()}]({evaluation[1]})")
     box = f'!!! abstract "Skill details"\n    {details}\n\n    {" · ".join(links)}\n\n'
 
-    body = nest_lists(absolute_links(skill["body"], f"skills/{folder}")).lstrip("\n")
+    body = nest_lists(absolute_links(skill["body"], f"skills/{folder}", "guide/skills")).lstrip("\n")
     title, _, rest = body.partition("\n")
     if title.startswith("# "):
         rest = rest.lstrip("\n")
@@ -87,11 +87,10 @@ def _catalog(skills):
 
 def on_post_build(config):
     path = Path(config["site_dir"]) / "index.html"
-    if path.is_file():
-        path.write_text(
-            inject_landing_page(path.read_text(encoding="utf-8"), _skills),
-            encoding="utf-8",
-        )
+    if not path.is_file():
+        return
+    html = inject_landing_page(path.read_text(encoding="utf-8"), _skills)
+    path.write_text(fill_ga_id(html, config["extra"]), encoding="utf-8")
 
 
 def on_config(config):

@@ -179,10 +179,21 @@ def test_marker_inside_fenced_code_is_left_alone():
     assert expand_includes(md) == (md, set())
 
 
+def test_images_under_docs_use_the_site_copy_on_a_page():
+    md = "![g](./docs/guide/assets/setup.gif) ![o](skills/x/plot.png) [d](docs/guide/faq.md)"
+    out = absolute_links(md, "", page_dir="guide")
+    assert "![g](assets/setup.gif)" in out
+    assert f"![o]({REPO}/raw/main/skills/x/plot.png)" in out
+    assert f"[d]({REPO}/blob/main/docs/guide/faq.md)" in out
+    assert "![g](guide/assets/setup.gif)" in absolute_links(md, "", page_dir="")
+
+
 def test_readme_setup_expands_with_absolute_links():
-    out, used = expand_includes("<!-- include: README.md#Setup -->\n")
+    out, used = expand_includes("<!-- include: README.md#Setup -->\n", page_dir="guide")
     assert used == {REPO_ROOT / "README.md"}
     assert f"]({REPO}/blob/main/sync_skills_git2unity.py)" in out
+    assert "![setup](assets/setup.gif)" in out
+    assert (REPO_ROOT / "docs" / "guide" / "assets" / "setup.gif").is_file()
     assert "<!-- include:" not in out
 
 
@@ -194,7 +205,7 @@ def test_every_docs_include_resolves(page):
 
 
 @pytest.mark.parametrize(
-    "name", ["setup.md", "contributing.md", "evaluation.md", "CHANGELOG.md"]
+    "name", ["setup.md", "contributing.md", "evaluation.md"]
 )
 def test_guide_page_is_copied_from_repo_file(name):
     page = REPO_ROOT / "docs" / "guide" / name
@@ -206,16 +217,6 @@ def test_evaluation_page_has_whole_section():
     out, _ = expand_includes(page.read_text(encoding="utf-8"))
     assert "## Run an evaluation" in out and "## What the `eval/` folder holds" in out
     assert "!!! warning" in out and "## Docs site" not in out
-
-
-def test_changelog_page_copies_root_file():
-    page = REPO_ROOT / "docs" / "guide" / "CHANGELOG.md"
-    out, used = expand_includes(page.read_text(encoding="utf-8"))
-    assert used == {REPO_ROOT / "CHANGELOG.md"}
-    assert out.startswith("# Changelog")
-    assert "## 1.0.0" in out
-    assert "<!-- include:" not in out
-    assert out.count("\n# ") == 0
 
 
 def test_contributing_page_has_no_cla():
