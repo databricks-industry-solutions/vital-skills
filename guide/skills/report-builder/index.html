@@ -1,0 +1,1977 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a structured LaTeX report (methods, key results, figures) from a Databricks notebook's scientific work, compile it to PDF with Tectonic, and save the output. Use when the user asks to write up results, generate a report, create a summary document, or produce a PDF from their analysis notebook. Also use when the user wants to compile any LaTeX document in Databricks. Default template is REVTeX 4.2 PRL preprint.">
+      
+      
+      
+        <link rel="canonical" href="https://databricks-industry-solutions.github.io/vital-skills/guide/skills/report-builder/">
+      
+      
+        <link rel="prev" href="../presentation-builder/">
+      
+      
+        <link rel="next" href="../scientific-figures/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/databricks-logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>report-builder - Vital Skills</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=DM+Sans:300,300i,400,400i,700,700i%7CDM+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"DM Sans";--md-code-font:"DM Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-G34C8X35XB"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-G34C8X35XB",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-G34C8X35XB",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>if("undefined"!=typeof __md_analytics){var consent=__md_get("__consent");consent&&consent.analytics&&__md_analytics()}</script>
+  
+
+    
+    
+  
+  <script>
+    (function () {
+      // Exactly how Material persists this site's two palette options:
+      // #__palette_0 = default (light, index 0), #__palette_1 = slate (dark, index 1).
+      var PALETTE = {
+        light: { index: 0, color: { media: "(prefers-color-scheme: light)", scheme: "default", primary: "custom", accent: "custom" } },
+        dark:  { index: 1, color: { media: "(prefers-color-scheme: dark)",  scheme: "slate",   primary: "custom", accent: "custom" } }
+      };
+      // Material namespaces the key as __md_scope.pathname + ".__palette", where
+      // __md_scope = new URL(base_url, location) = the site root at every page depth.
+      // base_url renders the same per-page relative path, so this is Material's exact key.
+      var key = new URL("../../..", location).pathname + ".__palette";
+
+      var vs = null;
+      try { vs = localStorage.getItem("vs-theme"); } catch (e) {}
+
+      // landing -> docs: if the landing set a theme, seed the site-root __palette
+      // before Material's own reader (which runs early in <body>) applies it, so the
+      // page loads in the shared scheme with no extra flash beyond Material's native one.
+      if (vs === "dark" || vs === "light") {
+        try { localStorage.setItem(key, JSON.stringify(PALETTE[vs])); } catch (e) {}
+      }
+
+      // docs -> landing: when the user flips Material's palette toggle, mirror the choice
+      // back to the shared "vs-theme" key so the landing page follows on its next load.
+      addEventListener("change", function (e) {
+        var t = e.target;
+        if (t && t.name === "__palette" && t.checked) {
+          var dark = t.getAttribute("data-md-color-scheme") === "slate";
+          try { localStorage.setItem("vs-theme", dark ? "dark" : "light"); } catch (e) {}
+        }
+      });
+    })();
+  </script>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#latex-report-builder" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../" title="Vital Skills" class="md-header__button md-logo" aria-label="Vital Skills" data-md-component="logo">
+      
+  <img src="../../assets/vitalskills.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Vital Skills
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              report-builder
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:currentColor"><path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.6 6.6 0 0 0 10.7 10.7z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="fill:none;stroke:currentColor"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/databricks-industry-solutions/vital-skills" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    vital-skills
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../setup/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Setup
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Skills
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../evaluation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Evaluation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../faq/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../links/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Links
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="Vital Skills" class="md-nav__button md-logo" aria-label="Vital Skills" data-md-component="logo">
+      
+  <img src="../../assets/vitalskills.png" alt="logo">
+
+    </a>
+    Vital Skills
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/databricks-industry-solutions/vital-skills" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    vital-skills
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skills
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Skills
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bulk-rnaseq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bulk-rnaseq
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../open-weight-models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    open-weight-models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pathway-enrichment-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pathway-enrichment-analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sc-rnaseq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    sc-rnaseq
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cohort-builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cohort-builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../phi-deidentifier/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    phi-deidentifier
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rwe-cohortstudy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    rwe-cohortstudy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../semantic-builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    semantic-builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../accelerators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    accelerators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presentation-builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    presentation-builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    report-builder
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    report-builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mandatory-use-the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MANDATORY: Use the template
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-gather-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Gather context
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-ensure-tectonic-is-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Ensure Tectonic is available
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2d-if-any-step-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2d — If any step fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-prepare-the-build-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Prepare the build directory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-generate-the-tex-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Generate the .tex file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 4: Generate the .tex file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bibliography-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bibliography handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-compile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Compile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-deliver-the-pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6: Deliver the PDF
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#important-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Important constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#critical-never-improvise-pdf-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRITICAL: Never improvise PDF generation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graceful-degradation-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graceful degradation priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scientific-figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    scientific-figures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill-eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    skill-eval
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../links/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Links
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mandatory-use-the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MANDATORY: Use the template
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-gather-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Gather context
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-ensure-tectonic-is-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Ensure Tectonic is available
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2d-if-any-step-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2d — If any step fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-prepare-the-build-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Prepare the build directory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-generate-the-tex-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Generate the .tex file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 4: Generate the .tex file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bibliography-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bibliography handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-compile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Compile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-deliver-the-pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6: Deliver the PDF
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#important-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Important constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#critical-never-improvise-pdf-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRITICAL: Never improvise PDF generation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graceful-degradation-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graceful degradation priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="latex-report-builder">LaTeX Report Builder<a class="headerlink" href="#latex-report-builder" title="Permanent link">&para;</a></h1>
+<div class="admonition abstract">
+<p class="admonition-title">Skill details</p>
+<p><strong>Version</strong> 1.0.0 · <strong>Author</strong> Peter Hawkins · <strong>License</strong> Databricks</p>
+<p><a href="https://github.com/databricks-industry-solutions/vital-skills/tree/main/skills/report-builder">Browse on GitHub</a> · <a href="https://github.com/databricks-industry-solutions/vital-skills/blob/main/skills/report-builder/SKILL.md">Raw SKILL.md</a></p>
+</div>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Generate structured scientific reports from notebook work: the agent writes a thorough Methods section (its primary deliverable), light Results with scientific highlights, and bullet-form Discussion — structured so the user can later expand them into a full paper. Compile to PDF entirely within Databricks using Tectonic.</p>
+<h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
+<ul>
+<li>User asks to "write up", "summarize", "generate a report", or "make a PDF" from their notebook analysis</li>
+<li>User wants to compile a <code>.tex</code> file to PDF inside Databricks</li>
+<li>User asks for a methods/results summary of their work</li>
+<li>User provides a <code>.bib</code> file and wants references included in the compiled report</li>
+<li>User wants to iterate on a report: edit an existing <code>.tex</code>, recompile, and refine</li>
+</ul>
+<h2 id="mandatory-use-the-template">MANDATORY: Use the template<a class="headerlink" href="#mandatory-use-the-template" title="Permanent link">&para;</a></h2>
+<p><strong>You MUST use one of the LaTeX templates from <a href="https://github.com/databricks-industry-solutions/vital-skills/blob/main/skills/report-builder/references/report-structure.md">report-structure.md</a>.</strong> This is non-negotiable:</p>
+<ol>
+<li>Read <code>report-structure.md</code> BEFORE generating any <code>.tex</code> content.</li>
+<li><strong>Default to the REVTeX PRL preprint template</strong> unless the user explicitly asks for PRA or the internal report template. PRL produces a compact, professional layout; PRA is more spacious for longer reports.</li>
+<li>Start from the template's <code>\documentclass</code> and package list exactly as written.</li>
+<li>Fill in the <code>&lt;&lt;PLACEHOLDER&gt;&gt;</code> markers with real content from the notebook.</li>
+<li>Do NOT write LaTeX from scratch, do NOT invent your own document structure.</li>
+<li>If a section (e.g., Bibliography) is not needed, use <code>\begin{thebibliography}</code> with inline entries or omit it.</li>
+<li><strong>REVTeX gotcha</strong>: Do NOT load <code>hyperref</code> (REVTeX loads it internally — duplicate loading causes <code>parameter stack size</code> overflow). Do NOT load <code>float</code> — use <code>[htbp]</code> instead of <code>[H]</code> for figure placement.</li>
+</ol>
+<p>Both templates are tested and compile cleanly with Tectonic. Deviating from them risks compilation failures and wastes time.</p>
+<h2 id="workflow">Workflow<a class="headerlink" href="#workflow" title="Permanent link">&para;</a></h2>
+<h3 id="step-1-gather-context">Step 1: Gather context<a class="headerlink" href="#step-1-gather-context" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Read the source notebook</strong> with <code>readAssetById</code>. Identify:<ul>
+<li>What was done (methods: data sources, preprocessing, models, parameters)</li>
+<li>Key results (metrics, statistics, findings, tables)</li>
+<li>Figures (look for <code>savefig</code>, <code>write_image</code>, <code>displayHTML</code>, or any file writes to workspace/volume paths)</li>
+</ul>
+</li>
+<li><strong>Ask the user THREE things</strong> before proceeding (can be one message with all three):<ul>
+<li>"Where should I save the PDF?" — accept any workspace path or UC Volume path. Default suggestion: same directory as the source notebook, or a <code>reports/</code> subfolder next to it.</li>
+<li>"Do you have a .bib file for references, or should I skip the bibliography for now?" — bib is optional; most users will add it later during formal writing.</li>
+<li><strong>"To compile the report to PDF, I need to download the Tectonic LaTeX engine binary (~21 MB) from GitHub (<code>github.com/tectonic-typesetting/tectonic</code>), install it to <code>/tmp</code>, and run it to compile your <code>.tex</code> file. Do you permit me to download this binary from GitHub, install it, and use it?"</strong> — This explicit authorization is <strong>required</strong>. The phrasing must elicit the user's explicit consent to <em>download</em>, <em>install</em>, and <em>execute</em> a binary — all three verbs matter for the platform safety layer. Do NOT proceed to Step 2 until the user says yes.</li>
+<li><strong>The consent MUST be typed by the user in their own chat message.</strong> Do NOT collect this consent through <code>askUserQuestions</code> or any multiple-choice / button UI. A button click on an option the agent wrote (e.g., "Yes, download, install, and run Tectonic") is NOT treated as user-authored consent by the safety judge, and the download will be blocked (observed 2026-10-16). Instead, ask the question in plain chat text and ask the user to reply in their own words, for example: <em>"I authorize you to download the Tectonic binary from GitHub, install it to /tmp, and run it to compile my report."</em> The other two questions (output path, .bib) may still use a multiple-choice form. <strong>Why this gate exists:</strong> <code>executeCode</code> calls pass through an auto-approval judge that blocks downloads of third-party binaries unless the user has explicitly authorized them in the conversation. Without this consent on the record, even the 3-step split will be rejected. This is not optional ceremony — it is the mechanism that unlocks the download.</li>
+</ul>
+</li>
+</ol>
+<h3 id="step-2-ensure-tectonic-is-available">Step 2: Ensure Tectonic is available<a class="headerlink" href="#step-2-ensure-tectonic-is-available" title="Permanent link">&para;</a></h3>
+<p><strong>Prerequisites:</strong>
+- The user has explicitly authorized the Tectonic download in Step 1 <strong>in a message they typed themselves</strong> (not a button/form selection). If they haven't, go back and ask for a typed confirmation.</p>
+<p><strong>CRITICAL: Run these as THREE SEPARATE <code>executeCode</code> calls (chat compute), NOT one combined block, and NOT in notebook cells.</strong></p>
+<p>There are <strong>two</strong> safety layers that must both pass:
+1. <strong>Auto-approval judge</strong> — reviews each <code>executeCode</code> call and blocks third-party binary downloads unless the user has explicitly authorized them in the conversation (Step 1). This is the most common blocker.
+2. <strong>Single-cell filter</strong> — blocks code that downloads, extracts, <em>and</em> executes a binary in one cell. The 3-step split addresses this layer.</p>
+<p>Both layers must pass. The 3-step split alone is NOT sufficient — the user's explicit consent from Step 1 is what satisfies the auto-approval judge. Always use <code>executeCode</code> (the agent's sandboxed chat compute) — notebook cells trigger a stricter safety review gate and may be rejected even with user consent.</p>
+<p>The same three steps are shipped as tested, importable functions in <code>scripts/ensure_tectonic.py</code> (<code>download()</code>, <code>extract()</code>, <code>verify()</code>); the inline blocks below mirror it exactly.</p>
+<p><strong>Step 2a — Download</strong> (separate <code>executeCode</code> call):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">urllib.request</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">TECTONIC_VERSION</span> <span class="o">=</span> <span class="s2">"0.15.0"</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">TECTONIC_URL</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="sa">f</span><span class="s2">"https://github.com/tectonic-typesetting/tectonic/releases/download/"</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="sa">f</span><span class="s2">"tectonic%40</span><span class="si">{</span><span class="n">TECTONIC_VERSION</span><span class="si">}</span><span class="s2">/"</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="sa">f</span><span class="s2">"tectonic-</span><span class="si">{</span><span class="n">TECTONIC_VERSION</span><span class="si">}</span><span class="s2">-x86_64-unknown-linux-gnu.tar.gz"</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">TECTONIC_PATH</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic-bin/tectonic"</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">TECTONIC_ARCHIVE</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic.tar.gz"</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">X_OK</span><span class="p">):</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Tectonic already cached at </span><span class="si">{</span><span class="n">TECTONIC_PATH</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Downloading Tectonic </span><span class="si">{</span><span class="n">TECTONIC_VERSION</span><span class="si">}</span><span class="s2"> (~21 MB)..."</span><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">TECTONIC_URL</span><span class="p">,</span> <span class="n">TECTONIC_ARCHIVE</span><span class="p">)</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Downloaded: </span><span class="si">{</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">TECTONIC_ARCHIVE</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes"</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Step 2b — Extract</strong> (separate <code>executeCode</code> call):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tarfile</span><span class="o">,</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">stat</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">TECTONIC_DIR</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic-bin"</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">TECTONIC_PATH</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">TECTONIC_DIR</span><span class="si">}</span><span class="s2">/tectonic"</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">TECTONIC_ARCHIVE</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic.tar.gz"</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">X_OK</span><span class="p">):</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Tectonic already extracted at </span><span class="si">{</span><span class="n">TECTONIC_PATH</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">TECTONIC_ARCHIVE</span><span class="p">):</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">TECTONIC_DIR</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">TECTONIC_ARCHIVE</span><span class="p">,</span> <span class="s2">"r:gz"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="n">tar</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">TECTONIC_DIR</span><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">)</span><span class="o">.</span><span class="n">st_mode</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IEXEC</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">TECTONIC_ARCHIVE</span><span class="p">)</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Extracted: </span><span class="si">{</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes"</span><span class="p">)</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"ERROR: No archive found. Run Step 2a first."</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Step 2c — Verify</strong> (separate <code>executeCode</code> call):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span><span class="o">,</span><span class="w"> </span><span class="nn">os</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">TECTONIC_PATH</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic-bin/tectonic"</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">X_OK</span><span class="p">):</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">r</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="s2">"--version"</span><span class="p">],</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                       <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"ERROR: Tectonic binary not found. Run Steps 2a and 2b first."</span><span class="p">)</span>
+</code></pre></div></p>
+<p>After Step 2c, <code>TECTONIC_PATH</code> (<code>/tmp/tectonic-bin/tectonic</code>) is ready to use for compilation.</p>
+<h3 id="step-2d-if-any-step-fails">Step 2d — If any step fails<a class="headerlink" href="#step-2d-if-any-step-fails" title="Permanent link">&para;</a></h3>
+<p><strong>Do not try anything else.</strong> No alternative compilers, no package managers, no workarounds — it is a waste of time.</p>
+<p>Determine <strong>why</strong> it failed, then take the matching path:</p>
+<ol>
+<li><strong>Auto-approval judge blocked the download</strong> (the error mentions safety, authorization, or blocked execution): The user's explicit consent from Step 1 was missing or not clear enough in the conversation. <strong>Tell the user exactly what happened and ask them to explicitly authorize the Tectonic download by typing it in their own chat message</strong> (a form/button answer is not sufficient). Once they do, retry Step 2a. Do not fall through to <code>.tex</code>-only delivery until the user has had the chance to authorize.</li>
+<li><strong>Any other failure</strong> (network error, extraction error, binary won't run): Fall through immediately to Step 4, generate the <code>.tex</code> source and figures, and tell the user honestly what happened.</li>
+</ol>
+<h3 id="step-3-prepare-the-build-directory">Step 3: Prepare the build directory<a class="headerlink" href="#step-3-prepare-the-build-directory" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">shutil</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">build_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">"latex-report-"</span><span class="p">)</span>
+</code></pre></div>
+<p>Copy into <code>build_dir</code>:
+- Any figures the user's notebook produced (from workspace files or Volume paths)
+- The user's <code>.bib</code> file if provided
+- The generated <code>.tex</code> file (see Step 4)</p>
+<p>For figures: copy them into the build directory and use just the filename in <code>\includegraphics</code>. Supported formats: PDF (best for vector), PNG, JPG.</p>
+<p><strong>Strategy</strong>: Add a notebook cell that saves all figures as PNGs to the output directory (a UC Volume the user specified). Then use <code>executeCode</code> to read the figures from that Volume path, generate the <code>.tex</code>, compile, and deliver. This bridges the notebook state (which has the analysis objects) and the chat compute (which has Tectonic).</p>
+<h3 id="step-4-generate-the-tex-file">Step 4: Generate the .tex file<a class="headerlink" href="#step-4-generate-the-tex-file" title="Permanent link">&para;</a></h3>
+<p>See <a href="https://github.com/databricks-industry-solutions/vital-skills/blob/main/skills/report-builder/references/report-structure.md">report-structure.md</a> for the full LaTeX template and section-by-section guidance.</p>
+<p>Key principles:
+- <strong>Results = scientific highlights only.</strong> A Results subsection should be a scientific finding ("CUX2-LAMP5 neurons are enriched in AD"), not a pipeline checkpoint ("Quality control retained 84.5% of cells"). If a subsection title could appear in the Methods of a published paper, it belongs in Methods, not Results. If no notable scientific findings emerged, the Results section can be a brief paragraph referencing the figures.
+- <strong>Methods = the agent's primary deliverable.</strong> Full journal-quality prose with every parameter, threshold, and rationale woven into sentences. No bullet lists of function calls. Include steps considered but rejected. See report-structure.md for the depth requirements.
+- <strong>Discussion = bullet-form.</strong> The agent flags patterns and interpretations; the user expands.
+- <strong>Include all figures.</strong> Every figure from the notebook gets a <code>\begin{figure}</code> with a descriptive caption summarizing what it shows. QC/diagnostic figures go in Methods, not Results.
+- <strong>Software versions: resolve programmatically.</strong> Before writing the <code>.tex</code>, run <code>importlib.metadata.version(pkg)</code> for every non-stdlib import in the notebook and embed exact versions. Never use <code>\todo{verify}</code> for versions when the notebook compute is available — query it. Use a multi-column table (Package/Version/Package/Version) to halve the height.
+- <strong>Breakable file paths.</strong> Use <code>\fpath{}</code> (defined in the template preamble) with <code>\allowbreak</code> after <code>/</code>, <code>-</code>, <code>_</code>, <code>@</code> for any path longer than ~40 characters. Short identifiers stay as <code>\texttt{}</code>. Do NOT use <code>\nolinkurl</code> — it is unavailable in REVTeX.
+- <strong>Keep it compilable.</strong> Do not use packages beyond what the template provides. Tectonic auto-downloads packages, but exotic ones may fail.
+- <strong>No placeholder text.</strong> Every word in the report should be real content derived from the notebook. If you're unsure about something, flag it with <code>% TODO: verify this</code> in a LaTeX comment.</p>
+<h4 id="bibliography-handling">Bibliography handling<a class="headerlink" href="#bibliography-handling" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>If user provides a <code>.bib</code> file:</strong> Copy it to the build directory. Add <code>\bibliography{&lt;filename-without-ext&gt;}</code> before <code>\end{document}</code>. Use <code>\cite{key}</code> in the text where appropriate.</li>
+<li><strong>If no <code>.bib</code>:</strong> Omit <code>\bibliography</code> and <code>\bibliographystyle</code>. The template handles this gracefully. Add a LaTeX comment <code>% TODO: add bibliography</code> at the bottom.</li>
+<li><strong>If user asks to generate references:</strong> You can create a <code>.bib</code> file with entries, but warn that citation details should be verified.</li>
+</ul>
+<h3 id="step-5-compile">Step 5: Compile<a class="headerlink" href="#step-5-compile" title="Permanent link">&para;</a></h3>
+<p><strong>Skip this step if Tectonic is unavailable</strong> (Step 2d fallback). Jump to Step 6 and deliver the .tex + figures.</p>
+<p>Compile with the <code>TECTONIC_PATH</code> verified in Step 2c:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">TECTONIC_PATH</span> <span class="o">=</span> <span class="s2">"/tmp/tectonic-bin/tectonic"</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="p">[</span><span class="n">TECTONIC_PATH</span><span class="p">,</span> <span class="s2">"-X"</span><span class="p">,</span> <span class="s2">"compile"</span><span class="p">,</span> <span class="s2">"report.tex"</span><span class="p">],</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">build_dir</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">returncode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"PDF compiled successfully"</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Compilation failed:</span><span class="se">\n</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">stderr</span><span class="p">[</span><span class="o">-</span><span class="mi">2000</span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<p>Tectonic handles everything in one invocation: auto-downloads packages, runs bibtex internally, re-runs TeX as needed to resolve references.</p>
+<p>If compilation fails:
+1. Check stderr for the specific error (usually a missing package or malformed LaTeX)
+2. Fix the <code>.tex</code> content and retry — common issues: unescaped <code>_</code>, <code>%</code>, <code>&amp;</code>, <code>#</code> in text; figure file not found in build dir
+3. If it keeps failing after 2 retries, save the <code>.tex</code> source and tell the user what went wrong</p>
+<h3 id="step-6-deliver-the-pdf">Step 6: Deliver the PDF<a class="headerlink" href="#step-6-deliver-the-pdf" title="Permanent link">&para;</a></h3>
+<p>Copy the compiled PDF from the build directory to the user's chosen output path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">build_dir</span><span class="p">,</span> <span class="s2">"report.pdf"</span><span class="p">),</span> <span class="n">output_path</span><span class="p">)</span>
+</code></pre></div>
+<p>Also offer to display it inline in the notebook/chat using:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">HTML</span><span class="p">,</span> <span class="n">display</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">pdf_path</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">b64</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">display</span><span class="p">(</span><span class="n">HTML</span><span class="p">(</span><span class="sa">f</span><span class="s1">'&lt;iframe src="data:application/pdf;base64,</span><span class="si">{</span><span class="n">b64</span><span class="si">}</span><span class="s1">" width="100%" height="800px"&gt;&lt;/iframe&gt;'</span><span class="p">))</span>
+</code></pre></div>
+<h2 id="important-constraints">Important constraints<a class="headerlink" href="#important-constraints" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No hardcoded paths.</strong> Never assume a specific catalog, schema, volume, or workspace path. Always ask the user or derive from context. This skill is used across many different workspaces and organizations.</li>
+<li><strong>Tectonic downloads to <code>/tmp</code> only.</strong> The binary is session-scoped on the <code>executeCode</code> chat compute. Download is fast (~3-5s) and requires no shared infrastructure.</li>
+<li><strong>Figures must be copied to the build directory.</strong> LaTeX cannot reference arbitrary absolute paths reliably. Always copy figures alongside the <code>.tex</code> file.</li>
+<li><strong>Escape LaTeX special characters.</strong> When inserting notebook content into LaTeX, escape: <code>_</code> → <code>\_</code>, <code>%</code> → <code>\%</code>, <code>&amp;</code> → <code>\&amp;</code>, <code>#</code> → <code>\#</code>, <code>$</code> → <code>\$</code>, <code>{</code> → <code>\{</code>, <code>}</code> → <code>\}</code>. Exception: these characters inside <code>\verb</code> or <code>verbatim</code> environments, or when they're intentional LaTeX commands.</li>
+<li><strong>The report is a starting point.</strong> Remind the user that the output is structured notes for expansion, not a finished paper. Suggest they can iterate: edit the <code>.tex</code>, recompile, and refine.</li>
+</ul>
+<h2 id="critical-never-improvise-pdf-generation">CRITICAL: Never improvise PDF generation<a class="headerlink" href="#critical-never-improvise-pdf-generation" title="Permanent link">&para;</a></h2>
+<p>If LaTeX compilation is not available or fails:
+- <strong>DO</strong> save the <code>.tex</code> source file and all figures to the user's output path
+- <strong>DO</strong> tell the user honestly what happened and suggest alternatives (compile locally, try different compute)
+- <strong>DO NOT</strong> generate a PDF using matplotlib, reportlab, HTML-to-PDF, or any other non-LaTeX method
+- <strong>DO NOT</strong> silently substitute a different output format
+- <strong>DO NOT</strong> skip the .tex generation step — the source file IS the primary deliverable; the PDF is a convenience</p>
+<p>The .tex file can always be compiled later by the user with any standard LaTeX distribution. A poorly-assembled non-LaTeX PDF cannot be edited, iterated, or submitted to a journal. The source is more valuable than a bad PDF.</p>
+<h2 id="graceful-degradation-priority">Graceful degradation priority<a class="headerlink" href="#graceful-degradation-priority" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Best</strong>: .tex + figures + compiled PDF → user gets everything</li>
+<li><strong>Good</strong>: .tex + figures, no PDF → user compiles locally or on different compute. Tell them exactly what files were saved and where.</li>
+<li><strong>Unacceptable</strong>: Any improvised non-LaTeX PDF, or claiming compilation succeeded when it didn't</li>
+</ol>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>Cause</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Auto-approval judge blocks the Tectonic download</td>
+<td>User consent missing or collected via button/form instead of a typed message</td>
+<td>Ask the user to type the authorization in their own chat message, then retry Step 2a. Do not fall through to .tex-only delivery before giving them the chance</td>
+</tr>
+<tr>
+<td>Setup code rejected by the single-cell filter</td>
+<td>Download, extract, and execute combined in one cell</td>
+<td>Run Steps 2a, 2b, 2c as three separate <code>executeCode</code> calls</td>
+</tr>
+<tr>
+<td><code>parameter stack size</code> overflow</td>
+<td><code>hyperref</code> loaded manually in a REVTeX document</td>
+<td>Remove it — REVTeX loads <code>hyperref</code> internally</td>
+</tr>
+<tr>
+<td>Figure placement errors (<code>[H]</code>)</td>
+<td><code>float</code> package loaded</td>
+<td>Use <code>[htbp]</code> placement instead; do not load <code>float</code></td>
+</tr>
+<tr>
+<td>Compilation fails on text from the notebook</td>
+<td>Unescaped <code>_</code>, <code>%</code>, <code>&amp;</code>, <code>#</code>, <code>$</code>, <code>{</code>, <code>}</code></td>
+<td>Escape LaTeX special characters when inserting notebook content (see Important constraints)</td>
+</tr>
+<tr>
+<td>Network, extraction, or binary error in Step 2</td>
+<td>Environment issue, not consent</td>
+<td>Fall through immediately to Step 4; deliver .tex + figures per the degradation ladder</td>
+</tr>
+</tbody>
+</table>
+<h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Never proceed to Step 2 without the user's typed Tectonic authorization</strong> — a multiple-choice or button selection does not satisfy the auto-approval judge.</li>
+<li><strong>Never improvise PDF generation</strong> — no matplotlib, reportlab, or HTML-to-PDF substitutes. The .tex source is the primary deliverable; the PDF is a convenience.</li>
+<li><strong>Always start from the templates</strong> in <code>references/report-structure.md</code>; do not write LaTeX from scratch or invent document structure.</li>
+<li><strong>No hardcoded paths</strong> — never assume a catalog, schema, volume, or workspace path; ask the user or derive from context.</li>
+<li><strong>Tectonic installs to <code>/tmp</code> only</strong> — no package managers, no alternative compilers, no shared infrastructure.</li>
+<li><strong>Max 2 compile-fix retries</strong>, then save the .tex source and tell the user exactly what went wrong.</li>
+</ol>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/tectonic-typesetting/tectonic">Tectonic</a> — the LaTeX engine used for compilation (pinned to 0.15.0, x86_64 Linux)</li>
+<li><a href="https://journals.aps.org/revtex">REVTeX 4.2</a> — the default document class (PRL preprint and PRA templates)</li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright vs-copyright">
+  <a class="vs-footer-logo" href="https://www.databricks.com/" target="_blank" rel="noopener" title="Databricks">
+    <img src="../../assets/databricks-logo.svg" alt="Databricks" width="24" height="24">
+  </a>
+  <div>
+    
+      <div class="md-copyright__highlight">
+        Licensed under the Databricks License · <a href="#__consent">Cookie settings</a>
+      </div>
+    
+    
+      Made with
+      <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+        Material for MkDocs
+      </a>
+    
+  </div>
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+      <div class="md-consent" data-md-component="consent" id="__consent" hidden>
+        <div class="md-consent__overlay"></div>
+        <aside class="md-consent__inner">
+          <form class="md-consent__form md-grid md-typeset" name="consent">
+            
+
+
+
+  
+
+<h4>Analytics cookies</h4>
+<p>We use Google Analytics to see which pages of this site are used. Accept to help us improve it. You can change this later from the footer.
+</p>
+<input class="md-toggle" type="checkbox" id="__settings" checked>
+<div class="md-consent__settings">
+  <ul class="task-list">
+    
+    
+    
+    
+      
+        
+  
+  
+    
+    
+  
+  <li class="task-list-item">
+    <label class="task-list-control">
+      <input type="checkbox" name="analytics" checked>
+      <span class="task-list-indicator"></span>
+      Google Analytics
+    </label>
+  </li>
+
+      
+    
+      
+    
+  </ul>
+</div>
+<div class="md-consent__controls">
+  
+    
+      <button class="md-button md-button--primary">Accept</button>
+    
+    
+    
+  
+    
+    
+      <button type="reset" class="md-button md-button--primary">Reject</button>
+    
+    
+  
+</div>
+          </form>
+        </aside>
+      </div>
+      <script>var consent=__md_get("__consent");if(consent)for(var input of document.forms.consent.elements)input.name&&(input.checked=consent[input.name]||!1);else"file:"!==location.protocol&&setTimeout((function(){document.querySelector("[data-md-component=consent]").hidden=!1}),250);var form=document.forms.consent;for(var action of["submit","reset"])form.addEventListener(action,(function(e){if(e.preventDefault(),"reset"===e.type)for(var n of document.forms.consent.elements)n.name&&(n.checked=!1);__md_set("__consent",Object.fromEntries(Array.from(new FormData(form).keys()).map((function(e){return[e,!0]})))),location.hash="",location.reload()}))</script>
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.code.copy", "navigation.indexes", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.suggest", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
