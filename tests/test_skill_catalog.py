@@ -8,8 +8,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "docs" / "hooks"))
 
+import yaml  # noqa: E402
 from skill_catalog import (  # noqa: E402
+    GA_PLACEHOLDER,
+    LANDING,
     CatalogError,
+    fill_ga_id,
     js_catalog,
     load_skills,
     main,
@@ -87,3 +91,28 @@ def test_sync_writes_nothing_when_a_target_is_broken(tmp_path, monkeypatch):
     with pytest.raises(CatalogError, match="missing markers"):
         sync(write=True)
     assert readme.read_text(encoding="utf-8") == before
+
+
+def _mkdocs_extra() -> dict:
+    class Loader(yaml.SafeLoader):
+        pass
+
+    # mkdocs.yml uses !!python/name tags for the emoji extension; they don't matter here.
+    Loader.add_multi_constructor("tag:yaml.org,2002:python/", lambda *_: None)
+    config = yaml.load((REPO_ROOT / "mkdocs.yml").read_text(encoding="utf-8"), Loader=Loader)
+    return config["extra"]
+
+
+def test_landing_page_gets_the_ga_id_from_mkdocs_yml():
+    landing = LANDING.read_text(encoding="utf-8")
+    assert GA_PLACEHOLDER in landing
+    extra = _mkdocs_extra()
+    property_id = extra["analytics"]["property"]
+    built = fill_ga_id(landing, extra)
+    assert GA_PLACEHOLDER not in built
+    assert f'var GA_ID = "{property_id}";' in built
+
+
+def test_ga_id_left_alone_without_analytics_config():
+    assert fill_ga_id(f"x {GA_PLACEHOLDER}", {}) == f"x {GA_PLACEHOLDER}"
+    assert fill_ga_id(f"x {GA_PLACEHOLDER}", None) == f"x {GA_PLACEHOLDER}"

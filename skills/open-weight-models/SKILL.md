@@ -2,7 +2,7 @@
 name: open-weight-models
 description: Package, register, validate, and deploy open-weight health and life-sciences models on Databricks. Use for Geneformer, scGPT, Scimilarity, TEDDY, AlphaFold/OpenFold, Boltz, or similar models whose code, checkpoints, databases, tokenizers, or scientific inputs come from Hugging Face, Git, Zenodo, or other external sources. Use this skill when a request involves custom PyFunc wrappers, Unity Catalog registration, Model Serving, Jobs, GPU/runtime selection, complex biological inputs, provenance, or AI Gateway inference tables.
 category: Bioinformatics
-summary: Package, register, validate & deploy open-weight HLS models on Databricks — e.g. TEDDY and Geneformer.
+summary: Package, register, validate & deploy open-weight HLS models on Databricks, such as TEDDY and Geneformer.
 version: 1.0.0
 author: May Merkle Tan
 license: Databricks License

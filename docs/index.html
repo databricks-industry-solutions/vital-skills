@@ -31,15 +31,31 @@
 <script>
   // Google Analytics 4, only after consent. The Measurement ID is filled in at
   // mkdocs build time from extra.analytics.property (see mkdocs.yml).
+  // The choice lives in Material's own consent key ("<site root>.__consent"), so the
+  // landing page and the /guide/ pages share one answer.
   (function () {
     var GA_ID = "__GA_MEASUREMENT_ID__";
-    var VS_KEY = "vs-ga-consent";
-    function consentStoreKey() {
-      return new URL(".", location).pathname + ".__consent";
+    var CONSENT_KEY = new URL(".", location).pathname + ".__consent";
+    function readConsent() {
+      try {
+        var c = JSON.parse(localStorage.getItem(CONSENT_KEY) || "null");
+        if (c && typeof c === "object") return c.analytics ? "accepted" : "rejected";
+      } catch (e) {}
+      return null;
     }
     function writeConsent(accepted) {
-      try { localStorage.setItem(VS_KEY, accepted ? "accepted" : "rejected"); } catch (e) {}
-      try { localStorage.setItem(consentStoreKey(), JSON.stringify({ analytics: !!accepted })); } catch (e) {}
+      try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics: !!accepted })); } catch (e) {}
+    }
+    function clearGaCookies() {
+      var host = location.hostname;
+      var domains = ["", host, "." + host, "." + host.split(".").slice(-2).join(".")];
+      document.cookie.split(";").forEach(function (c) {
+        var name = c.split("=")[0].trim();
+        if (name !== "_ga" && name.indexOf("_ga_") !== 0) return;
+        domains.forEach(function (d) {
+          document.cookie = name + "=; Max-Age=0; path=/" + (d ? "; domain=" + d : "");
+        });
+      });
     }
     function loadGA() {
       if (!GA_ID || GA_ID.indexOf("__") === 0 || window.__vsGa) return;
@@ -53,33 +69,31 @@
       gtag("js", new Date());
       gtag("config", GA_ID);
     }
-    var saved = null;
-    try { saved = localStorage.getItem(VS_KEY); } catch (e) {}
-    if (saved !== "accepted" && saved !== "rejected") {
-      try {
-        var md = JSON.parse(localStorage.getItem(consentStoreKey()) || "null");
-        if (md && typeof md === "object") saved = md.analytics ? "accepted" : "rejected";
-      } catch (e) {}
-    }
+    var saved = readConsent();
     if (saved === "accepted") loadGA();
     document.addEventListener("DOMContentLoaded", function () {
       var banner = document.getElementById("gaBanner");
       var prefs = document.getElementById("gaPrefs");
-      function show() { if (banner) banner.hidden = false; }
-      function hide() { if (banner) banner.hidden = true; }
-      if (saved !== "accepted" && saved !== "rejected") show();
-      document.getElementById("gaAccept").addEventListener("click", function () {
+      var accept = document.getElementById("gaAccept");
+      function show(focus) {
+        banner.hidden = false;
+        if (focus) accept.focus();
+      }
+      function hide() { banner.hidden = true; }
+      if (!saved) show(false);
+      accept.addEventListener("click", function () {
         writeConsent(true);
         hide();
         loadGA();
       });
       document.getElementById("gaReject").addEventListener("click", function () {
-        var had = saved === "accepted";
+        var running = !!window.__vsGa;
         writeConsent(false);
+        clearGaCookies();
         hide();
-        if (had) location.reload();
+        if (running) location.reload();
       });
-      if (prefs) prefs.addEventListener("click", show);
+      prefs.addEventListener("click", function () { show(true); });
     });
   })();
 </script>
@@ -565,7 +579,7 @@
     { name: "bulk-rnaseq", topic: "Bioinformatics",
       outcome: "Find top differentially expressed genes from bulk RNA-seq counts." },
     { name: "open-weight-models", topic: "Bioinformatics",
-      outcome: "Package, register, validate & deploy open-weight HLS models on Databricks — e.g. TEDDY and Geneformer." },
+      outcome: "Package, register, validate & deploy open-weight HLS models on Databricks, such as TEDDY and Geneformer." },
     { name: "pathway-enrichment-analysis", topic: "Bioinformatics",
       outcome: "Pathway enrichment for RNA-seq (ORA or GSEA)." },
     { name: "sc-rnaseq", topic: "Bioinformatics",

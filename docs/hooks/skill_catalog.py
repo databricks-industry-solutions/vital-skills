@@ -168,6 +168,15 @@ def inject_landing_page(text: str, skills: list[dict] | None = None) -> str:
     return replace_block(text, JS_START, JS_END, js_catalog(skills))
 
 
+GA_PLACEHOLDER = "__GA_MEASUREMENT_ID__"
+
+
+def fill_ga_id(text: str, extra: dict | None) -> str:
+    """Put mkdocs.yml extra.analytics.property into the built landing page."""
+    property_id = str(((extra or {}).get("analytics") or {}).get("property") or "")
+    return text.replace(GA_PLACEHOLDER, property_id) if property_id else text
+
+
 def sync(write: bool = True) -> list[Path]:
     """Regenerate README.md and docs/index.html; return the files that were stale."""
     skills = load_skills()

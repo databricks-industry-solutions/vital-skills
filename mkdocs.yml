@@ -1,6 +1,7 @@
 # Docs site. docs/index.html is the hand-built landing page and is copied as-is
 # except for the skill table, which is filled from skills/*/SKILL.md frontmatter
-# (docs/hooks/skill_catalog.py). MkDocs renders the guide under /guide/ and
+# (docs/hooks/skill_catalog.py), and the Google Analytics ID, which is filled from
+# extra.analytics.property (docs/hooks/skill_pages.py). MkDocs renders the guide under /guide/ and
 # generates one page per skill (docs/hooks/skill_pages.py). Guide pages can pull
 # sections of README.md and other repo files with `<!-- include: FILE#Heading -->`
 # (docs/hooks/repo_sections.py). Build: see docs/requirements.txt.
@@ -11,7 +12,7 @@ site_url: https://databricks-industry-solutions.github.io/vital-skills/
 repo_url: https://github.com/databricks-industry-solutions/vital-skills
 repo_name: vital-skills
 edit_uri: ""
-copyright: Licensed under the Databricks License
+copyright: Licensed under the Databricks License · <a href="#__consent">Cookie settings</a>
 
 exclude_docs: |
   hooks/
@@ -29,8 +30,8 @@ extra:
   homepage: ./
   analytics:
     provider: google
-    # GA4 Measurement ID for https://databricks-industry-solutions.github.io/vital-skills/
-    # Create a Web stream in Google Analytics and replace this value.
+    # GA4 Measurement ID of the Web stream for
+    # https://databricks-industry-solutions.github.io/vital-skills/
     property: G-G34C8X35XB
   consent:
     title: Analytics cookies
@@ -105,4 +106,3 @@ nav:
   - Contributing: guide/contributing.md
   - FAQ: guide/faq.md
   - Links: guide/links.md
-  - Changelog: guide/CHANGELOG.md

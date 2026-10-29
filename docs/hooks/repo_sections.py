@@ -13,8 +13,8 @@ file is copied, minus its leading `# Title` because the page has its own:
 The source file stays the only copy, so edit it there, not on the site.
 
 - The path is relative to the repository root. Headings are matched without
-  case, backticks, or link URLs, so `Optional: Register and sync the skills to
-  Unity Gateway` matches a heading that links "Unity Gateway".
+  case, backticks, or link URLs, so `Register and sync the skills to Unity
+  Gateway` matches a heading that links "Unity Gateway".
 - `omit="Heading"` leaves out that heading and the text under it. Repeat it to
   leave out more than one section.
 - `replace="Heading=Markdown"` keeps the heading but swaps the text under it for

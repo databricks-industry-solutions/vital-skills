@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mkdocs.structure.files import File
 from repo_links import BRANCH, REPO, absolute_links, nest_lists
-from skill_catalog import inject_landing_page, load_skills
+from skill_catalog import fill_ga_id, inject_landing_page, load_skills
 
 _skills = []
 
@@ -26,11 +26,11 @@ def _eval_link(skill):
     return None
 
 
-def _summary(description, limit=160):
-    first = description.split(". ")[0].rstrip(".")
-    if len(first) > limit:
-        first = first[:limit].rsplit(" ", 1)[0] + "…"
-    return first.replace("|", "\\|")
+def _summary(summary, limit=160):
+    text = summary.strip().rstrip(".")
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0] + "…"
+    return text.replace("|", "\\|")
 
 
 def _skill_page(skill):
@@ -90,10 +90,7 @@ def on_post_build(config):
     if not path.is_file():
         return
     html = inject_landing_page(path.read_text(encoding="utf-8"), _skills)
-    property_id = str(((config.extra or {}).get("analytics") or {}).get("property") or "")
-    if property_id and property_id != "G-G34C8X35XB":
-        html = html.replace("__GA_MEASUREMENT_ID__", property_id)
-    path.write_text(html, encoding="utf-8")
+    path.write_text(fill_ga_id(html, config["extra"]), encoding="utf-8")
 
 
 def on_config(config):

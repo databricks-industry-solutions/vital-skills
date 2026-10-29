@@ -1,3 +1,7 @@
+## Blog
+- 27 Oct 2026 | [Vital Skills: Upskilling Genie Code with Healthcare and Life Sciences skills](https://www.databricks.com/blog/vital-skills-upskilling-genie-code-healthcare-and-life-sciences-skills){target="_blank" rel="noopener"}
+
+
 ## Events
 - 29 Oct 2026 | Chicago | [Healthcare and Life Sciences Industry Session](https://dataaisummit.databricks.com/flow/db/wt26ord/scheduler/page/catalog/session/1788896611371001H1zD){target="_blank" rel="noopener"} at Databricks World Tour
 - 10 Nov 2026 | Amsterdam | [Healthcare and Life Sciences Industry Session](https://dataaisummit.databricks.com/flow/db/wt26ams/scheduler/page/catalog/session/1784970585923001B3XP){target="_blank" rel="noopener"} at Databricks World Tour
@@ -10,6 +14,7 @@
 ## Help
 - [Source code on GitHub](https://github.com/databricks-industry-solutions/vital-skills){target="_blank" rel="noopener"}
 - [Report a bug or request a skill](https://github.com/databricks-industry-solutions/vital-skills/issues/new/choose){target="_blank" rel="noopener"}
+- [Changelog](https://github.com/databricks-industry-solutions/vital-skills/blob/main/CHANGELOG.md){target="_blank" rel="noopener"}
 
 
 ## Databricks

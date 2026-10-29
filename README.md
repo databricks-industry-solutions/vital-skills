@@ -8,11 +8,12 @@ Site: [https://databricks-industry-solutions.github.io/vital-skills/](https://da
 <!-- Do not change this header which generates setup.md -->
 #### Git clone this repo to Databricks
 [Git clone](https://docs.databricks.com/aws/en/repos/git-operations-with-repos#clone-a-repo) this repo onto Databricks. Then open Genie Code and click on [Customizations to add the cloned folder](https://docs.databricks.com/aws/en/genie-code/skills#add-skills-from-another-folder). It should point to the `skills` subfolder
+
 ![setup](./docs/guide/assets/setup.gif)
 
-<details>
-    <summary>Optional registration to Unity Gateway</summary>
-    
+<details markdown="1">
+<summary>Optional registration to Unity Gateway</summary>
+
 #### Register and sync the skills to [Unity Gateway](https://docs.databricks.com/aws/en/agents/uc-skills/)
 
 Run [`sync_skills_git2unity.py`](sync_skills_git2unity.py) to sync the latest skills from the repo to Unity Catalog. They also show up on Unity Gateway under Skills.
@@ -37,7 +38,7 @@ You can get the SQL warehouse id from the Databricks left menu bar: SQL Warehous
 | Skill | Category | What it does |
 |-------|----------|--------------|
 | [**bulk-rnaseq**](skills/bulk-rnaseq/SKILL.md) | Bioinformatics | Find top differentially expressed genes from bulk RNA-seq counts. |
-| [**open-weight-models**](skills/open-weight-models/SKILL.md) | Bioinformatics | Package, register, validate & deploy open-weight HLS models on Databricks — e.g. TEDDY and Geneformer. |
+| [**open-weight-models**](skills/open-weight-models/SKILL.md) | Bioinformatics | Package, register, validate & deploy open-weight HLS models on Databricks, such as TEDDY and Geneformer. |
 | [**pathway-enrichment-analysis**](skills/pathway-enrichment-analysis/SKILL.md) | Bioinformatics | Pathway enrichment for RNA-seq (ORA or GSEA). |
 | [**sc-rnaseq**](skills/sc-rnaseq/SKILL.md) | Bioinformatics | Analyze single-cell RNA-seq data from .h5ad files. |
 | [**cohort-builder**](skills/cohort-builder/SKILL.md) | Clinical | Build a reproducible, feasibility-checked patient cohort from coded + free-text clinical data. |
