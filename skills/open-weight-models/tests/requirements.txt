@@ -1,0 +1,4 @@
+# Test-only dependencies for CI (.github/workflows/ci.yml). Versions verified together.
+mlflow-skinny==3.17.2
+pandas==2.3.3
+pyyaml==6.0.3

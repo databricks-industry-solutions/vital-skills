@@ -95,7 +95,7 @@ response = w.serving_endpoints.query(
 )
 ```
 
-Note: Scimilarity serving does not use `extra_params` — no tunable inference controls.
+Note: Scimilarity serving takes no tunable inference controls, so requests carry no `params` field.
 
 ## Artifacts and runtime
 
@@ -207,9 +207,9 @@ Note: `scimilarity` uses `hnswlib` + `tiledb-vector-search` (NOT faiss) for kNN.
 Use **two separate notebooks**:
 
 1. **Download notebook (CPU)** — `curl` from Zenodo OR `snapshot_download` from HF. Widget selects source. Parallel download (model + sample data via `ThreadPoolExecutor`). No GPU, no `scimilarity` import needed. Provenance manifest.
-2. **Register and deploy notebook (CPU)** — installs `scimilarity`, loads model from Volume, registers **three separate PyFunc models** to UC, optionally creates VS index, deploys CPU Model Serving endpoints.
+2. **Register and deploy notebook (CPU)** — installs `scimilarity`, loads model from Volume, registers **three separate PyFunc models** to UC, optionally creates an AI Search index, deploys CPU Model Serving endpoints.
 
-Separating these avoids re-downloading on failed registration attempts. Use `run_go` widget gate for expensive operations.
+Separating these avoids re-downloading on failed registration attempts. Use a `run_go` widget gate for expensive operations, with saved default `"false"`; when it is switched on is in SKILL.md Troubleshooting #14.
 
 ### Three PyFunc models (from GWB module)
 
@@ -341,8 +341,8 @@ Register to Unity Catalog as `<catalog>.<schema>.scimilarity`. Log BSD-3 license
 7. **Empty expression test**: all-zero expression returns an embedding without raising.
 8. **SDK query test**: `w.serving_endpoints.query(dataframe_records=[...])` succeeds.
 9. **Embedding sanity**: embedding vector has consistent dimension (128-d) across cells.
-10. **VS self-retrieval test** (Phase 1b): query VS index with a known embedding; verify top-1 result is the query cell itself.
-11. **VS monotonic distances** (Phase 1b): verify kNN distances are monotonically non-increasing.
+10. **AI Search self-retrieval test** (Phase 1b): query the AI Search index with a known embedding; verify top-1 result is the query cell itself.
+11. **AI Search monotonic distances** (Phase 1b): verify kNN distances are monotonically non-increasing.
 12. **HF expanded model test**: if using HF source, verify `gene_order.tsv` sentinel present and API compatibility with Zenodo model.
 
 ## Open questions

@@ -1,0 +1,12 @@
+[
+  {
+    "task_id": "teddy-001",
+    "dataset": "https://huggingface.co/Merck/TEDDY",
+    "query": "Deploy TEDDY-70M as a Model Serving endpoint on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_001_{run}`, serving endpoint `owm_teddy_ep_001_{run}`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_{run}/`. Write the code and explain your decisions."
+  },
+  {
+    "task_id": "teddy-002",
+    "dataset": "https://huggingface.co/Merck/TEDDY",
+    "query": "Deploy TEDDY-70M as a Model Serving endpoint and enable nearest-neighbor cell-type search on Databricks. The model is at https://huggingface.co/Merck/TEDDY (Apache-2.0, paper: arxiv 2503.03485). Use catalog <catalog>, schema skills_owm_202610. Use these names: model `<catalog>.skills_owm_202610.owm_teddy_model_002_{run}`, serving endpoint `owm_teddy_ep_002_{run}`, Vector Search endpoint `owm_teddy_vs_002_{run}`, embeddings table `<catalog>.skills_owm_202610.owm_teddy_cells_002_{run}`, index `<catalog>.skills_owm_202610.owm_teddy_index_002_{run}`, and store downloaded files under `/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_{run}/`. Write the code."
+  }
+]

@@ -22,15 +22,15 @@ Not all model references have been tested end-to-end through the eval harness.
 
 | Reference | Validated | Eval tasks | Notes |
 |-----------|-----------|------------|-------|
-| `teddy.md` | **Yes** | oss-001 (deploy), oss-002 (deploy + VS) | 70M variant. 160M/400M share ref but not yet tested. |
-| `geneformer.md` | No | oss-005, oss-006 (WIP) | Serving tested; eval (oss-005/006) WIP. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
+| `teddy.md` | **Yes** | teddy-001 (deploy; formerly oss-001), teddy-002 (deploy + AI Search; formerly oss-002) | 70M variant. 160M/400M share ref but not yet tested. |
+| `geneformer.md` | Pending | geneformer-001, geneformer-002 (formerly oss-005, oss-006; planned) | Serving tested; evaluation pending. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
 | `scgpt.md` | No | — | Reference provided; no eval task yet. |
 | `scimilarity.md` | No | — | Zenodo v1.1 and HF expanded. |
 | `alphafold-openfold.md` | No | — | Reference provided; no eval task yet. |
 | `boltz.md` | No | — | Reference provided; no eval task yet. |
 | `midnight.md` | No | — | DINOv2 pathology tile embedder. Skeleton wrapper. |
 
-**Validated** = used by Genie Code in a blind eval run producing a working deployment. Does not imply scientific/clinical validation.
+**Validated** = used by Genie Code in a blind eval run producing a working deployment. Does not imply scientific/clinical validation. **Pending** = deployment tested by hand; the Genie Code evaluation is planned.
 
 ## When to Use
 
@@ -40,7 +40,7 @@ Not all model references have been tested end-to-end through the eval harness.
 - You must decide between Model Serving, Jobs, an interactive app, or a multi-step workflow for a scientific model.
 - The request touches provenance, licensing, or offline reproducibility controls for external model weights and datasets.
 - The user asks for AI Gateway policies, usage tracking, or inference tables over an HLS endpoint that may log sensitive payloads.
-- The deployment combines a model endpoint with a **Databricks AI Search index** for embedding-based retrieval.
+- The deployment combines a model endpoint with a **Databricks AI Search index** (formerly Vector Search, VS) for embedding-based retrieval.
 - The model requires **vLLM** (autoregressive generation) or **NVIDIA TE stubs** (BioNeMo models) rather than a standard PyFunc wrapper.
 
 For generic custom PyFunc, sklearn, or ordinary PyTorch packaging with no scientific inputs, use the standard Databricks ML training skill instead.
@@ -63,7 +63,7 @@ Complex inputs (AnnData, sparse matrices, FASTA, YAML, structures) need a delibe
 Technical validation (imports, signatures, deployment) is distinct from scientific, clinical, and regulatory validation. A successful deployment never implies clinical validity.
 
 ### Retrieval-augmented deployment (Databricks AI Search)
-Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (oss-002 covers TEDDY + VS end-to-end).
+Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (teddy-002, formerly oss-002, covers TEDDY + AI Search end-to-end).
 
 ### Serving engines and NVIDIA architecture components
 The default deployment path is MLflow custom PyFunc. Two important extensions:
@@ -111,7 +111,7 @@ For endpoint observability, usage tracking, or request logging, use supported AI
 
 ## Best Practices
 
-1. **Define the serving contract before the wrapper.** Create an `input_example` and a signature that represent the actual request. Prefer explicit columns/fields for meaningful optional controls over an untested SDK `params=` path. Document request/response examples for both Python SDK and HTTP invocation, and validate them with the generic MLflow serving-input tools plus a real endpoint or local runner.
+1. **Define the serving contract before the wrapper.** Create an `input_example` and a signature that represent the actual request. Prefer explicit columns/fields for meaningful optional controls; if you use MLflow `params` instead, send them in the REST body `"params"` field (not the SDK's `extra_params`, see Troubleshooting #13) and prove a non-default value changes the output. Document request/response examples for both Python SDK and HTTP invocation, and validate them with the generic MLflow serving-input tools plus a real endpoint or local runner.
 2. **Package for reproducibility.** Pin source revisions and dependency versions; prefer build-time downloads into a governed Volume or model artifact location; record URL, revision, checksum, license, and acquisition date in a manifest; never download weights at request time; never embed credentials in artifacts or notebooks; test an offline / network-restricted startup path.
 3. **Make cache and database paths explicit.** Ensure cache paths are writable by the serving or Job identity. Keep large reference databases outside the model artifact when appropriate, but version and validate their mounted location.
 4. **Keep the wrapper boundary thin.** Load heavyweight objects once during initialization; keep `predict` deterministic with respect to declared inputs; normalize scientific input types at the boundary; return stable serializable outputs or persisted artifact references; expose provenance without leaking secrets.
@@ -125,6 +125,7 @@ For endpoint observability, usage tracking, or request logging, use supported AI
 12. **Use file-based model logging (`python_model=<path>`) when the model code is shipped via `code_paths`, not pip-installed.** Passing a live instance (`python_model=wrapper`) triggers cloudpickle serialisation, which captures `import <package>` references. If the package is not pip-installable (only available via `code_paths`), the serving container will fail at unpickle time with `ModuleNotFoundError` because `cloudpickle.load()` runs **before** `code_paths` are placed on `sys.path`. The fix: write the PyFunc class to a standalone `.py` file, add `mlflow.models.set_model(MyWrapper())` at module level, and pass `python_model=<path_to_wrapper.py>` to `log_model`. This makes MLflow import the file directly after `code_paths` are on `sys.path`, bypassing cloudpickle entirely. This applies to all HLS models whose source code is bundled (TEDDY, Geneformer custom tokenizers, scGPT, etc.).
 13. **Use SDK enum classes for endpoint configuration, not string literals.** When setting `workload_type`, use `ServingModelWorkloadType.GPU_SMALL` (from `databricks.sdk.service.serving`), not the string `"GPU_SMALL"`. String literals bypass SDK validation and can silently produce invalid configs. The same principle applies to other typed fields: `EndpointStateReady`, `EndpointStateConfigUpdate`, `ServedModelStateDeployment`, etc.
 14. **Construct test payloads from the declared signature, not from "typical" template code.** Before running a smoke test against a deployed endpoint, read the model's MLflow signature and ensure every required field is present with the correct type. A missing required column (e.g. `adata_obs`) produces a schema-enforcement `BadRequest` that is distinct from the model logic itself. Use real input values from the model's vocabulary or reference data — synthetic values that map to the OOV token produce degenerate outputs that cannot validate the tokenisation path.
+15. **Write to existing tables and indexes additively; confirm before replacing anything.** Before writing an embeddings table, check whether it exists (`spark.catalog.tableExists(name)`). If it does, append, or `MERGE` on the primary key (for example `cell_id`), instead of overwriting; overwrite, drop, or recreate an existing table, index, endpoint, or model version only after the user confirms that exact name. Offer a new name (for example a variant- or date-suffixed one) as the safe alternative. Resources the current run created itself can be cleaned up without asking.
 
 ## Example
 
@@ -142,7 +143,7 @@ input_example = {
     "genes": ["<ensembl-gene-id-1>", "<ensembl-gene-id-2>", "<ensembl-gene-id-3>"],
     "expression": [12.0, 5.0, 3.0],  # counts aligned position-for-position to `genes`
     "vocab_version": "<vocab-version>",
-    # Optional controls as explicit fields (Best Practices §1), NOT an untested params= path.
+    # Optional controls as explicit fields (Best Practices §1), NOT an unverified params path.
     # Supported values (e.g. the pooling mode enum, the max token/gene-count limit) must be
     # read from the pinned reference — do not assume them here.
     "config": "{\"truncation\": true, \"gene_count_limit\": \"<max-input-tokens>\", \"pooling_mode\": \"<pooling-mode>\", \"output\": \"embedding\"}",
@@ -224,8 +225,8 @@ artifacts:
    - *How to avoid*: Download at build time into a governed Volume or artifact location; test an offline startup path.
 2. **Unpinned or `latest` revisions.** A mutable branch or model card silently changes behavior.
    - *How to avoid*: Pin an immutable commit SHA or content-addressed release/DOI (git tags can move) and record it in the manifest with a checksum.
-3. **Relying on an untested `params=` path.** The SDK `params=` route may not round-trip for a given custom PyFunc and deployment route.
-   - *How to avoid*: Use explicit fields/columns for controls, and validate the exact serving serializer before depending on arrays or nested lists.
+3. **Relying on an untested `params` path.** Inference controls sent through the SDK's `extra_params` never reach a custom PyFunc (see Troubleshooting #13), and a control missing from the signature's params schema is dropped — both without an error.
+   - *How to avoid*: Use explicit fields/columns for controls, or send them in the REST body `"params"` field and prove a non-default value changes the output; validate the exact serving serializer before depending on arrays or nested lists.
 4. **Logging raw sensitive payloads.** Inference tables can capture patient, donor, sequence, or compound data.
    - *How to avoid*: Classify and minimize/redact first; log hashes, metadata, or governed URIs instead of raw inputs.
 5. **Assuming skill inheritance.** Genie Code has no formal mechanism to inherit the generic skill's steps.
@@ -246,10 +247,14 @@ artifacts:
     - *How to avoid*: Purge `package.*` entries from `sys.modules` in **two places**: (a) at cell level before any `from <package> import ...` statement in the notebook, and (b) at the top of `load_context` inside the PyFunc wrapper. The cell-level purge catches notebook re-execution issues; the `load_context` purge makes the dry-load test cell safe (it imports the package in the same kernel as the class cell). The serving container starts clean, so the `load_context` purge is a no-op there — but it costs nothing and prevents a class of hard-to-debug failures. Also re-insert the bundle path at position 0 in `sys.path` after purging.
 12. **`pd.read_json` treats a literal JSON string as a file path in newer pandas.** Pandas 2.1+ deprecated passing a raw JSON string directly and may raise `FileNotFoundError` treating the content as a path.
     - *How to avoid*: Always wrap with `io.StringIO`: `pd.read_json(io.StringIO(json_string), orient="split")`. Import `io` explicitly inside the PyFunc class cell.
-13. **`serving_endpoints.query()` uses `extra_params`, not `params`.** The Databricks Python SDK's `serving_endpoints.query()` signature uses `extra_params: Optional[Dict[str, str]]`, not `params`. Values must be strings.
-    - *How to avoid*: Pass `extra_params={"max_seq_len": "2048", "pooling": "mean"}` (string values). The PyFunc `predict` method should cast on receipt: `int(params.get("max_seq_len", 2048))`, `str(params.get("pooling", "mean"))`.
-14. **Use a `run_go` widget gate for expensive operations.** Endpoint creation, model deployment, and VS index creation cost real money. A widget gate (`dbutils.widgets.dropdown("run_go", "false", ["false", "true"])`) prevents accidental execution in shared notebooks.
-    - *How to implement*: Read `RUN_GO = dbutils.widgets.get("run_go") == "true"` early; wrap all side-effect cells with `if not RUN_GO: print("run-gate off"); ...`.
+13. **`serving_endpoints.query(extra_params=...)` is silently ignored by a custom PyFunc.** The SDK sends `extra_params` under the request-body key `"extra_params"`, a field it documents as only for external and foundation-model endpoints. The MLflow scoring server behind a custom PyFunc keeps only the input field (`dataframe_records`, `dataframe_split`, `instances`, `inputs`) and reads inference controls from the body key `"params"`, so `extra_params` is dropped and `predict()` runs with its defaults. The call still succeeds and returns valid-looking output — **a passing call is not proof the setting was applied.** Measured 2026-10-27 on a TEDDY PyFunc endpoint: `extra_params={"pooling": "first_token"}` returned embeddings identical to the default (cosine 1.0); the same value under body `"params"` changed them (cosine 0.53–0.64).
+    - *How to avoid*: Post the body yourself so controls land under `"params"`: `w.api_client.do("POST", f"/serving-endpoints/{name}/invocations", body={"dataframe_records": records, "params": {"max_seq_len": "512"}})` (HTTP equivalent: `POST /serving-endpoints/<name>/invocations` with JSON `{"dataframe_records": [...], "params": {"max_seq_len": "512"}}`). Declare every control in the logged signature's params schema — undeclared keys are dropped with only a log warning — and give each default the type you will send: if you send strings (e.g. `default_params={"max_seq_len": "2048", "pooling": "mean"}`), MLflow will not convert a string to an integer param and rejects the request. Cast in `predict`: `int(params.get("max_seq_len", 2048))`. Locally, `loaded_model.predict(df, params={...})` is the same mechanism. Smoke test: send one non-default value and assert the output differs from the default.
+14. **Gate costly steps (endpoint, deployment, AI Search index) behind a `run_go` widget whose saved default is `"false"`.** Always create it as `dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")` and never change the saved default to `"true"`, so re-running the saved notebook (or a copy) never spends money without someone choosing to.
+    - *Request asks to deploy* (e.g. "Deploy X as a serving endpoint"): that is the user's intent. Say in one short line that the gate is off by default and that, because they asked to deploy, you will switch `run_go` on for this run and create <endpoint name, GPU tier, AI Search endpoint/index> unless they stop you — then proceed. If you cannot set the widget yourself, tell the user exactly how: set the `run_go` widget at the top of the notebook to `true` and re-run from the gated cell.
+    - *Request says both "deploy" and "write the code"* (e.g. "Deploy X … Write the code."): treat it as a deploy request — the code is written either way — and say so in the same one line before switching `run_go` on.
+    - *Request asks only for code*: leave the gate off and say how to turn it on.
+    - *Anything beyond the request* — a larger GPU tier than needed, extra endpoints, deleting or replacing existing resources: stop and ask first.
+    - *How to implement*: read `RUN_GO = dbutils.widgets.get("run_go") == "true"` early; wrap every costly cell in `if not RUN_GO: print('run_go is "false": skipped <step>. Set the run_go widget to "true" and re-run this cell to run it.')` with the costly work in the `else` branch.
 15. **Use sentinel files for idempotent re-runs.** Downloads and copies to UC Volumes should be idempotent — check for a sentinel file (e.g. `.copy_complete`, `.snapshot_complete`) before repeating expensive operations.
     - *How to implement*: Write a sentinel after successful completion; check for it at the start of the cell.
 16. **Use adaptive storage paths.** `/local_disk0` is unavailable on Serverless compute. Detect the environment at runtime and fall back to `/tmp`.
@@ -285,16 +290,16 @@ artifacts:
     - *How to avoid*: Poll with a 1800 s timeout (30 min) and check `ServedModelStateDeployment.DEPLOYMENT_FAILED` on each iteration. Raise immediately with the deployment state message instead of waiting for the full timeout.
 25. **Model forward output keys differ from documentation or expected conventions.** Custom HLS models may return pre-pooled embeddings under non-standard dict keys (e.g. `cell_emb` instead of `all_embs` or `last_hidden_state`). The wrapper’s embedding extraction silently returns `None`, which surfaces later as `unsupported operand type(s) for *: 'NoneType' and 'Tensor'` in the pooling step.
     - *How to avoid*: **Always run a runtime diagnostic** before writing the extraction logic: call `model(**fwd_kwargs)` once and print `type(outputs)`, `outputs.keys()` (for dicts), and shape/dim of each value. Check the model reference (`references/models/<model>.md`) for the verified output key. If the output is already 2D (pre-pooled), skip external pooling with a `dim() == 2` guard. Also verify which parameters `forward()` actually accepts via `inspect.signature(model.forward).parameters.keys()` — unused kwargs are silently filtered but worth documenting.
-    - *Discovered*: oss-002 v2 (2026-10-01). TEDDY 70M returns `{"cell_emb": tensor(cells, d_model)}`. See `references/models/teddy.md` §Forward output key.
+    - *Discovered*: teddy-002 (formerly oss-002) v2 (2026-10-01). TEDDY 70M returns `{"cell_emb": tensor(cells, d_model)}`. See `references/models/teddy.md` §Forward output key.
 26. **`artifacts=` dict in `log_model` only accepts file/directory paths.** Passing a literal string value (e.g. `artifacts={"vocab_version": "v1"}`) causes `MlflowException: No such artifact: 'v1'` because MLflow treats every value in the `artifacts` dict as a local filesystem path to upload. Non-path metadata silently becomes a broken artifact reference.
     - *How to avoid*: Only put file or directory paths in the `artifacts=` dict. For scalar metadata (version strings, config flags), either hardcode them inside the wrapper class, write them to a JSON/text file and pass that file path, or log them as MLflow tags/params.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer `vocab_version="v1"` passed as artifact value.
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer `vocab_version="v1"` passed as artifact value.
 27. **`workload_size` required alongside `workload_type` for GPU served entities.** Some workspace/API combinations reject a `ServedEntityInput` that specifies only `workload_type` (e.g. `GPU_SMALL`) without also setting `workload_size`. The error is `InvalidParameterValue: workloadSizeId is undefined`.
-    - *How to avoid*: Always pass both fields: `workload_type=ServingModelWorkloadType.GPU_SMALL, workload_size="Small"`. The `workload_size` string values are `"Small"`, `"Medium"`, `"Large"`.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer endpoint creation failed without `workload_size`.
+    - *How to avoid*: Always pass both fields: `workload_type=ServingModelWorkloadType.GPU_SMALL, workload_size="Small"`. The `workload_size` string values are `"Small"`, `"Medium"`, `"Large"`. Related required field: pass `name=ENDPOINT_NAME` to `EndpointCoreConfigInput` — `name` is Optional in databricks-sdk <=0.70.0 and required from 0.71.0 (serverless environment v6 ships 0.122.0), so passing it works on both — omitting it raises `TypeError: EndpointCoreConfigInput.__init__() missing 1 required positional argument: 'name'` (recorded in four of the five 2026-10-27 TEDDY runs).
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer endpoint creation failed without `workload_size`.
 28. **`serving_endpoints.query()` returns a typed `QueryEndpointResponse`, not a dict.** Calling `.get("predictions")` or other dict methods on the response raises `AttributeError: 'QueryEndpointResponse' object has no attribute 'get'`.
     - *How to avoid*: Use attribute access: `response.predictions`. If you need to handle both SDK objects and raw dicts (e.g. from `requests.post`), use `getattr(response, "predictions", None) or response["predictions"]`.
-    - *Discovered*: oss-005 (2026-10-03). Geneformer endpoint smoke test.
+    - *Discovered*: geneformer-001 (formerly oss-005) (2026-10-03). Geneformer endpoint smoke test.
 
 ## Workflow
 
@@ -304,7 +309,8 @@ artifacts:
 4. **Define the serving contract before the wrapper.** Build the `input_example`, signature, and documented SDK + HTTP examples (see Best Practices §1).
 5. **Package for reproducibility.** Pin and manifest all provenance-controlled inputs. Read `pip_requirements` from the model's own dependency specification (`pyproject.toml`, `requirements.txt`, or `setup.cfg`) rather than inferring them from PyFunc class imports — the PyFunc imports miss the bundled package's full import chain (see Best Practices §9). Test an offline startup path (see Best Practices §2–3).
 6. **Implement and register.** Use the standard custom PyFunc pattern, add only the HLS adapter behavior, and register to Unity Catalog with a versioning/promotion strategy (see Best Practices §4–5).
-7. **Validate scientifically and operationally.** Run at minimum: import/dependency smoke test; offline artifact and checksum test; wrapper initialization test; signature and `input_example` test; Python SDK and HTTP payload tests; a small known-input regression test; malformed-input and resource-limit tests; a serving or Job deployment test in the target runtime; and output sanity checks for the model family.
+7. **Validate scientifically and operationally.** Run at minimum: import/dependency smoke test; offline artifact and checksum test; wrapper initialization test; signature and `input_example` test; Python SDK and HTTP payload tests; an **upstream-parity test**; malformed-input and resource-limit tests; a serving or Job deployment test in the target runtime; and output sanity checks for the model family.
+   - *Upstream-parity test*: run a few real samples through the model's **own** upstream preprocessing and inference code (the functions named in `references/models/<model>.md`) and through your wrapper, then compare both stages — the same selected tokens/inputs (compare as sets: tiny floating-point differences can swap near-tied values, so assert membership and report order only for information), and output embeddings with cosine similarity ~1.0 per sample, with a stated threshold (for example >= 0.9999). A wrapper validated only against itself (for example endpoint output vs. the same wrapper run in the notebook) is **not** validated: it proves the deployment reproduces the wrapper, not that the wrapper reproduces the model. If upstream code cannot be run, say so and report the wrapper as unverified against upstream.
 
 ## Model-family references
 
@@ -344,7 +350,7 @@ Every new model reference should include:
 6. Serving-versus-Jobs recommendation.
 7. Wrapper boundary and serialization rules.
 8. Registration and deployment path.
-9. Smoke, regression, and negative tests.
+9. Smoke, regression, upstream-parity, and negative tests.
 10. Open questions requiring deeper exploration.
 11. Date reviewed and upstream version.
 
@@ -365,9 +371,10 @@ Every new model reference should include:
 2. Download weights, tokenizers, and reference databases at build time into a governed Volume or model artifact location; never fetch them at request time, and test an offline / network-restricted startup path.
 3. Never log raw sensitive payloads — patient, donor, sequence, structure, or compound data — to inference tables; classify and minimize/redact first, and log a hash, metadata record, or governed URI instead of the raw input.
 4. Honor and record both the model AND the dataset/weights licenses in the manifest before packaging or distributing; treat an unknown license as blocking, not as a default-permit.
-5. Validate the exact serving serializer against the deployed endpoint before depending on an SDK `params=` path, arrays, or nested lists; prefer explicit fields/columns for controls.
+5. Validate the exact serving serializer against the deployed endpoint before depending on a `params` path, arrays, or nested lists; prefer explicit fields/columns for controls, and never treat a successful call as proof an inference control was applied — compare output against a non-default value.
 6. When a model name is ambiguous, stop and ask for the exact upstream project (repository, package, model card) rather than guessing tensor shapes, tokenizer names, database paths, or APIs.
 7. Never treat a green technical deployment as scientific or clinical validity; report technical validation separately and defer scientific, clinical, and regulatory sign-off to the appropriate review.
+8. Never delete, drop, overwrite, or recreate an existing table, AI Search index, endpoint, or model version that the current run did not create without asking the user first; offer reuse under a new name, and replace only with explicit confirmation.
 
 ## References
 

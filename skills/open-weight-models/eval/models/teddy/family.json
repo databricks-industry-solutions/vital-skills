@@ -1,0 +1,179 @@
+{
+  "family": "teddy",
+  "description": "TEDDY (Merck/TEDDY, 70M variant) eval settings: resource names per run, outcome settings, old-prompt substitutions.",
+  "current_round": "runs_20261026",
+  "catalog_placeholder": "<catalog>",
+  "schema": "skills_owm_202610",
+  "volume": "owm_teddy_files",
+  "workspace_run_folder": "/Workspace/Users/<workspace-user>/PROJECTS/genie-code-skills/teddy-eval-2026-10",
+  "recorded_skill_folder": "/Workspace/Users/<workspace-user>/PROJECTS/hls-skills-tests/<project-folder>/.assistant/skills/oss-models/",
+  "installed_skill_folder": "/Workspace/Users/<workspace-user>/.assistant/skills/open-weight-models/",
+  "run_suffix": {
+    "baseline": "baseline",
+    "with_skill": "with_skill",
+    "old_prompt_baseline": "old_baseline",
+    "old_prompt_with_skill": "old_with_skill"
+  },
+  "run_suffix_overrides": {
+    "teddy-001": {
+      "with_skill": "skill_on"
+    }
+  },
+  "run_suffix_overrides_note": "teddy-001 with_skill uses suffix skill_on because the first baseline/teddy-001 run (2026-10-27) used the `_001_with_skill` names: its prompt is the standard teddy-001 request, identical word for word; only the resource names and download path differ - they carried the `_001_with_skill` suffix from the run guide before per-run names were finalised; see runs_20261026/README.md.",
+  "names": {
+    "teddy-001": {
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_001_{run}",
+      "serving_endpoint": "owm_teddy_ep_001_{run}",
+      "files": "/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/001_{run}/"
+    },
+    "teddy-002": {
+      "uc_model": "<catalog>.skills_owm_202610.owm_teddy_model_002_{run}",
+      "serving_endpoint": "owm_teddy_ep_002_{run}",
+      "vector_search_endpoint": "owm_teddy_vs_002_{run}",
+      "delta_table": "<catalog>.skills_owm_202610.owm_teddy_cells_002_{run}",
+      "vector_search_index": "<catalog>.skills_owm_202610.owm_teddy_index_002_{run}",
+      "files": "/Volumes/<catalog>/skills_owm_202610/owm_teddy_files/002_{run}/"
+    }
+  },
+  "outcome": {
+    "fixture": "fixtures/teddy_request.json",
+    "embedding_dim": 512,
+    "embedding_dim_source": "70M config.json d_model=512 (fixtures/teddy_request.json source); references/models/teddy.md:48",
+    "vector_search_tasks": [
+      "teddy-002"
+    ],
+    "checks_all_tasks": [
+      "outcome/endpoint_ready",
+      "outcome/serves_recorded_version",
+      "outcome/returns_valid_embeddings",
+      "outcome/accepts_expression_input"
+    ],
+    "checks_vector_search": [
+      "outcome/vs_endpoint_online",
+      "outcome/index_ready",
+      "outcome/nn_returns_cell_type"
+    ],
+    "convention_checks": [
+      "convention/shared_single_cell_format"
+    ],
+    "convention_checks_note": "Shared single-cell input format (adata_sparsematrix + adata_obs + adata_var) of references/models/teddy.md, also used by scgpt.md and Genesis Workbench. Reported on its own, not as a failure of the run."
+  },
+  "old_prompts_file": "old_prompts.json",
+  "old_prompts": {
+    "old_prompt_baseline": {
+      "recorded_arm": "baseline"
+    },
+    "old_prompt_with_skill": {
+      "recorded_arm": "with_skill"
+    }
+  },
+  "old_prompt_substitutions": {
+    "old_prompt_baseline": {
+      "teddy-001": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_without/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_baseline`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy_70m_baseline`",
+          "`{serving_endpoint}`"
+        ]
+      ],
+      "teddy-002": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_without/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_vs_baseline`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy-70m-vs-baseline`",
+          "`{serving_endpoint}`"
+        ],
+        [
+          "Create a Delta table of reference cell embeddings and a Vector Search index for nearest-neighbor lookup.",
+          "Create a Delta table `{delta_table}` of reference cell embeddings and a Vector Search index `{vector_search_index}` on endpoint `{vector_search_endpoint}` for nearest-neighbor lookup."
+        ]
+      ]
+    },
+    "old_prompt_with_skill": {
+      "teddy-001": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_with/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy_70m`",
+          "`{serving_endpoint}`"
+        ]
+      ],
+      "teddy-002": [
+        [
+          "`skills`",
+          "`skills_owm_202610`"
+        ],
+        [
+          "`/Volumes/<catalog>/skills/test_with/models/teddy`",
+          "`{files}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_70m_v2`",
+          "`{uc_model}`"
+        ],
+        [
+          "`teddy-70m-v2-embedder`",
+          "`{serving_endpoint}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_cells_70m_v2`",
+          "`{delta_table}`"
+        ],
+        [
+          "`<catalog>.skills.teddy_cell_index_70m_v2`",
+          "`{vector_search_index}`"
+        ],
+        [
+          "`teddy-70m-v2-search-endpoint`",
+          "`{vector_search_endpoint}`"
+        ]
+      ]
+    }
+  },
+  "upstream_dependencies": {
+    "source": "pyproject.toml of Merck/TEDDY on Hugging Face, [tool.poetry.dependencies]",
+    "revision": "8c880aa67674042ccdc254bccb5de081092a48bf",
+    "sha256": "05ece60ca7de631242c5cf0e18b88d7cde584ff9083a8e067eec6bbdd48533f1",
+    "checked": "2026-10-27, read-only download to a temporary folder, deleted after",
+    "note": "Exact pins of the packages on the model's serving path (torch is '^2.3.0 || >=2.0.1', not an exact pin, so it is not compared). Used by the corrected model_registration/pip_reqs_from_source check.",
+    "pins": {
+      "transformers": "4.41.0",
+      "tokenizers": "0.19.1",
+      "safetensors": "0.4.3",
+      "numpy": "1.26.4",
+      "pandas": "2.2.2",
+      "huggingface-hub": "0.23.1"
+    }
+  }
+}

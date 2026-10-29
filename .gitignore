@@ -20,6 +20,10 @@ build/
 .pytest_cache/
 **/tests/results/
 
+# Eval run folders (exported notebooks, run records, per-run scores) stay out of the repo; each skill keeps
+# only its score summaries (eval/baseline_scores.json, eval/with_skill_scores.json) and its report.
+skills/*/eval/models/*/runs_*/
+
 # Local agent skill installs (project consumers)
 .claude/skills/
 .cursor/skills/

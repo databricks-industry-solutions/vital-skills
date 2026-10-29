@@ -32,15 +32,15 @@ The `TransformerModelWrapper` PyFunc accepts three JSON-encoded columns (same pa
 | `adata_obs` | `str` — JSON orient=`split` | Cell metadata DataFrame. Must include `batch` and optionally `final_annotation`. |
 | `adata_var` | `str` — JSON orient=`split` | Gene metadata DataFrame with `gene_name` column. |
 
-Inference controls via `params` (MLflow local) or `extra_params` (SDK):
+Inference controls go in the REST request body's `"params"` field (endpoint) or `params=` (MLflow local `predict`). Do **not** use the SDK's `serving_endpoints.query(extra_params=...)` — a custom PyFunc endpoint drops it (see [HTTP payload](#http-payload-databricks-sdk)). Send values as strings, log the signature with string defaults, and cast in `predict`:
 
 | Parameter | Type | Default | Notes |
 |-----------|------|---------|-------|
-| `need_preprocess` | bool (as str via SDK) | `True` | Whether to run the scGPT `Preprocessor` |
-| `subset_hvg` | int (as str) | `1200` | Number of highly variable genes to select |
-| `binning` | int (as str) | `51` | Number of expression bins |
-| `filter_gene_by_counts` | int (as str) | `3` | Minimum gene count filter |
-| `normalize_total` | float (as str) | `1e4` | Target sum for normalization |
+| `need_preprocess` | bool (sent as str) | `True` | Whether to run the scGPT `Preprocessor` |
+| `subset_hvg` | int (sent as str) | `1200` | Number of highly variable genes to select |
+| `binning` | int (sent as str) | `51` | Number of expression bins |
+| `filter_gene_by_counts` | int (sent as str) | `3` | Minimum gene count filter |
+| `normalize_total` | float (sent as str) | `1e4` | Target sum for normalization |
 
 ### Output
 
@@ -98,17 +98,24 @@ HTTP request equivalent (JSON):
 
 ### HTTP payload (Databricks SDK)
 
+Send inference controls under the body key `"params"`; `w.serving_endpoints.query(extra_params=...)` writes them to a body key `"extra_params"` that the MLflow scoring server drops, so `predict()` silently runs with defaults. This was measured on a TEDDY endpoint (2026-10-27); for scGPT it is **inferred from the same mechanism, not live-tested** (see SKILL.md Troubleshooting #13).
+
 ```python
-response = w.serving_endpoints.query(
-    name=ENDPOINT_NAME,
-    dataframe_records=[{
-        "adata_sparsematrix": expr,
-        "adata_obs": obs,
-        "adata_var": var,
-    }],
-    extra_params={"need_preprocess": "True", "subset_hvg": "1200", "binning": "51"},
+response = w.api_client.do(
+    "POST",
+    f"/serving-endpoints/{ENDPOINT_NAME}/invocations",
+    body={
+        "dataframe_records": [{
+            "adata_sparsematrix": expr,
+            "adata_obs": obs,
+            "adata_var": var,
+        }],
+        "params": {"need_preprocess": "True", "subset_hvg": "1200", "binning": "51"},
+    },
 )
 ```
+
+Equivalent HTTP request: `POST /serving-endpoints/<endpoint-name>/invocations` with JSON `{"dataframe_records": [...], "params": {"need_preprocess": "True", "subset_hvg": "1200", "binning": "51"}}`. String values need string defaults in the logged signature (MLflow rejects a string sent for an integer-typed param), and the wrapper must cast them — note `"False"` is truthy, so parse booleans explicitly (e.g. `str(params.get("need_preprocess", "True")).lower() == "true"`).
 
 ## Artifacts and runtime
 
@@ -191,7 +198,7 @@ Use **two separate notebooks**:
 1. **Download notebook (CPU)** — `gdown` from Google Drive + `wget` from Figshare. No GPU. Installs `gdown` + `wget` only. Sentinel files for idempotency. Provenance manifest.
 2. **Register and deploy notebook (GPU)** — loads model on GPU (flash-attn requires it), wraps in `TransformerModelWrapper` PyFunc, builds input_example from sample data, infers signature, registers to UC, deploys to GPU Model Serving endpoint.
 
-Use `run_go` widget gate for expensive operations.
+Use a `run_go` widget gate for expensive operations, with saved default `"false"`; when it is switched on is in SKILL.md Troubleshooting #14.
 
 ### GWB lineage
 
@@ -272,17 +279,20 @@ Uses `scgpt.preprocess.Preprocessor` to normalize and bin expression data:
 ```python
 def preprocess(self, context, input_dataframe=None, params=None):
     from scgpt.preprocess import Preprocessor
-    import scipy.sparse, scanpy
+    import io, scipy.sparse, scanpy
 
+    params = params or {}
     adata_sparsematrix = scipy.sparse.csr_matrix(input_dataframe['adata_sparsematrix'][0])
-    adata_obs = pd.read_json(input_dataframe['adata_obs'][0], orient='split')
-    adata_var = pd.read_json(input_dataframe['adata_var'][0], orient='split')
+    adata_obs = pd.read_json(io.StringIO(input_dataframe['adata_obs'][0]), orient='split')
+    adata_var = pd.read_json(io.StringIO(input_dataframe['adata_var'][0]), orient='split')
     loaded_data = scanpy.AnnData(adata_sparsematrix, obs=adata_obs, var=adata_var)
 
     preprocessor = Preprocessor(
         use_key=params.get("use_key", "X"),
-        subset_hvg=params.get("subset_hvg", self.n_hvg),
-        binning=params.get("binning", self.n_bins),
+        filter_gene_by_counts=int(params.get("filter_gene_by_counts", 3)),  # params arrive as strings
+        normalize_total=float(params.get("normalize_total", 1e4)),
+        subset_hvg=int(params.get("subset_hvg", self.n_hvg)),
+        binning=int(params.get("binning", self.n_bins)),
         # ... additional params
     )
     preprocessor(loaded_data)
@@ -293,7 +303,8 @@ def preprocess(self, context, input_dataframe=None, params=None):
 
 ```python
 def predict(self, context, model_input=None, params=None):
-    if params.get("need_preprocess", True):
+    params = params or {}
+    if str(params.get("need_preprocess", "True")).lower() == "true":  # "False" is a truthy string
         preprocessed = self.preprocess(context, model_input, params)
     else:
         preprocessed = model_input
@@ -317,7 +328,7 @@ def predict(self, context, model_input=None, params=None):
 
 * `scale_to_zero_enabled=True` with `ServingModelWorkloadType.GPU_SMALL`.
 * Enable AI Gateway inference table + usage tracking.
-* `run_go` gate widget to prevent accidental deployment.
+* `run_go` gate widget, default `"false"`, to prevent accidental deployment.
 * **Prefer Jobs** for large-batch embedding, perturbation prediction, or dataset-scale workflows.
 
 ## Registration and observability
@@ -332,7 +343,7 @@ Register to Unity Catalog as `<catalog>.<schema>.scgpt`. Log license, paper DOI,
 4. **Preprocessing test**: `Preprocessor` runs on sample h5ad data; produces binned AnnData.
 5. **Forward pass test**: model produces gene embeddings dict with expected genes.
 6. **Signature test**: `infer_signature` with `input_example` and `output_example` + `default_params`.
-7. **SDK query test**: `w.serving_endpoints.query(extra_params={...})` returns valid embeddings.
+7. **Inference-control test** (inferred, not live-tested): the output is one embedding per gene that is both in `vocab.json` and kept by preprocessing, so the test must change the kept gene set. Build a payload whose gene names come from `vocab.json` (the `GENE<i>` placeholders above match nothing, so both calls would return an empty dict) with more than 20 vocabulary genes. Call the endpoint through the body-`"params"` request above twice: defaults (`subset_hvg` 1200 is above the payload's gene count, so highly-variable-gene selection does not cut the set to 20), then `{"subset_hvg": "20"}`, which keeps at most 20 highly variable genes (`scgpt.preprocess.Preprocessor` passes it to `scanpy.pp.highly_variable_genes(n_top_genes=..., subset=True)`). Assert the default call returns more than 20 genes and the second at most 20. Identical gene sets mean the control never reached `predict()`; a successful call alone proves nothing.
 8. **Endpoint teardown**: tear down immediately after validation to stop GPU billing.
 
 ## Open questions

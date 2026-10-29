@@ -39,7 +39,12 @@ Describe `load_context`, request normalization, prediction, postprocessing, and 
 
 ## Deployment recommendation
 
-Choose Model Serving, Jobs, or hybrid. Explain the decision using latency, resource, request-size, database, and output-size constraints.
+Choose Model Serving, Jobs, or hybrid. Explain the decision using latency, resource, request-size, database, and output-size constraints. Gate costly steps (endpoint, deployment, index) behind a `run_go` widget whose saved default is always `"false"` (SKILL.md Troubleshooting #14):
+
+* Request asks to deploy: say in one short line that the gate is off by default and that, because they asked, you will switch it on for this run and create <endpoint name, GPU tier, any index> unless they stop you — then proceed (or tell the user how to switch it on if you cannot).
+* Request says both "deploy" and "write the code": treat it as a deploy request (the code is written either way) and say so in the same one line before switching it on.
+* Request asks only for code: leave the gate off and say how to turn it on.
+* Anything beyond the request (larger GPU tier, extra endpoints, deleting or replacing resources): stop and ask first.
 
 ## Registration and observability
 
@@ -50,7 +55,7 @@ Describe the Unity Catalog model artifact and versioning approach. If AI Gateway
 Include:
 
 * import and offline-startup checks
-* known-input regression case
+* upstream-parity case: a few real samples through the model's own upstream preprocessing and inference functions (name them, with module paths) and through the wrapper — same token/input sets (order can differ on near-tied values), output cosine ~1.0 against a stated threshold
 * signature and payload tests
 * malformed-input tests
 * resource-limit tests

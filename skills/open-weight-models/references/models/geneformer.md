@@ -15,14 +15,14 @@
 
 Geneformer is a transformer encoder foundation model for single-cell RNA-seq. Given gene expression profiles, it produces per-cell embedding vectors for downstream tasks: cell-type annotation, batch correction, perturbation prediction, and cross-dataset transfer. The model tokenizes cells by rank-ordering expressed genes and mapping to a learned vocabulary.
 
-This reference covers **two deployment paths** (serving exercised on Databricks; end-to-end eval validation is WIP — see oss-005/006):
+This reference covers **two deployment paths** (serving exercised on Databricks; end-to-end evaluation pending — geneformer-001/002):
 
 | Path | Checkpoint | hidden_size | Vocab | Layers | Status |
 |------|-----------|-------------|-------|--------|--------|
-| **A. HF/ctheodoris** | `ctheodoris/Geneformer` → `Geneformer-V1-10M` | 256 | gc30M (25,426 tokens) | 6 | Serving tested; eval WIP |
-| **B. NVIDIA BioNeMo** | `nvidia/geneformer_V2_316M` | 1152 | gc104M (20,275 tokens) | 18 | Serving tested; eval WIP |
+| **A. HF/ctheodoris** | `ctheodoris/Geneformer` → `Geneformer-V1-10M` | 256 | gc30M (25,426 tokens) | 6 | Serving tested; evaluation pending |
+| **B. NVIDIA BioNeMo** | `nvidia/geneformer_V2_316M` | 1152 | gc104M (20,275 tokens) | 18 | Serving tested; evaluation pending |
 
-Both paths have been exercised on Databricks (serverless GPU, Model Serving GPU_SMALL A10G); end-to-end eval validation (oss-005/006) is still in progress (WIP).
+Both paths have been exercised on Databricks (serverless GPU, Model Serving GPU_SMALL A10G); end-to-end evaluation (geneformer-001/002) is pending.
 
 ### Downstream applications
 
@@ -133,7 +133,7 @@ Embedding dimension equals the model's `hidden_size` (256 for Path A, 1152 for P
 
 | Path | Purpose |
 |------|---------|
-| `Geneformer-V1-10M/` | 10M-param checkpoint (6 layers) — serving tested (eval WIP) |
+| `Geneformer-V1-10M/` | 10M-param checkpoint (6 layers) — serving tested (evaluation pending) |
 | `geneformer/gene_dictionaries_30m/token_dictionary_gc30M.pkl` | gc30M token dictionary (pickle) |
 
 ### HF repo structure (`nvidia/geneformer_V2_316M` — Path B)
@@ -183,7 +183,7 @@ Use sentinel files (`.snapshot_complete`, `.copy_complete`) for idempotent re-ru
 |------|---------|
 | Download from HF | CPU (Serverless or classic). Adaptive storage (`/local_disk0/tmp` or `/tmp`). |
 | Dry-load, log model, register | **GPU required**. Serverless GPU (1×A10G) exercised. |
-| Model Serving endpoint | `GPU_SMALL` (A10G). Both paths serving-tested (eval WIP). |
+| Model Serving endpoint | `GPU_SMALL` (A10G). Both paths serving-tested (evaluation pending). |
 
 Path A (10M params) fits easily on A10G. Path B (316M params, 1.36 GB safetensors) also fits on A10G with headroom.
 
@@ -273,8 +273,8 @@ Each path has its own **self-contained GT notebook** (download → register → 
 
 Both notebooks use:
 * Widget-based configuration (`catalog`, `schema`, `volume_name`, `endpoint_name`, `run_go`)
-* `run_go` gate for expensive operations (deploy, endpoint creation)
-* Idempotent cleanup cell before registration (delete existing endpoint + model versions)
+* `run_go` gate for expensive operations (deploy, endpoint creation), saved default `"false"` — when it is switched on is in SKILL.md Troubleshooting #14
+* Idempotent cleanup cell before registration — deletes only the endpoint and model versions this notebook created earlier; if an endpoint or model with the target name exists from anything else, stop and ask the user (reuse under a new name, or replace only with their confirmation)
 * Sentinel files for download idempotency
 * Dry-load test before `log_model` (pre-deploy gate)
 
@@ -317,7 +317,7 @@ Artifacts: `{"model_dir": SNAPSHOT_DIR, "token_dict": dict_path}`
 * `GPU_SMALL` (A10G) with `scale_to_zero_enabled=True`.
 * Use `ServingModelWorkloadType.GPU_SMALL` SDK enum (not string literal).
 * Enable AI Gateway inference table + usage tracking.
-* `run_go` gate widget to prevent accidental deployment.
+* `run_go` gate widget, default `"false"`, to prevent accidental deployment.
 * **Prefer Jobs** for dataset-scale embedding, preprocessing, or fine-tuning.
 * Path A is simpler (no stubs). Path B produces richer embeddings (1152-dim vs 256-dim).
 
