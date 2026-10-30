@@ -41,10 +41,11 @@ You can get the SQL warehouse id from the Databricks left menu bar: SQL Warehous
 | [**open-weight-models**](skills/open-weight-models/SKILL.md) | Bioinformatics | Package, register, validate & deploy open-weight HLS models on Databricks, such as TEDDY and Geneformer. |
 | [**pathway-enrichment-analysis**](skills/pathway-enrichment-analysis/SKILL.md) | Bioinformatics | Pathway enrichment for RNA-seq (ORA or GSEA). |
 | [**sc-rnaseq**](skills/sc-rnaseq/SKILL.md) | Bioinformatics | Analyze single-cell RNA-seq data from .h5ad files. |
-| [**cohort-builder**](skills/cohort-builder/SKILL.md) | Clinical | Build a reproducible, feasibility-checked patient cohort from coded + free-text clinical data. |
-| [**phi-deidentifier**](skills/phi-deidentifier/SKILL.md) | Clinical | HIPAA Safe-Harbor de-identify a Unity Catalog table (k-anonymity + governed view). |
-| [**rwe-cohortstudy**](skills/rwe-cohortstudy/SKILL.md) | Clinical | Comparative effectiveness (cohort study) with propensity adjustment (matching, IPW). |
+| [**cohort-builder**](skills/cohort-builder/SKILL.md) | Clinical RWE | Build a reproducible, feasibility-checked patient cohort from coded + free-text clinical data. |
+| [**rwe-cohortstudy**](skills/rwe-cohortstudy/SKILL.md) | Clinical RWE | Comparative effectiveness (cohort study) with propensity adjustment (matching, IPW). |
+| [**phi-deidentifier**](skills/phi-deidentifier/SKILL.md) | Payer and provider | HIPAA Safe-Harbor de-identify a Unity Catalog table (k-anonymity + governed view). |
 | [**semantic-builder**](skills/semantic-builder/SKILL.md) | Clinical | Canonical payer+provider measure catalog mapped to Unity Catalog metric views. |
+| [**x12-claims-ingest**](skills/x12-claims-ingest/SKILL.md) | Payer and provider | Parse X12 837P/837I claim files into Delta claims, lines and quality-check tables on serverless or Lakeflow. |
 | [**accelerators**](skills/accelerators/SKILL.md) | Others | Route imaging, biology-model and HL7v2 tasks to an HLS accelerator (Pixels, Genesis Workbench or funke-hl7v2) with the exact next step. |
 | [**presentation-builder**](skills/presentation-builder/SKILL.md) | Others | Turn a cohort, dataset, model, or analysis into a grounded, shareable HTML deck (PHI de-id delegated to phi-deidentifier). |
 | [**report-builder**](skills/report-builder/SKILL.md) | Others | LaTeX report generation and PDF compilation from analysis notebooks via Tectonic. |
@@ -105,6 +106,7 @@ This is an open source solution to provide agent skills to assist with healthcar
 - [Vimal Thomas Joseph](mailto:vimalthomas.joseph@databricks.com)
 - [Peter Hawkins](mailto:peter.hawkins@databricks.com)
 - [Rohan Parikh](mailto:rohan.parikh@databricks.com)
+- [Raven Mukherjee](mailto:raven.mukherjee@databricks.com)
 
 To add yourself, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
