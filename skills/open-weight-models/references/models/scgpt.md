@@ -32,7 +32,7 @@ The `TransformerModelWrapper` PyFunc accepts three JSON-encoded columns (same pa
 | `adata_obs` | `str` — JSON orient=`split` | Cell metadata DataFrame. Must include `batch` and optionally `final_annotation`. |
 | `adata_var` | `str` — JSON orient=`split` | Gene metadata DataFrame with `gene_name` column. |
 
-Inference controls go in the REST request body's `"params"` field (endpoint) or `params=` (MLflow local `predict`). Do **not** use the SDK's `serving_endpoints.query(extra_params=...)` — a custom PyFunc endpoint drops it (see [HTTP payload](#http-payload-databricks-sdk)). Send values as strings, log the signature with string defaults, and cast in `predict`:
+Inference controls go in the REST request body's `"params"` field (endpoint) or a loaded model's `.predict(df, params=...)`; `mlflow.models.predict` has no `params=` argument (use a JSON body file with `input_path=`). Do **not** use the SDK's `serving_endpoints.query(extra_params=...)` — a custom PyFunc endpoint drops it. For new versions, prefer the standard in `../integration-contract.md` (controls as optional input columns, echoed in each response) (see [HTTP payload](#http-payload-databricks-sdk)). Send values as strings, log the signature with string defaults, and cast in `predict`:
 
 | Parameter | Type | Default | Notes |
 |-----------|------|---------|-------|
@@ -158,7 +158,7 @@ wget_lib.download("https://api.figshare.com/v2/file/download/25717328", f"{data_
 |------|---------|
 | Download (gdown + wget) | CPU (Serverless or classic). Write to `/tmp`. Install `gdown` + `wget`. |
 | Register (PyFunc + log_model) | **GPU required** — `flash-attn` needs CUDA at import time. |
-| Model Serving endpoint | `GPU_SMALL` (A10G). `flash-attn` requires GPU at import. |
+| Model Serving endpoint | `GPU_SMALL` (one T4, 16 GB, on AWS). `flash-attn` requires GPU at import. |
 
 **Critical**: `flash-attn` (a dependency of `scgpt`) **requires GPU at Python import time**, not just at inference. This means:
 * The register/deploy notebook must run on GPU compute
@@ -324,7 +324,7 @@ def predict(self, context, model_input=None, params=None):
 
 ## Deployment recommendation
 
-**Model Serving** on `GPU_SMALL` (A10G) is appropriate for bounded gene-embedding requests:
+**Model Serving** on `GPU_SMALL` (one T4 on AWS) is appropriate for bounded gene-embedding requests:
 
 * `scale_to_zero_enabled=True` with `ServingModelWorkloadType.GPU_SMALL`.
 * Enable AI Gateway inference table + usage tracking.

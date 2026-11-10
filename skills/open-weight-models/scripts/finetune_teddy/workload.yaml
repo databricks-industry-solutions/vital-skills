@@ -1,0 +1,48 @@
+# Databricks AI Runtime workload: fine-tune TEDDY-70M for cell types on one A10 GPU.
+# NOT upstream-validated (TEDDY ships no fine-tuning script; see train_teddy_classifier.py).
+#
+# Fields checked with `databricks air run -h config.<field>` (Databricks CLI v1.20.0).
+# Always validate before submitting, and submit only after the user confirms:
+#   databricks air run --file workload.yaml --dry-run -o json -p <profile>
+#   databricks air run --file workload.yaml --idempotency-key <user>-teddy-finetune-<YYYYMMDD>-v1 -o json -p <profile>
+# Copy this folder next to your notebook (or point root_path at it) and replace every <placeholder>.
+experiment_name: teddy-70m-cell-type-finetune      # alphanumerics, hyphens and underscores only
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10                      # current list: databricks air run -h config.compute
+environment:
+  version: "5"                                     # AI Runtime v5 image (torch 2.9.0, CUDA 12.9, Python 3.12) — confirm with --dry-run
+  dependencies:                                    # torch comes with the image; never list it here
+    - transformers==4.41.0                         # EXACT: 5.x breaks TeddyGModel (references/models/teddy.md §Dependencies)
+    - numpy>=1.26.4,<2.0
+    - pandas>=2.2.2,<3.0
+    - anndata==0.10.7                              # upstream pyproject.toml pins (imported by TEDDY's preprocessing/tokenization)
+    - scanpy==1.10.1
+    - datasets==2.19.1
+    - tqdm
+    - scikit-learn
+    - pyyaml
+    - mlflow
+code_source:
+  root_path: "."                                   # this folder; extracted to $CODE_SOURCE_PATH on the node
+max_retries: 0                                     # fail once, read the logs, decide with the user (default is 3)
+timeout_minutes: 90
+parameters:                                        # written to $HYPERPARAMETERS_PATH on the node
+  snapshot_dir: /Volumes/<catalog>/<schema>/<volume>/teddy/snapshot
+  variant: 70M
+  reference_h5ad: /Volumes/<catalog>/<schema>/<volume>/workshop/<dataset>/reference_cells.h5ad
+  heldout_h5ad: /Volumes/<catalog>/<schema>/<volume>/workshop/<dataset>/heldout_cells.h5ad
+  label_column: cell_type
+  max_seq_len: 2048
+  unfreeze_layers: 2
+  head_layers: 1
+  epochs: 3
+  learning_rate: 5.0e-5
+  head_learning_rate: 1.0e-3
+  batch_size: 16
+  max_cells: null
+  seed: 42
+  output_dir: /tmp/teddy_finetune
+command: |-
+  cd "$CODE_SOURCE_PATH"
+  python train_teddy_classifier.py

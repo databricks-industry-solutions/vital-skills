@@ -11,6 +11,14 @@ Site: [https://databricks-industry-solutions.github.io/vital-skills/](https://da
 
 ![setup](./docs/guide/assets/setup.gif)
 
+#### Use only some of the skills
+
+Genie Code lists every skill in a folder you add, and the sync script below publishes every skill in `skills/`. To use only some:
+
+- **Switch the others off.** Each skill from an added folder has its own on/off toggle in Genie Code's skills list.
+- **Copy only the skill folders you want** into your own `/Users/<you>/.assistant/skills/` folder, or into `/Workspace/.assistant/skills/` for everyone in the workspace. Genie Code reads both by default ([docs](https://docs.databricks.com/aws/en/genie-code/skills)). A folder you add under Customizations must hold skill folders, as `skills/` does, not a single skill.
+- **After a sync**, drop any skill you don't want from the Unity Catalog schema yourself: the script never deletes one.
+
 <details markdown="1">
 <summary>Optional registration to Unity Gateway</summary>
 
@@ -46,6 +54,7 @@ You can get the SQL warehouse id from the Databricks left menu bar: SQL Warehous
 | [**rwe-cohortstudy**](skills/rwe-cohortstudy/SKILL.md) | Clinical | Comparative effectiveness (cohort study) with propensity adjustment (matching, IPW). |
 | [**semantic-builder**](skills/semantic-builder/SKILL.md) | Clinical | Canonical payer+provider measure catalog mapped to Unity Catalog metric views. |
 | [**accelerators**](skills/accelerators/SKILL.md) | Others | Route imaging, biology-model and HL7v2 tasks to an HLS accelerator (Pixels, Genesis Workbench or funke-hl7v2) with the exact next step. |
+| [**html-report**](skills/html-report/SKILL.md) | Others | Turn a notebook's scientific work into a self-contained, printable HTML report (no LaTeX). |
 | [**presentation-builder**](skills/presentation-builder/SKILL.md) | Others | Turn a cohort, dataset, model, or analysis into a grounded, shareable HTML deck (PHI de-id delegated to phi-deidentifier). |
 | [**report-builder**](skills/report-builder/SKILL.md) | Others | LaTeX report generation and PDF compilation from analysis notebooks via Tectonic. |
 | [**scientific-figures**](skills/scientific-figures/SKILL.md) | Others | Publication-quality scientific and biopharma figures for notebooks, apps, and reports. |

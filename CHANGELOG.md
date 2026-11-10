@@ -4,7 +4,16 @@ All notable changes to Vital Skills are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
-## 1.0.0 — Unreleased
+## Unreleased
+
+### Added
+
+- README Setup: how to use only some of the skills (switch the others off, copy only some into
+  `.assistant/skills/`, or drop them from the Unity Catalog schema after a sync).
+- `html-report` skill: a notebook's analysis as one self-contained, printable HTML report (no LaTeX).
+- `open-weight-models` workflow: per-cell embeddings → Databricks AI Search (formerly Vector Search) index → nearest-neighbour cell-type lookup and whole-sample checks (each donor's cell-type mix against healthy donors; an antibody-gene check for one B-cell clone, which the model's vocabulary cannot see), with a held-out accuracy check, a confidence threshold set from a 95% lower bound on held-out accuracy, figures, a classifier on frozen embeddings compared with the vote, an optional TEDDY fine-tune on Databricks AI Runtime (not upstream-validated), and a hand-off to the report and slide skills (`references/workflows/embeddings-to-vector-search.md`). The code lives once in `skills/open-weight-models/scripts/` (`vs_index.py`, `nn_annotate.py`, `sample_checks.py`, `visualize.py`, `finetune_teddy/`) with CPU unit tests; the dev check notebook calls it. See `skills/open-weight-models/CHANGELOG.md`.
+
+## 1.0.0 — 2026-10-29
 
 First public release: Health & Life Sciences **Genie Code** skills, a generated
 catalog, and a docs site. Clone the repo into Databricks, point Genie Code at
