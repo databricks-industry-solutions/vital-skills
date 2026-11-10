@@ -14,7 +14,30 @@
 
 ## What this model does
 
-TEDDY-G is a transformer encoder foundation model pre-trained on 116 million single-cell RNA-seq (scRNA-seq) cells. It produces per-cell embedding vectors from gene expression profiles. Upstream preprocessing scales each cell to 10,000 total counts and divides each gene by its TEDDY gene median; the model then keeps only vocabulary genes, selects the top-K most expressed genes per cell, rank-encodes their expression values as linearly spaced floats from 1.0 (highest) to −1.0 (lowest), and passes the sequence through a transformer encoder. The resulting embeddings are used for cell-type annotation, batch correction, perturbation prediction, and cross-dataset transfer. This reference covers **online inference** (bounded per-cell queries to a Model Serving endpoint); for large-batch embedding of AnnData objects use a Job.
+TEDDY-G is a transformer encoder foundation model pre-trained on 116 million single-cell RNA-seq (scRNA-seq) cells. It produces per-cell embedding vectors from gene expression profiles. Upstream preprocessing scales each cell to 10,000 total counts and divides each gene by its TEDDY gene median; the model then keeps only vocabulary genes, selects the top-K most expressed genes per cell, rank-encodes their expression values as linearly spaced floats from 1.0 (highest) to −1.0 (lowest), and passes the sequence through a transformer encoder. The resulting embeddings are used for cell-type annotation, batch correction, perturbation prediction, and cross-dataset transfer. This reference covers **online inference** (bounded per-cell queries to a Model Serving endpoint); for large-batch embedding of AnnData objects use a Job. For a deployment with a Vector Search (AI Search) index, see [Deploy with Vector Search](#deploy-with-vector-search).
+
+## Intended use and reference test
+
+* Intended use: zero-shot cell embeddings for clustering and neighbour search; fine-tuned classification (held-out donors, diseases). The paper's zero-shot embeddings average the output gene embeddings (arXiv:2503.03485v2, "Zero-shot embeddings produce coherent clusters").
+* Training data: CELLxGENE downloaded 2024-06-11; cells with < 225 counts or > 10% mitochondrial reads and 10x v1 assays removed; cell-type, disease, tissue and sex labels used as training targets. Census 2024-07-01 is the closest proxy for "possibly in training data". Upstream `preprocess.py` compares the mito fraction (0-1) to `max_mitochondrial_prop=10`, so as coded it removes nothing: use 0.10, from Census `raw_sum` and all 37 mito genes (only 13 are in the vocabulary).
+* Reference test: scib-style zero-shot clustering (Leiden at the NMI-best resolution 0.1-2.0, NMI / ARI / ASW). Paper: TEDDY-G 400M on Thomas et al. 2024 (gut, not in Census), coarse NMI 0.838 / ARI 0.715. Stand-in used: 10,000 cells of Pelka et al. 2021 colon (Census 2025-11-08, dataset `16023185-de21-4c0d-a9c8-73abdd52d142`, after the cut-off), 7 compartments.
+* Baseline: log-normalised counts, 2,000 most variable genes, 50 PCs. On the stand-in, 70M with mean pooling matches it; first-token output scores far lower.
+
+### Validation record
+
+What has been checked, so users know how far to trust a deployment from this file. Guidance only; nothing here blocks use.
+
+| Layer | Variant, revision | Result | Date |
+| --- | --- | --- | --- |
+| 1: fidelity | 70M, `8c880aa`, wrapper v2 (`pooling` control) | Pass: `first` and `mean` vs TEDDY's own code, min cosine 0.99999 (25 Census cells); `tutorial` vs the tutorial's steps, 0.99999 (64 cells) | 2026-10-30 |
+| 2: contract, live endpoint (`GPU_MEDIUM`) | same | Pass, 11 of 11: column and `params` routes used and echoed, column wins, bad values rejected, batch invariance 1.0. `serving_endpoints.query(extra_params=...)` was dropped | 2026-10-30 |
+| 3: index (Delta Sync, 3,001 cells) | same | Pass: recall@10 vs exact search 0.9999; every cell its own top-1 at `num_results=10` | 2026-10-30 |
+| 4: paper claim | - | Not possible for 70M: the paper's zero-shot numbers are for 400M only; its 70M numbers need fine-tuning | 2026-10-30 |
+| 4: tutorial recipe (`tutorials/model_tutorial.ipynb`, `data/sample_data.h5ad`, 3,538 cells) | same | Reproduced (fidelity above; UMAP redrawn). Reported, `Cell.Types` NMI: `tutorial` 0.72, `mean` 0.88, PCA baseline 0.95 | 2026-10-30 |
+| 4: stand-in (Pelka 2021 colon, 10,000 cells, reported) | same | Coarse NMI: `mean` 0.95, `first` 0.51, PCA baseline 0.94; fine NMI: `mean` 0.72, PCA 0.73 (paper 400M on Thomas et al.: 0.84 / 0.88) | 2026-10-30 |
+| 5: field-style (blood, Census 2025-11-08, reported) | same | Leave one collection out (16): 10-neighbour vote 46% vs PCA 36%. Held-out cells from seen studies: 75% vs PCA 77% | 2026-10-30 |
+| 2: express deployment (`env_pack`, `GPU_MEDIUM`) | 70M, `8c880aa`, wrapper v2 | Pass, 5 of 5, twice (run 1, then a clean in-order re-test with order guards): registered in 25.8 s; READY 2.5 / 2.79 min after create (event log; standard: 15-25 min), 0 container-build events; served = notebook wrapper, min cosine 1.000000 (20 cells x 3 poolings); controls reach the model by both routes. A one-cell request in the serving UI's format matched the wrapper (cosine 1.000000) | 2026-11-01 |
+| 1-3, earlier wrapper | 70M, `8c880aa`, first-token only | Passed, but served the most-expressed gene's output (layer 4 above); superseded by wrapper v2 | 2026-10-29 |
 
 ## Inputs and outputs
 
@@ -28,24 +51,29 @@ The model does not accept a raw AnnData object. Transport as three DataFrame col
 | `adata_obs` | `str` — JSON orient=`split` | Cell metadata DataFrame. Required by the signature; not consumed by `predict`. Include at minimum a `cell_id` column. |
 | `adata_var` | `str` — JSON orient=`split` | Gene metadata DataFrame. Must have an `index` column containing Ensembl gene IDs (`ENSGXXXXXXXXXXX`) that match `vocab.txt`. |
 
-Inference controls go in the REST request body's `"params"` field (endpoint) or `params=` (MLflow local `predict`). Do **not** use the SDK's `serving_endpoints.query(extra_params=...)`: the endpoint silently ignores it (see [Sending inference controls](#sending-inference-controls) and SKILL.md Troubleshooting #13).
+Inference controls follow the standard in `../integration-contract.md`: **optional input columns** on the same row (one row = one batch of cells), used when present; else the same name under the request's `"params"`; else the default. Every output row echoes the values used. The column route works with any client, including `w.serving_endpoints.query(dataframe_records=...)`; `params` reaches `predict` only via a REST body with a top-level `"params"` key or a loaded model's `.predict(df, params=...)` (not `serving_endpoints.query(extra_params=...)`, not `mlflow.models.predict`). See [Sending inference controls](#sending-inference-controls).
 
-| Parameter | Type | Default | Notes |
+| Control (optional column, `str`) | Default | Allowed | Notes |
 |-----------|------|---------|-------|
-| `max_seq_len` | int (sent as `str`; declare a `str` default in the signature, cast in `predict`) | 2048 | Top-K genes selected per cell. |
-| `pooling` | str | `"mean"` | `"mean"` pools over all token positions; `"cls"` uses the CLS token (only valid when `config.add_cls=True`). The 70M forward pass returns `cell_emb`, already one vector per cell (the encoder output at the first position), so the wrapper below skips pooling and this control has no effect there (see [Wrapper boundary](#wrapper-boundary)). |
+| `max_seq_len` | `"2048"` | positive integer as a string | Top-K genes selected per cell; cast with `int()` in `predict`. |
+| `pooling` | `"mean"` | `"mean"`, `"tutorial"`, `"first"` | `"mean"`: average the encoder outputs over expressed genes (padding excluded). `"tutorial"`: pad to 2,048 and average all positions, as in the official tutorial. `"first"`: the output at position 0, which for 70M (`add_cls=False`) is the most-expressed gene, not a cell token. Use `"mean"` for zero-shot use; see [Pooling for zero-shot use](#pooling-for-zero-shot-use). The control must actually switch the output (Validation checklist item 8). |
 
 ### Output
 
 ```json
 {
   "predictions": [
-    {"embedding": ["<float>", "..."]}
+    {"embedding": ["<float>", "..."], "pooling": "mean", "max_seq_len": "2048"}
   ]
 }
 ```
 
-One dict per input cell. Embedding dimension equals `config.d_model` (read from `config.json` in the checkpoint directory).
+One dict per input cell, with the controls actually used. Embedding dimension equals `config.d_model` (read from `config.json` in the checkpoint directory).
+
+`cell_id` is **not** echoed: predictions come back one per cell in request order, so match them to cells by
+position (check the count). Send requests with `dataframe_records=[...]` as in the example below; the SDK's
+`dataframe_split` expects its typed object, and a plain dict fails with `'dict' object has no attribute
+'as_dict'` (both hit in a 2026-11-02 run).
 
 ### Input example (Python — use real vocab gene IDs)
 
@@ -53,9 +81,13 @@ One dict per input cell. Embedding dimension equals `config.d_model` (read from 
 {
   "adata_sparsematrix": [[12.0, 5.0, 3.0]],
   "adata_obs": "<json-string-orient=split-cell-metadata>",
-  "adata_var": "<json-string-orient=split-gene-metadata-with-index>"
+  "adata_var": "<json-string-orient=split-gene-metadata-with-index>",
+  "pooling": "mean",
+  "max_seq_len": "2048"
 }
 ```
+
+`pooling` and `max_seq_len` are optional; omit them to get the defaults.
 
 ```python
 import pandas as pd
@@ -77,6 +109,8 @@ input_example = pd.DataFrame({
     "adata_sparsematrix": [expr.tolist()],           # one row = one batch
     "adata_obs":          [obs_df.to_json(orient="split")],
     "adata_var":          [var_df.to_json(orient="split")],
+    "pooling":            ["mean"],                  # optional controls, shown so users see them
+    "max_seq_len":        ["2048"],
 })
 ```
 
@@ -84,25 +118,31 @@ input_example = pd.DataFrame({
 
 ### HTTP payload (Databricks SDK)
 
-Send inference controls under the request-body key `"params"`, **not** with `w.serving_endpoints.query(extra_params=...)`: the SDK writes `extra_params` to a body key `"extra_params"` that the MLflow scoring server drops, so the call succeeds but `predict()` runs with defaults (measured 2026-10-27 on a TEDDY endpoint: `extra_params` gave embeddings identical to the default, cosine 1.0; body `"params"` changed them, cosine 0.53–0.64).
+Put controls in the record itself; this works with the SDK's `query()`. Never use `w.serving_endpoints.query(extra_params=...)`: the SDK writes it to a body key the MLflow scoring server drops, so the call succeeds with defaults (measured 2026-10-27 on a TEDDY endpoint: cosine 1.0 to the default).
 
 ```python
 records = [{
     "adata_sparsematrix": expr.tolist(),
     "adata_obs":          obs_df.to_json(orient="split"),
     "adata_var":          var_df.to_json(orient="split"),
+    "pooling":            "mean",                    # optional; omit for the default
 }]
-response = invoke(w, ENDPOINT_NAME, records, params={"max_seq_len": "2048", "pooling": "mean"})  # w = WorkspaceClient(); invoke() is defined in "Sending inference controls"
-embeddings = [p["embedding"] for p in response["predictions"]]
+response = w.serving_endpoints.query(name=ENDPOINT_NAME, dataframe_records=records)  # w = WorkspaceClient()
+preds = response.predictions                            # typed response: use the attribute, not .get()
+embeddings = [p["embedding"] for p in preds]
+assert {p["pooling"] for p in preds} == {"mean"}        # the echo shows what was used
 ```
 
-`invoke()`, the equivalent HTTP request, and the type rules are in [Sending inference controls](#sending-inference-controls). Values are strings; the PyFunc wrapper casts them: `int(params.get("max_seq_len", 2048))`, `str(params.get("pooling", "mean"))`.
+Callers that send `"params"` instead (REST body, `invoke()` in [Sending inference controls](#sending-inference-controls)) still work; a column on the row wins over `params`. Values are strings; the wrapper casts them.
 
 ## Artifacts and runtime
 
 ### Checkpoint directory (`model_dir`)
 
-Path: `<VOLUME_PATH>/snapshot/teddy/models/teddy_g/<VARIANT>/`
+Path: `<VOLUME_PATH>/snapshot/teddy/models/teddy_g/<VARIANT>/` (e.g. `.../snapshot/teddy/models/teddy_g/70M/`).
+The weights sit inside the `teddy/` package folder, not at `snapshot/models/...`. Set `model_dir` from
+this path and assert that `model_dir/config.json` and `model_dir/model.safetensors` exist before loading;
+a run on 2026-11-02 first set it one folder too shallow and lost a retry.
 
 | File | Size (70M) | Purpose |
 |------|------------|----------|
@@ -129,6 +169,13 @@ Stage a copy of `<VOLUME_PATH>/snapshot/teddy/` **without weights** to `/tmp/ted
 | `teddy/data_processing/utils/medians/data/teddy_gene_medians.json` | Per-gene medians (Ensembl ID → median) used by preprocessing; ships in the code bundle |
 
 ### Hugging Face download
+
+**Download the full pinned snapshot when possible** (all three sizes, `tutorials/`, `data/sample_data.h5ad`; about 2.6 GB at `8c880aa`). The reference check needs the tutorial and its sample data, and comparing sizes needs every set of weights. Plain HTTPS from `https://huggingface.co/Merck/TEDDY/resolve/<revision>/<path>`, checking each file against the LFS SHA-256 from `https://huggingface.co/api/models/Merck/TEDDY/revision/<revision>?blobs=true`, avoids the Xet error below and gives a per-file checksum manifest (tested 2026-10-30: 74 files, 2.58 GB).
+
+**When the user asks for one size only** (e.g. a short demo of 70M): download the same file list but skip
+the other sizes' folders (`teddy/models/teddy_g/160M/` and `.../400M/` when serving 70M). Keep the code
+(`teddy/`, including the medians JSON), `tutorials/` and `data/sample_data.h5ad`: the fidelity check needs
+them. Record in the manifest which paths were skipped.
 
 The TEDDY repo uses HF's **Xet/CAS storage backend**. Standard HTTP download fails with:
 ```
@@ -163,6 +210,7 @@ This guarantees a fresh Python process with no pre-imported `huggingface_hub`. D
 | Download from HF | CPU (Serverless or classic). Write to `/tmp`, not `/local_disk0`. |
 | Dry-load test, log model, register | GPU (Serverless GPU or GPU classic). |
 | Census cell generation (1K cells) | GPU recommended (~5 min). CPU works but ~20 min for 1K cells (model forward pass is the bottleneck). |
+| Batch embedding in a notebook | Serverless A10 (22 GB usable): attention at 2,048 genes needs ~0.4-0.5 GB per cell, so use 16-20 cells per batch and free other models first (50 ran out of memory, 2026-10-29). |
 | Model Serving endpoint | `GPU_SMALL` = **T4 (16 GB VRAM)**, not A10G. Sufficient for 70M with batch cap ≤10 cells. For 160M/400M or higher throughput, use `GPU_MEDIUM` (A10G, 24 GB VRAM). H100 is not required. `scale_to_zero_enabled=True`. |
 
 ### Dependencies (from `pyproject.toml`)
@@ -178,6 +226,54 @@ pip_requirements = [
 ```
 
 `transformers` must be pinned exactly to `4.41.0`. In transformers 5.x, `PreTrainedModel._move_missing_keys_from_meta_to_device` calls `self.all_tied_weights_keys.keys()` on a dict; `TeddyGModel` only implements `_tied_weights_keys` (a list from 4.x). An unpinned `>=4.40` resolves to 5.x in the serving container and fails with `AttributeError: 'TeddyGModel' object has no attribute 'all_tied_weights_keys'`.
+
+## Deploy with Vector Search
+
+When the request includes an index (endpoint plus nearest-neighbour search), follow `../workflows/embeddings-to-vector-search.md` for the steps and use its tested helpers (`scripts/vs_index.py`, `scripts/nn_annotate.py`). Index lifecycle mechanics come from the generic `vector-search` skill. This section holds only the TEDDY-specific facts.
+
+| Topic | TEDDY rule |
+| --- | --- |
+| Vector size | `config.d_model`: 70M = 512, 160M = 768, 400M = 1,024. One index per model size; a size mismatch means a new index name, not a replacement (Validation checklist item 12). |
+| Pooling | Embed reference cells with the default `pooling="mean"`. Queries must use the same model version and pooling as the index ([Pooling for zero-shot use](#pooling-for-zero-shot-use)). |
+| Table columns | `cell_id` (primary key, Census release in the ID), `embedding`, labels (`cell_type`, `disease`, `dataset_id`, `donor_id`), `n_genes`, plus `model_version` and `pooling` per row. Change Data Feed on, for a Delta Sync index. |
+| Writes | Append or `MERGE` on `cell_id`; never overwrite an existing table or index (SKILL.md Best Practices #15). |
+| Embedding the reference | Faster on a notebook GPU with the registered model than through the endpoint; then check that the endpoint gives the same vectors (Upstream-parity test, Validation checklist item 13). |
+| Endpoint batches | GPU_MEDIUM (A10G): about 10 cells per request at 2,048 genes for 70M, 8 for 400M; GPU_SMALL (T4): 10 for 70M. |
+| Checks | Self-retrieval and reachability (Validation checklist item 10), dimension match (item 12), and recall@10 against exact search on held-out cells (workflow). |
+| Query cells and "same type" scores | Pick held-out query cells from labels that are in the index, and avoid umbrella labels whose subtypes are also in it (Census brain: plain `neuron` next to `glutamatergic neuron` etc.). Neighbour agreement compares exact `cell_type` strings, so an umbrella-label query scores its subtype neighbours as misses (2026-11-02: 83/100 overall, with both misses from `neuron` queries). Report chance as that label's share of the index. Also say which reference types have no query cells: their accuracy is untested, and 10 of 10 can hide it (2026-11-09 demo: query cells covered 5 of 9 types, none of the 4 GABAergic interneuron types). For any vote below 10 of 10, show the neighbours' types; a split between related types (excitatory neuron vs pvalb interneuron) is expected, not a pipeline error. To check untested types without new data, run leave-one-out on reference cells (query with the cell's own embedding, k=11, drop self, vote over 10) and label it in-index (demo: 20 of 20 interneurons, agreement 7-10, misses pvalb vs sst). Reference map for the 9-type brain reference: `visualize.plot_reference_map(..., families={"red": ["L2/3-6 intratelencephalic projecting glutamatergic neuron"], "navy": ["VIP GABAergic cortical interneuron", "pvalb GABAergic cortical interneuron", "lamp5 GABAergic cortical interneuron", "sst GABAergic cortical interneuron"], "orange": ["oligodendrocyte", "oligodendrocyte precursor cell"], "teal": ["astrocyte", "microglial cell"]})`; this order gives pvalb a light and sst the darkest navy, so the pair most often confused stays distinguishable. |
+
+### Short runs: do these, they cost a test run time (2026-11-02)
+
+1. **One install cell, one restart, first.** Put every package in a single `%pip` cell before the config
+   cell, e.g. `%pip install -q "transformers==4.41.0" "numpy>=1.26.4,<2.0" "pandas>=2.2.2,<3.0"
+   "mlflow>=3.12" anndata scipy cellxgene-census`, then `dbutils.library.restartPython()` once.
+   Installing Census later forced a second restart, which wiped `w` and the config.
+2. **Config and `w = WorkspaceClient()` in one cell after the restart.** No re-defining config in later
+   cells, no checkpoint or crash-recovery code.
+3. **Census: filter in the query, before sampling.** Put every filter in `value_filter` and wrap values
+   that contain `'` in double quotes:
+   `'is_primary_data == True and tissue_general == "brain" and assay == "10x 3\' v3"'`. Read only the
+   columns you need. Reading all primary brain cells and filtering in pandas took about 7 minutes.
+4. **h5ad files: write to `/tmp`, then copy to the volume** (`adata.write_h5ad("/tmp/x.h5ad")`, then
+   `shutil.copy`). Writing h5ad straight to `/Volumes/...` crashed the kernel (SIGSEGV).
+5. **Vector Search: use `scripts/vs_index.py`, don't hand-write wait loops.** The endpoint status is an
+   enum (`EndpointStatusState.ONLINE`); a loop comparing it with the string `"ONLINE"` never ends.
+6. **Model signature types are attributes:** `ColSpec(DataType.string, "pooling")`, not
+   `DataType[string]`.
+7. **A new Vector Search endpoint's ONLINE status doesn't mean it is ready.** A new STANDARD endpoint
+   reports ONLINE within seconds, but its compute only starts when its first index is created. That
+   first index then takes 16-29 min to answer queries (2026-11-02: 16 and 18.6 min; 2026-11-08: 28.6 min), of which only
+   about 1 min is the sync of about 1,000 rows. A new index on an endpoint that already holds one was
+   ready in 0.7 min. For a short or live run, reuse an endpoint that already holds an index (confirm
+   the name with the user), and report the time from index create to answering queries, not
+   endpoint ONLINE.
+8. **A new index can answer once and then say "not ready".** 2026-11-08 (a new index on a new
+   STANDARD endpoint): the probe in `ensure_index` answered at 28.6 min, then the first
+   self-retrieval query seconds later got "Vector index ... is not ready"; all 20 checks passed at
+   29.9 min. `vs_index.py` now needs 3 answers in a row and `index_sanity_check(..., deadline=...)`
+   retries "not ready"; pass a deadline in self-retrieval loops.
+
+The subsections below ([AI Search reference corpus](#ai-search-reference-corpus-census-based) onward) are older notes from the `gt_teddy` notebook; their cell numbers refer to that notebook. Where they disagree with this section or the workflow, follow this section.
 
 ## Notebook architecture
 
@@ -254,7 +350,7 @@ Embeddings are NOT interchangeable between variants (different dimensionality), 
    ```
 5. Intersect with TEDDY vocab: ~22K overlap out of 25K Ensembl IDs (86.6%)
 6. **Filter AnnData to TEDDY vocab genes** before embedding: `adata = adata[:, mask]`. Census delivers ~60k genes per cell; sending all of them to the serving endpoint exceeds the 16 MB request-size limit. Filtering to the ~22k Census genes that are in the TEDDY vocab cuts the payload by >50% and stays within limits.
-7. Embed in batches via the serving endpoint. **Batch size depends on GPU tier**: 10 cells for `GPU_SMALL` (T4, 16 GB); 50 for `GPU_MEDIUM` (A10G, 24 GB). Larger batches on T4 cause `CUDA out of memory` — the 70M model's activations at 2048 seq_len × 512 hidden dim saturate 14.5 GB of available VRAM with >10 concurrent cells.
+7. Embed in batches via the serving endpoint. **Batch size depends on GPU tier and model size**: 10 cells per request for 70M on `GPU_SMALL` (T4, 16 GB) and on `GPU_MEDIUM` (A10G, 24 GB); 8 for 400M. 50 ran out of memory on an A10G at 2,048 genes (2026-10-29). Larger batches on T4 cause `CUDA out of memory` — the 70M model's activations at 2048 seq_len × 512 hidden dim saturate 14.5 GB of available VRAM with >10 concurrent cells.
 8. Write `(cell_id, embedding, cell_type, tissue_general, disease)` to Delta **without overwriting an existing table**: if `spark.catalog.tableExists(CELLS_TABLE)`, check its embedding dimension matches this variant, then `MERGE` on `cell_id` (or append); overwrite only after the user confirms the table name (SKILL.md Best Practices §15):
    ```python
    from delta.tables import DeltaTable
@@ -272,7 +368,7 @@ Embeddings are NOT interchangeable between variants (different dimensionality), 
 | Cells | Time (GPU) | Time (CPU) | Use case |
 |-------|-----------|-----------|----------|
 | 200 | ~1 min | ~4 min | Marginal for viz |
-| **1,000** | **~5 min (GPU_MEDIUM, batch 50)** / **~2 min endpoint** | **~20 min** | **GT default, good for PCA/t-SNE** |
+| **1,000** | **~1 min (notebook A10G, batch 16: 3,750 cells in 167 s, 2026-10-30)** / **~2 min endpoint** | **~20 min** | **GT default, good for PCA/t-SNE** |
 | 10,000 | ~45 min | hours | Production |
 
 #### Gene ID compatibility (verified)
@@ -435,9 +531,52 @@ def load_context(self, context):
 >
 > Forward params (70M): `{'labels', 'return_outputs', 'gene_ids', 'kwargs', 'annotations', 'annotation_attention_mask', 'annotation_labels', 'attention_mask', 'position_ids'}`.
 
+### Pooling for zero-shot use
+
+`cell_emb` is the output at position 0. With `add_cls=False` (70M), that is the most-expressed gene's output, so neighbours mostly share that gene rather than a cell type (measured 2026-10-30: 92% of 15 nearest neighbours shared it; zero-shot clustering NMI 0.51 vs 0.95 with mean pooling). Serve mean pooling instead: set `model.return_all_embs = True` and average `outputs["all_embs"]` over the attention mask. Don't use upstream's `cell_emb_mean`: it averages padding positions too, so a cell's vector depends on the other cells in its batch.
+
+```python
+# Controls: optional column on the row, else params, else default (integration-contract.md)
+CONTROLS = {"pooling": ("mean", {"mean", "tutorial", "first"}), "max_seq_len": ("2048", None)}
+
+def resolve_controls(row, columns, params):
+    used = {}
+    for name, (default, allowed) in CONTROLS.items():
+        v = row[name] if name in columns and not pd.isna(row[name]) else (params or {}).get(name, default)
+        v = str(v)
+        if allowed and v not in allowed:
+            raise ValueError(f"{name}={v!r} is not supported; use one of {sorted(allowed)}")
+        used[name] = v
+    return used                                    # echoed in each output dict
+
+# load_context: once
+model.return_all_embs = True
+
+# _predict_batch: pad to 2,048 for "tutorial" (the tutorial's collate pads every cell to max_seq_len);
+# "mean" and "first" don't depend on padding (cosine 0.9999999 and 1.0 alone vs in a batch).
+H = outputs["all_embs"]                            # (cells, tokens, d_model)
+M = attention_mask.unsqueeze(-1).to(H.dtype)       # 1 = expressed gene
+if pooling == "mean":
+    emb = (H * M).sum(1) / M.sum(1)
+elif pooling == "tutorial":
+    emb = H.mean(1)                                # all 2,048 positions, padding included
+else:                                              # "first"
+    emb = outputs["cell_emb"]
+```
+
+Prototype checked 2026-10-30 (MLflow 3.13, loaded model): column absent gives the defaults; a column value is used and echoed; `params` is used when the column is absent; the column wins when both are set; `"median"` raises the error above. Also checked through a live `GPU_MEDIUM` endpoint (2026-10-30): all of the above hold by both routes, and `serving_endpoints.query(extra_params=...)` was dropped (the echo showed the default).
+
+**Default and options.** Default to `"mean"` and say so in one line; ask only if the user wants to reproduce earlier results or upstream's default output. Record the default as a model-version tag.
+
+* `"mean"` (default): zero-shot search, clustering, or annotation by neighbour votes; the paper's method.
+* `"tutorial"`: pad to 2,048 and average all positions, as in `tutorials/model_tutorial.ipynb`; for checking against the tutorial. A cell with 2,048 or more expressed genes has no padding, so `"tutorial"` equals `"mean"` for it. The tutorial embeds the integer counts in `.raw.X` of `data/sample_data.h5ad`; its `.X` is already normalised (max about 7.2) and gives different vectors.
+* `"first"`: upstream's default `cell_emb` (what earlier deployments served).
+
+Serve one model with a working `pooling` control, not several models: a request can override the default. The reference table and index must use the same model version and pooling as the queries, so store both in the table.
+
 ### Tensor-boolean safety in `_predict_batch`
 
-TEDDY's forward pass returns a dict. The **primary key is `cell_emb`** (first-position output, shape `(cells, d_model)`). Fallback keys `all_embs`, `last_hidden_state`, and `hidden_states` are retained for forward-compatibility with other variants. **Never use Python `or` or truthy evaluation on these tensors** — `bool(tensor)` raises `RuntimeError: Boolean value of Tensor with more than one element is ambiguous`. Always use explicit `is None` checks:
+TEDDY's forward pass returns a dict. For `pooling="mean"` read `all_embs` and pool over the mask ([Pooling for zero-shot use](#pooling-for-zero-shot-use)); the lookup below is for `pooling="first"`, where the key is `cell_emb` (first-position output, shape `(cells, d_model)`). Fallback keys `all_embs`, `last_hidden_state`, and `hidden_states` are retained for forward-compatibility with other variants. **Never use Python `or` or truthy evaluation on these tensors** — `bool(tensor)` raises `RuntimeError: Boolean value of Tensor with more than one element is ambiguous`. Always use explicit `is None` checks:
 
 ```python
 # WRONG — triggers tensor boolean ambiguity
@@ -572,6 +711,53 @@ served_entity = ServedEntityInput(
 )
 ```
 
+### Standard vs express deployment
+
+Docs: [Express deployments for model serving endpoints](https://docs.databricks.com/aws/en/machine-learning/model-serving/express-deployments/) (formerly "serverless optimized deployments"). Express packages the notebook's environment when the model is registered, so the endpoint skips the container image build; the served environment is the notebook's.
+
+| | Standard | Express |
+| --- | --- | --- |
+| Environment built | At endpoint creation (container image) | At registration (`env_pack`) |
+| Served environment | From `pip_requirements`; can differ from the notebook | Identical to the registering notebook |
+| TEDDY-70M, `GPU_MEDIUM` (measured) | 15-25 min to READY (2026-10-30) | Registration +25.8 s; 2.5 min to READY (2026-11-01); 2026-11-09: READY at the first check, 9.2 min after create (upper bound, not polled earlier) |
+| Typical failure | Image build, dependency resolution | That class removed; the notebook environment must already work |
+| Price | No separate express price in the docs; billing is for the serving compute either way | same |
+
+**Use express (default when its requirements hold):** registering from a serverless GPU notebook (AI environment, version 3 or later) into Unity Catalog, `mlflow>=3.12`, `databricks-sdk>=0.102.0`, environment under 200 GB, serving on GPU (register on GPU to serve on GPU; CPU to CPU). Express is for **custom models** only, which TEDDY's PyFunc is.
+
+**Use standard when:** registering from classic compute (Databricks Runtime ML) or into the workspace model registry; the serving environment must differ from the notebook (for example a pinned CUDA 12.x torch for an older driver); the compute types differ; or a model version already exists without `env_pack` (express needs a new registration, so a new version).
+
+**Express pattern (tested 2026-11-01).** Log without `registered_model_name` (that path ignores `env_pack`), then register separately:
+
+```python
+from mlflow.utils.env_pack import EnvPackConfig
+
+info = mlflow.pyfunc.log_model(name="model", python_model=WRAPPER_PATH,
+                               artifacts={"model_dir": MODEL_DIR, "teddy_pkg_parent": CODE_DIR},
+                               signature=signature, input_example=input_example, pip_requirements=PIP_REQS)
+mv = mlflow.register_model(info.model_uri, UC_MODEL_NAME,
+                           env_pack=EnvPackConfig(name="databricks_model_serving", install_dependencies=True))
+# If install_dependencies=True fails (custom code, no internet), retry once with False, as the docs suggest.
+```
+
+Then create the endpoint exactly as in standard (same `ServedEntityInput`, AI Gateway, tags); add the tag `deployment=express` to the model version and endpoint.
+
+**Express caveats:**
+
+* Everything installed in the notebook session is packaged. Keep the install cell minimal and pinned: `mlflow>=3.12`, `databricks-sdk>=0.102.0`, `transformers==4.41.0`, `anndata` (reading cells only). torch comes from the AI environment (tested: torch 2.11 with CUDA 13 on AI v6 served on `GPU_MEDIUM`); numpy 2.x from the AI environment worked, so the `numpy<2.0` pin in [Dependencies](#dependencies-from-pyprojecttoml) applies to standard only.
+* The served environment is tied to the AI environment version registered from; re-registering on a newer version can change it, so re-run the fidelity check after re-registering.
+* `pip_requirements` pin the notebook's own versions; drop torch's local build tag (`+cu130`) so the pin is installable.
+* Run steps in order: verify the registered version loads and matches the notebook wrapper before creating the endpoint, then run the endpoint contract checks (served = wrapper, controls by both routes) as for standard.
+* **Serving UI:** the Query endpoint box pre-fills from the model's `serving_input_example.json`. With a 3-cell x 22,029-gene example (1.73 MB) the box was empty on the express endpoint (seen 2026-11-01; size is the likely cause, and standard models logged the same way would carry the same example, not checked). Log a **one-cell example with only that cell's expressed genes** (about 40 kB): it gives the same embedding (cosine 0.999999), because zero genes change neither the total count nor top-K. Paste the same JSON (`{"dataframe_records": [ {...} ]}`) into the box to demo a query.
+* **Inference table:** `<endpoint>_payload` appears at once with only `databricks_request_id` and 0 rows; full columns and rows arrive minutes later. Read it by printing its columns rather than assuming names.
+* **Scaled-to-zero endpoint: small requests only.** 2026-11-09 (GPU_MEDIUM, about 2 h
+  idle): a request of 10 cells x 61,497 genes (all genes, dense) was rejected with "Max request
+  size exceeded for a scale to zero endpoint". The same request size worked while the endpoint was
+  warm. One cell per request with only its expressed genes worked and woke the endpoint; it
+  gives the same embedding (zero genes change neither the total count nor top-K). Send expressed
+  genes only by default, at least for the first request after idle. The size limit was not measured.
+* Not yet tested: 160M/400M, CPU serving.
+
 ## Registration and observability
 
 Register to Unity Catalog as `<catalog>.<schema>.teddy_<variant>` (e.g. `<catalog>.skills.teddy_70m`). Log both declared licenses (model card Apache-2.0, package `pyproject.toml` MIT — see [Identity](#identity)), the HF revision, paper DOI, HF source URL, and variant as MLflow tags. The Census table follows the same convention: `teddy_cells_<variant>` (e.g. `teddy_cells_70m`), and the endpoint: `teddy-<variant>-embedder` (e.g. `teddy-70m-embedder`).
@@ -610,21 +796,23 @@ w.serving_endpoints.create(
 1. **Vocabulary smoke test**: load `vocab.txt`, verify the line count (70M at HF revision `8c880aa`: 43,808 lines, of which 25,424 are Ensembl IDs), check that `ENSG00000000003` is present.
 2. **Import test**: in the serving container environment, `from teddy.models.model_directory import get_architecture, model_dict` and `from teddy.tokenizer.gene_tokenizer import GeneTokenizer` succeed.
 3. **Dry-load test**: `load_context` completes, prints `TEDDY-G 70M loaded on cuda, d_model=…`.
-4. **Signature test**: build the signature with `infer_signature(input_example, output_example, params=default_params)` using string defaults (see [Sending inference controls](#sending-inference-controls)); check the input schema has all three columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required fields and that `{p.name: p.dtype for p in signature.params.params}` lists every control as `DataType.string`.
+4. **Signature test**: build the signature with `infer_signature(input_example, output_example, params=default_params)` using string defaults (see [Sending inference controls](#sending-inference-controls)); check the input schema has the three data columns (`adata_sparsematrix`, `adata_obs`, `adata_var`) as required, the controls (`pooling`, `max_seq_len`) as optional strings, and that `{p.name: p.dtype for p in signature.params.params}` lists the same controls as `DataType.string`.
 5. **Real-gene payload test**: test payload uses Ensembl IDs from `vocab.txt`; embeddings are non-degenerate (not all the same value, norm > 0).
 6. **All-OOV payload test**: all gene names set to random strings → every gene is dropped as out-of-vocabulary → the endpoint returns a clear error naming the vocabulary mismatch, not an embedding (upstream raises in the same case; see [Out-of-vocabulary genes](#out-of-vocabulary-oov-genes-drop-them-as-upstream-does)).
 7. **Missing-field test**: omit `adata_obs` from the request → endpoint returns a schema-validation error (confirming the signature enforces all three fields).
-8. **Inference-control test**: call the endpoint twice through `invoke()` ([Sending inference controls](#sending-inference-controls)) on the same real-gene payload — once with defaults, once with a non-default `{"max_seq_len": "32"}` (values as strings; each cell must have more than 32 expressed genes, or truncation changes nothing) — and assert the embeddings differ (cosine clearly below 1.0). Before the calls, confirm the registered version's params schema (`mlflow.models.get_model_info(model_uri).signature.params`) lists `max_seq_len` and `pooling` as strings — an undeclared control is dropped. Identical output means the control never reached `predict()`; a successful call alone proves nothing. Use `max_seq_len`, not `pooling`, for 70M: its pre-pooled output makes `pooling` a no-op in this wrapper.
+8. **Inference-control test** (report the result; don't block): on the same real-gene payload, a non-default value must change the output and be echoed, through **both** routes — as a column via `w.serving_endpoints.query(dataframe_records=...)`, and under `"params"` via `invoke()`. Check each `pooling` value and a non-default `max_seq_len` such as `"32"` (values as strings; each cell must have more than 32 expressed genes, or truncation changes nothing) — and assert the embeddings differ (cosine clearly below 1.0). Before the calls, confirm the registered version's params schema (`mlflow.models.get_model_info(model_uri).signature.params`) lists `max_seq_len` and `pooling` as strings — an undeclared control is dropped. Identical output means the control never reached `predict()`; a successful call alone proves nothing. Repeat with `{"pooling": "first"}`: an unchanged output means the control is ignored. Check that `"tutorial"` differs from `"mean"` only on cells with fewer than 2,048 expressed genes: with no padding the two are equal by design.
 9. **Embedding sanity**: for 70M, embedding dimension should match `config.d_model` (read from `config.json`).
 
-10. **AI Search self-retrieval test**: query the index with a known cell's embedding; top-1 result must be the same cell (score ~1.0). Results must be monotonically ordered by similarity.
+10. **AI Search self-retrieval test**: query the index with a known cell's embedding, asking for at least 10 results (`num_results=1` missed the exact match for 3 of 50 cells, 2026-10-30); top-1 result must be the same cell (score ~1.0). Results must be monotonically ordered by similarity.
 11. **Census gene ID test**: verify `adata.var_names` are Ensembl IDs (start with `ENSG`), not numeric indices, before intersecting with TEDDY vocab. Overlap should be ≥80% (22K+).
 12. **AI Search dimension match test**: if switching variants, the index dimension must match `EMB_DIM` for the current variant. On a dim mismatch (e.g. 1024 from 400M vs 512 from 70M), stop and ask the user: use a new variant-suffixed index name, or replace the existing index only with their confirmation.
 13. **Upstream-parity test** (SKILL.md Workflow step 7): run a few real cells through TEDDY's own preprocessing and tokenization and through the wrapper; the selected token sets must match and the per-cell embedding cosine must be at least 0.9999. Comparing the endpoint only with the same wrapper run in the notebook does not count. See [Upstream-parity test](#upstream-parity-test).
+14. **Batch invariance**: a cell embedded alone and inside a batch of other cells gives the same vector (cosine >= 0.9999). Fails if padding leaks into pooling.
+15. **Reference test** (`evaluation.md` layer 4): run [Intended use and reference test](#intended-use-and-reference-test) on the served output; report it next to the paper value and the PCA baseline.
 
 ## Upstream-parity test
 
-Run in the notebook after the dry-load test, before registering — not in the serving container. Upstream `preprocess.py` and `tokenization.py` import `anndata`, `scanpy`, `scikit-learn`, `datasets` and `tqdm` at module level, so install those in the notebook only. `wrapper` is the dry-loaded `TEDDYEmbedder` instance, `default_params` comes from [Sending inference controls](#sending-inference-controls), and the full snapshot (with `teddy/data_processing/` and the upstream sample data `data/sample_data.h5ad`) is under `<VOLUME_PATH>/snapshot`.
+Run in the notebook after the dry-load test, before registering — not in the serving container. Upstream `preprocess.py` and `tokenization.py` import `anndata`, `scanpy`, `scikit-learn`, `datasets` and `tqdm` at module level, so install those in the notebook only. With an express deployment (`env_pack`) the notebook environment is the serving environment, so don't add scanpy to the `%pip` cell: if `scanpy` is missing, install it for this test only into a side folder — `pip install -q --no-deps --target /tmp/<run>/parity_pkgs scanpy==1.11.2 legacy-api-wrap session-info2 natsort` (via `subprocess`), then `sys.path.insert(0, "/tmp/<run>/parity_pkgs")`. No Python restart, and nothing is packed with the model (tested 2026-11-06, AI environment v6: 5 cells, same gene sets, min cosine 0.9999992). `wrapper` is the dry-loaded `TEDDYEmbedder` instance, `default_params` comes from [Sending inference controls](#sending-inference-controls), and the full snapshot (with `teddy/data_processing/` and the upstream sample data `data/sample_data.h5ad`) is under `<VOLUME_PATH>/snapshot`.
 
 ```python
 import sys, types, numpy as np, pandas as pd, torch, anndata as ad
@@ -686,7 +874,7 @@ Pass = the same set of genes and cosine >= 0.9999 on every cell. Token **order**
 
 ## Sending inference controls
 
-Custom PyFunc inference controls must arrive under the request-body key `"params"`, which the MLflow scoring server passes to `predict(..., params=...)`. `w.serving_endpoints.query()` has no `params` argument; its `extra_params` argument is written to a body key `"extra_params"`, which the server drops without an error (SKILL.md Troubleshooting #13). Post the body yourself:
+Preferred: send controls as optional columns on the record (works with `w.serving_endpoints.query`; see [HTTP payload](#http-payload-databricks-sdk)). For callers that use `"params"`, they must arrive under the request-body key `"params"`, which the MLflow scoring server passes to `predict(..., params=...)`. `w.serving_endpoints.query()` has no `params` argument; its `extra_params` argument is written to a body key `"extra_params"`, which the server drops without an error (SKILL.md Troubleshooting #13). For `params`, post the body yourself:
 
 ```python
 def invoke(w, endpoint_name, records, params=None):
@@ -721,7 +909,15 @@ with open(f"{model_dir}/config.json") as f:
 output_example = pd.DataFrame({"embedding": [[0.0] * d_model for _ in range(n_cells)]})
 
 default_params = {"max_seq_len": "2048", "pooling": "mean"}  # strings, matching what invoke() sends
-signature = infer_signature(input_example, output_example, params=default_params)
+output_example = output_example.assign(pooling="mean", max_seq_len="2048")  # documented echo
+sig = infer_signature(input_example, output_example, params=default_params)
+
+# Make the control columns optional (infer_signature marks every example column required)
+from mlflow.models import ModelSignature
+from mlflow.types.schema import Schema, ColSpec
+signature = ModelSignature(
+    inputs=Schema([ColSpec(c.type, c.name, required=c.name not in default_params) for c in sig.inputs.inputs]),
+    outputs=sig.outputs, params=sig.params)
 assert {p.name: p.dtype for p in signature.params.params} == {
     "max_seq_len": DataType.string, "pooling": DataType.string}
 ```
@@ -733,6 +929,7 @@ A control missing from the signature's params schema is dropped with only a log 
 * Whether HF_HUB_DISABLE_XET will remain necessary as HF updates the Xet client. The subprocess workaround is runtime-version-agnostic (tested on AI v5; expected to work on v6+).
 * Whether the `transformers==4.41.0` exact pin will need to be updated for future TEDDY releases.
 * Optimal `max_seq_len` for 160M and 400M variants (may differ from 70M default of 2048).
+* Whether 160M/400M have `add_cls=True` (then `cell_emb` is a real cell token) and how first-token vs mean pooling compare on the reference test.
 * Whether per-cell `adata_obs` metadata (batch label, donor ID) should be echoed back in the response to aid downstream correlation.
 * Whether future Databricks GPU_SMALL tiers will provision A10G instead of T4 — monitor release notes.
 * ~~What output key the model forward pass uses~~ **RESOLVED (oss-002 v2, 2026-10-01):** 70M returns `{"cell_emb": tensor(cells, d_model)}` (first-position output, 2D). Forward accepts `gene_ids` + `attention_mask` but NOT `gene_values`. Verify whether 160M/400M variants use the same output key or different ones.

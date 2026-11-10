@@ -1,4 +1,4 @@
-# HLS adapter integration contract
+# Adapter integration contract (Vital-Skills open-weight-models)
 
 Use this file with the official Databricks ML training, Model Serving, Python SDK, and MLflow evaluation skills. It defines the HLS-specific contract without duplicating their general tutorials.
 
@@ -33,16 +33,33 @@ The exact model API, input types, and serialization must come from the model ref
 
 ## Request-shape rules
 
-Use explicit fields for meaningful controls such as sequence length, number of samples, temperature, recycling count, seed, ranking method, or output format. If a control changes scientific behavior, it should be visible in the signature or in a versioned request object.
+Use explicit fields for meaningful controls such as sequence length, number of samples, temperature, recycling count, seed, pooling, ranking method, or output format. If a control changes scientific behavior, it should be visible in the signature or in a versioned request object.
 
-Use `params` only after testing all of the following on the exact path:
+### Which call paths deliver `params` to a custom PyFunc
 
-* local `mlflow.pyfunc` invocation
-* MLflow serving input validation
-* Databricks Model Serving HTTP request
-* the selected Databricks SDK or client
+A call that drops `params` still succeeds and returns valid-looking output, so the only proof is a non-default value changing the result.
 
-If any path drops or reshapes optional parameters, move them into the declared model input, usually as a scalar column or a JSON configuration field. Document the compatibility decision in the model reference.
+| Path | Does `params` reach `predict(..., params=...)`? | Evidence |
+| --- | --- | --- |
+| `w.serving_endpoints.query(...)` (Databricks SDK) | **No.** No `params` argument; `extra_params` goes to a body key the scoring server ignores | `SKILL.md` Troubleshooting #13; TEDDY 2026-10-27: cosine 1.0 to default |
+| `mlflow.models.predict(...)` (pre-deploy env check) | **No `params=` argument** (MLflow 3.13: `TypeError`). Works only with `"params"` inside a JSON body file passed as `input_path=` | TEDDY run 2026-10-29 |
+| REST `POST /serving-endpoints/<name>/invocations` with top-level `"params"` (e.g. `w.api_client.do(...)`, `scripts/nn_annotate.py` `invoke()`) | **Yes** | TEDDY 2026-10-29: `max_seq_len="32"` changed every cell (cosine 0.54-0.77) |
+| Loaded model `mlflow.pyfunc.load_model(uri).predict(df, params=...)` | **Yes** | TEDDY run 2026-10-29 |
+
+### Standard: controls as optional input columns
+
+Because the most common client (`serving_endpoints.query`) drops `params` silently, put scientific controls in the input itself:
+
+* **Optional input columns** with a documented default when absent (e.g. `pooling`, default `"mean"`). Declare them in the signature as `ColSpec(..., required=False)`; MLflow 3.13 accepts requests with or without the column. Old requests keep working.
+* **Also accept the same names in `params`** for callers that already send them. Precedence: column, then `params`, then default.
+* **Echo what was used** in every response row (e.g. `{"embedding": [...], "pooling": "mean", "max_seq_len": 2048}`), so nobody gets a setting silently.
+* **Reject unknown values** with an error that lists the valid options; never fall back silently.
+* **Make it visible:** include the columns in `input_example` and in the documented SDK and HTTP examples; tag the model version with the defaults (e.g. `pooling_default=mean`); store the controls that made each vector next to it in any reference table or index.
+* **Test both routes once per deployment:** a non-default value via the column through `serving_endpoints.query`, and via `params` through REST, each changes the output. Report the result; don't block the user on it. `scripts/nn_annotate.py` `check_controls_applied(..., route="column" | "params")` does this.
+
+Tested through a live endpoint (TEDDY 70M, `GPU_MEDIUM`, MLflow 3.13, 2026-10-30): a request without the columns got the defaults; a column sent with `serving_endpoints.query(dataframe_records=...)` was used and echoed; `params` via REST was used when the column was absent; the column won when both were sent; an unknown value raised an error listing the options; `extra_params` was dropped.
+
+Document the controls, defaults, and allowed values in the model reference.
 
 ## Common transport encodings
 

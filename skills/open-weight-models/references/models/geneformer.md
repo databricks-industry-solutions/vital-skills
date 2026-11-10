@@ -22,7 +22,7 @@ This reference covers **two deployment paths** (serving exercised on Databricks;
 | **A. HF/ctheodoris** | `ctheodoris/Geneformer` → `Geneformer-V1-10M` | 256 | gc30M (25,426 tokens) | 6 | Serving tested; evaluation pending |
 | **B. NVIDIA BioNeMo** | `nvidia/geneformer_V2_316M` | 1152 | gc104M (20,275 tokens) | 18 | Serving tested; evaluation pending |
 
-Both paths have been exercised on Databricks (serverless GPU, Model Serving GPU_SMALL A10G); end-to-end evaluation (geneformer-001/002) is pending.
+Both paths have been exercised on Databricks (serverless GPU, Model Serving `GPU_SMALL`, one T4 on AWS); end-to-end evaluation (geneformer-001/002) is pending.
 
 ### Downstream applications
 
@@ -183,7 +183,7 @@ Use sentinel files (`.snapshot_complete`, `.copy_complete`) for idempotent re-ru
 |------|---------|
 | Download from HF | CPU (Serverless or classic). Adaptive storage (`/local_disk0/tmp` or `/tmp`). |
 | Dry-load, log model, register | **GPU required**. Serverless GPU (1×A10G) exercised. |
-| Model Serving endpoint | `GPU_SMALL` (A10G). Both paths serving-tested (evaluation pending). |
+| Model Serving endpoint | `GPU_SMALL` (one T4, 16 GB, on AWS). Both paths serving-tested (evaluation pending). |
 
 Path A (10M params) fits easily on A10G. Path B (316M params, 1.36 GB safetensors) also fits on A10G with headroom.
 
@@ -250,7 +250,7 @@ Model Serving rejects `create_endpoint` when the auto-generated inference table 
 
 ### Endpoint provisioning time
 
-GPU_SMALL (A10G) endpoints routinely take 15–25 min to provision. Poll with a **1800 s timeout** (30 min) and detect `DEPLOYMENT_FAILED` early:
+`GPU_SMALL` endpoints routinely take 15–25 min to provision. Poll with a **1800 s timeout** (30 min) and detect `DEPLOYMENT_FAILED` early:
 
 ```python
 from databricks.sdk.service.serving import ServedModelStateDeployment
@@ -314,7 +314,7 @@ Artifacts: `{"model_dir": SNAPSHOT_DIR, "token_dict": dict_path}`
 
 ## Deployment recommendation
 
-* `GPU_SMALL` (A10G) with `scale_to_zero_enabled=True`.
+* `GPU_SMALL` (one T4 on AWS) with `scale_to_zero_enabled=True`.
 * Use `ServingModelWorkloadType.GPU_SMALL` SDK enum (not string literal).
 * Enable AI Gateway inference table + usage tracking.
 * `run_go` gate widget, default `"false"`, to prevent accidental deployment.
@@ -345,7 +345,7 @@ Log license, HF source URL, paper DOI, and checkpoint name as MLflow tags.
 ## Resolved questions
 
 * **TE in Model Serving container**: TE does NOT build in serving containers. Functional `nn.Module` stubs are the working workaround — no TE source build needed.
-* **GPU tier for 316M**: A10G (`GPU_SMALL`) handles the 1.36 GB model comfortably.
+* **GPU tier for 316M**: `GPU_SMALL` (one T4, 16 GB, on AWS) holds the 1.36 GB model; `GPU_MEDIUM` is one A10G (24 GB).
 * **BF16 vs FP32**: `torch.autocast(dtype=torch.bfloat16)` works correctly on A10G for both paths. Weights stored as float32, autocast at inference.
 * **Embedding dimensions**: 256 for V1-10M (Path A), 1152 for V2-316M (Path B) — confirmed via `config.json` and smoke tests.
 * **CLS vs mean pooling**: Near-identical for both paths (no dedicated CLS token). Mean pooling is the default.

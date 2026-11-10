@@ -2,3 +2,8 @@
 mlflow-skinny==3.17.2
 pandas==2.3.3
 pyyaml==6.0.3
+# scripts/ (vs_index, nn_annotate, sample_checks, visualize): SDK of serverless environment v6, figure and
+# classifier libraries (scikit-learn also brings SciPy, which sample_checks uses)
+databricks-sdk==0.122.0
+matplotlib==3.11.2
+scikit-learn==1.9.1

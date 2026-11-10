@@ -8,11 +8,11 @@ author: May Merkle Tan
 license: Databricks License
 ---
 
-# HLS Open-Weight Models
+# Open-Weight Models (Vital-Skills)
 
 ## Overview
 
-This guide is a Health & Life Sciences (HLS) extension layer for packaging, registering, validating, and deploying open-weight scientific models on Databricks. It does not reproduce generic MLflow or custom PyFunc mechanics — it supplies the model-family decisions that generic guidance cannot know: scientific preprocessing, checkpoint and database requirements, GPU and runtime constraints, serving-versus-Jobs suitability, provenance, and biological sanity checks. When the request needs standard logging, signatures, dependency packaging, Unity Catalog registration, Model Serving, or MLflow evaluation, use the existing Databricks ML training and Model Serving skills as the implementation foundation and layer this guide on top.
+This guide is part of Vital-Skills, a Health & Life Sciences (HLS) extension layer for packaging, registering, validating, and deploying open-weight scientific models on Databricks. It does not reproduce generic MLflow or custom PyFunc mechanics — it supplies the model-family decisions that generic guidance cannot know: scientific preprocessing, checkpoint and database requirements, GPU and runtime constraints, serving-versus-Jobs suitability, provenance, and biological sanity checks. When the request needs standard logging, signatures, dependency packaging, Unity Catalog registration, Model Serving, or MLflow evaluation, use the existing Databricks ML training and Model Serving skills as the implementation foundation and layer this guide on top.
 
 These seven model families (single-cell transcriptomics; histopathology; protein/biomolecular structure) are an initial, representative set. The skill is designed to extend — see `references/models/index.md` and `references/model-template.md` to add a family. Coverage grows as demand and validated models arrive.
 
@@ -22,7 +22,7 @@ Not all model references have been tested end-to-end through the eval harness.
 
 | Reference | Validated | Eval tasks | Notes |
 |-----------|-----------|------------|-------|
-| `teddy.md` | **Yes** | teddy-001 (deploy; formerly oss-001), teddy-002 (deploy + AI Search; formerly oss-002) | 70M variant. 160M/400M share ref but not yet tested. |
+| `teddy.md` | **Yes** | teddy-001 (deploy; formerly oss-001), teddy-002 (deploy + AI Search; formerly oss-002) | 70M variant. Wrapper v2 (`pooling` control, five validation layers) tested by hand 2026-10-30; its blind eval is pending. 160M/400M share ref but not yet tested. |
 | `geneformer.md` | Pending | geneformer-001, geneformer-002 (formerly oss-005, oss-006; planned) | Serving tested; evaluation pending. Path A + Path B; NVIDIA TE stub pattern for BioNeMo PyFunc serving. |
 | `scgpt.md` | No | — | Reference provided; no eval task yet. |
 | `scimilarity.md` | No | — | Zenodo v1.1 and HF expanded. |
@@ -63,7 +63,7 @@ Complex inputs (AnnData, sparse matrices, FASTA, YAML, structures) need a delibe
 Technical validation (imports, signatures, deployment) is distinct from scientific, clinical, and regulatory validation. A successful deployment never implies clinical validity.
 
 ### Retrieval-augmented deployment (Databricks AI Search)
-Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (teddy-002, formerly oss-002, covers TEDDY + AI Search end-to-end).
+Many HLS embedding models (TEDDY, Geneformer, Scimilarity, Midnight) produce per-sample vectors useful for nearest-neighbour retrieval. The deployment has two components: (1) a Model Serving endpoint producing embeddings, and (2) a Databricks AI Search index storing and querying the reference atlas. For index lifecycle, defer to the `vector-search` skill and [Databricks AI Search docs](https://docs.databricks.com/aws/en/ai-search/ai-search/). This guide covers the model-side contract and atlas-population workflow. See `teddy.md` for a validated example (teddy-002, formerly oss-002, covers TEDDY + AI Search end-to-end). For the step-by-step path from embeddings to an index, a neighbour-vote label with calibrated confidence, figures and an optional classifier or AI Runtime fine-tune, load `references/workflows/embeddings-to-vector-search.md`; it calls the tested helpers in `scripts/` (`vs_index.py`, `nn_annotate.py`, `sample_checks.py`, `visualize.py`, `finetune_teddy/`) — import them with `sys.path.insert(0, f"{SKILL_DIR}/scripts")` rather than retyping them.
 
 ### Serving engines and NVIDIA architecture components
 The default deployment path is MLflow custom PyFunc. Two important extensions:
@@ -112,7 +112,7 @@ For endpoint observability, usage tracking, or request logging, use supported AI
 ## Best Practices
 
 1. **Define the serving contract before the wrapper.** Create an `input_example` and a signature that represent the actual request. Prefer explicit columns/fields for meaningful optional controls; if you use MLflow `params` instead, send them in the REST body `"params"` field (not the SDK's `extra_params`, see Troubleshooting #13) and prove a non-default value changes the output. Document request/response examples for both Python SDK and HTTP invocation, and validate them with the generic MLflow serving-input tools plus a real endpoint or local runner.
-2. **Package for reproducibility.** Pin source revisions and dependency versions; prefer build-time downloads into a governed Volume or model artifact location; record URL, revision, checksum, license, and acquisition date in a manifest; never download weights at request time; never embed credentials in artifacts or notebooks; test an offline / network-restricted startup path.
+2. **Package for reproducibility.** Pin source revisions and dependency versions; prefer build-time downloads into a governed Volume or model artifact location; record URL, revision, checksum, license, and acquisition date in a manifest; never download weights at request time; never embed credentials in artifacts or notebooks; test an offline / network-restricted startup path. Download the full pinned release when its size allows (every model size, tutorials and demo data), checking each file against upstream checksums: the reference check (`references/evaluation.md`, layer 4) needs the official tutorial and its data, and comparing model sizes needs every set of weights. For very large sources (e.g. AlphaFold databases), download what the task needs plus the tutorial and demo data, and record what was skipped in the manifest.
 3. **Make cache and database paths explicit.** Ensure cache paths are writable by the serving or Job identity. Keep large reference databases outside the model artifact when appropriate, but version and validate their mounted location.
 4. **Keep the wrapper boundary thin.** Load heavyweight objects once during initialization; keep `predict` deterministic with respect to declared inputs; normalize scientific input types at the boundary; return stable serializable outputs or persisted artifact references; expose provenance without leaking secrets.
 5. **Register with a promotion strategy.** Register to Unity Catalog with an explicit versioning/promotion strategy, and store the source/weight manifest alongside the model version or in a linked governed location.
@@ -226,7 +226,7 @@ artifacts:
 2. **Unpinned or `latest` revisions.** A mutable branch or model card silently changes behavior.
    - *How to avoid*: Pin an immutable commit SHA or content-addressed release/DOI (git tags can move) and record it in the manifest with a checksum.
 3. **Relying on an untested `params` path.** Inference controls sent through the SDK's `extra_params` never reach a custom PyFunc (see Troubleshooting #13), and a control missing from the signature's params schema is dropped — both without an error.
-   - *How to avoid*: Use explicit fields/columns for controls, or send them in the REST body `"params"` field and prove a non-default value changes the output; validate the exact serving serializer before depending on arrays or nested lists.
+   - *How to avoid*: Follow the standard in `references/integration-contract.md` ("Standard: controls as optional input columns"): controls are optional input columns with defaults, also accepted in `params`, echoed in every response. Its table shows which call paths deliver `params` (only REST with a top-level `"params"` key and a loaded model's `.predict(df, params=...)`). Prove a non-default value changes the output; validate the exact serving serializer before depending on arrays or nested lists.
 4. **Logging raw sensitive payloads.** Inference tables can capture patient, donor, sequence, or compound data.
    - *How to avoid*: Classify and minimize/redact first; log hashes, metadata, or governed URIs instead of raw inputs.
 5. **Assuming skill inheritance.** Genie Code has no formal mechanism to inherit the generic skill's steps.
@@ -248,7 +248,7 @@ artifacts:
 12. **`pd.read_json` treats a literal JSON string as a file path in newer pandas.** Pandas 2.1+ deprecated passing a raw JSON string directly and may raise `FileNotFoundError` treating the content as a path.
     - *How to avoid*: Always wrap with `io.StringIO`: `pd.read_json(io.StringIO(json_string), orient="split")`. Import `io` explicitly inside the PyFunc class cell.
 13. **`serving_endpoints.query(extra_params=...)` is silently ignored by a custom PyFunc.** The SDK sends `extra_params` under the request-body key `"extra_params"`, a field it documents as only for external and foundation-model endpoints. The MLflow scoring server behind a custom PyFunc keeps only the input field (`dataframe_records`, `dataframe_split`, `instances`, `inputs`) and reads inference controls from the body key `"params"`, so `extra_params` is dropped and `predict()` runs with its defaults. The call still succeeds and returns valid-looking output — **a passing call is not proof the setting was applied.** Measured 2026-10-27 on a TEDDY PyFunc endpoint: `extra_params={"pooling": "first_token"}` returned embeddings identical to the default (cosine 1.0); the same value under body `"params"` changed them (cosine 0.53–0.64).
-    - *How to avoid*: Post the body yourself so controls land under `"params"`: `w.api_client.do("POST", f"/serving-endpoints/{name}/invocations", body={"dataframe_records": records, "params": {"max_seq_len": "512"}})` (HTTP equivalent: `POST /serving-endpoints/<name>/invocations` with JSON `{"dataframe_records": [...], "params": {"max_seq_len": "512"}}`). Declare every control in the logged signature's params schema — undeclared keys are dropped with only a log warning — and give each default the type you will send: if you send strings (e.g. `default_params={"max_seq_len": "2048", "pooling": "mean"}`), MLflow will not convert a string to an integer param and rejects the request. Cast in `predict`: `int(params.get("max_seq_len", 2048))`. Locally, `loaded_model.predict(df, params={...})` is the same mechanism. Smoke test: send one non-default value and assert the output differs from the default.
+    - *How to avoid*: Post the body yourself so controls land under `"params"`: `w.api_client.do("POST", f"/serving-endpoints/{name}/invocations", body={"dataframe_records": records, "params": {"max_seq_len": "512"}})` (HTTP equivalent: `POST /serving-endpoints/<name>/invocations` with JSON `{"dataframe_records": [...], "params": {"max_seq_len": "512"}}`). Declare every control in the logged signature's params schema — undeclared keys are dropped with only a log warning — and give each default the type you will send: if you send strings (e.g. `default_params={"max_seq_len": "2048", "pooling": "mean"}`), MLflow will not convert a string to an integer param and rejects the request. Cast in `predict`: `int(params.get("max_seq_len", 2048))`. Locally, `loaded_model.predict(df, params={...})` is the same mechanism; `mlflow.models.predict` has **no** `params=` argument (MLflow 3.13 raises `TypeError`), so put `"params"` in a JSON body file and pass `input_path=`. Smoke test: send one non-default value and assert the output differs from the default. For new wrappers, prefer the input-column standard in `references/integration-contract.md`, which works with every client.
 14. **Gate costly steps (endpoint, deployment, AI Search index) behind a `run_go` widget whose saved default is `"false"`.** Always create it as `dbutils.widgets.dropdown("run_go", "false", ["false", "true"], "Run costly steps")` and never change the saved default to `"true"`, so re-running the saved notebook (or a copy) never spends money without someone choosing to.
     - *Request asks to deploy* (e.g. "Deploy X as a serving endpoint"): that is the user's intent. Say in one short line that the gate is off by default and that, because they asked to deploy, you will switch `run_go` on for this run and create <endpoint name, GPU tier, AI Search endpoint/index> unless they stop you — then proceed. If you cannot set the widget yourself, tell the user exactly how: set the `run_go` widget at the top of the notebook to `true` and re-run from the gated cell.
     - *Request says both "deploy" and "write the code"* (e.g. "Deploy X … Write the code."): treat it as a deploy request — the code is written either way — and say so in the same one line before switching `run_go` on.
@@ -311,6 +311,7 @@ artifacts:
 6. **Implement and register.** Use the standard custom PyFunc pattern, add only the HLS adapter behavior, and register to Unity Catalog with a versioning/promotion strategy (see Best Practices §4–5).
 7. **Validate scientifically and operationally.** Run at minimum: import/dependency smoke test; offline artifact and checksum test; wrapper initialization test; signature and `input_example` test; Python SDK and HTTP payload tests; an **upstream-parity test**; malformed-input and resource-limit tests; a serving or Job deployment test in the target runtime; and output sanity checks for the model family.
    - *Upstream-parity test*: run a few real samples through the model's **own** upstream preprocessing and inference code (the functions named in `references/models/<model>.md`) and through your wrapper, then compare both stages — the same selected tokens/inputs (compare as sets: tiny floating-point differences can swap near-tied values, so assert membership and report order only for information), and output embeddings with cosine similarity ~1.0 per sample, with a stated threshold (for example >= 0.9999). A wrapper validated only against itself (for example endpoint output vs. the same wrapper run in the notebook) is **not** validated: it proves the deployment reproduces the wrapper, not that the wrapper reproduces the model. If upstream code cannot be run, say so and report the wrapper as unverified against upstream.
+   - *What to check and how to report it*: see `references/evaluation.md` (five layers, guidance only; nothing blocks the user from trying the model). Quote the model file's "Validation record", or say none is recorded for this revision, and continue.
 
 ## Model-family references
 
@@ -325,6 +326,10 @@ Load only the relevant reference:
 - `references/models/midnight.md`
 
 Add new families by copying `references/model-template.md`, adding one row to `references/models/index.md`, and documenting tests before changing this core file.
+
+Workflows (load when the request goes past deployment):
+
+- `references/workflows/embeddings-to-vector-search.md` — embeddings → Delta table → AI Search index → nearest-neighbour labels, calibration, figures, classifier on frozen embeddings, optional TEDDY fine-tune on AI Runtime (not upstream-validated), and the hand-off to the write-up skills.
 
 ## AI Gateway and inference tables
 
@@ -360,6 +365,9 @@ Every new model reference should include:
 - `databricks-model-serving` — endpoint lifecycle, routing, AI Gateway configuration, and vLLM-based custom LLM serving.
 - `databricks-mlflow-evaluation` — evaluation mechanics for validating model outputs.
 - `vector-search` — AI Search endpoint and index lifecycle for embedding-based retrieval.
+- `databricks-ai-runtime` — `databricks air` workloads for GPU training (the optional TEDDY fine-tune).
+- `sc-rnaseq`, `pathway-enrichment-analysis` — quality control, marker genes and pathways for cells the neighbour vote flags.
+- `scientific-figures`, `report-builder`, `presentation-builder` — figures, a PDF report and a slide deck from the results (the workflow's "Write it up" section).
 - [Databricks: Custom LLM serving (vLLM)](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms/) — vLLM engine, no PyFunc.
 - [Databricks: Bring your own container](https://docs.databricks.com/aws/en/machine-learning/model-serving/bring-your-own-container) — Docker (NVIDIA NIM / Triton).
 - [NVIDIA NIM](https://docs.nvidia.com/nim/) — pre-built inference microservices for BioNeMo models.

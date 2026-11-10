@@ -1,4 +1,4 @@
-# HLS model reference index
+# Model reference index (Vital-Skills open-weight-models)
 
 The core skill loads these references on demand. Add a row when a new model family is introduced.
 

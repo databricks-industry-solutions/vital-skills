@@ -523,7 +523,10 @@ def test_known_false_negatives(scorers, key, source):
 
 def test_teddy_md_subprocess_download_is_not_a_false_negative(scorers):
     teddy = (SKILL_DIR / "references" / "models" / "teddy.md").read_text().splitlines()
-    block = "\n".join(teddy[136:154])
+    start = next(i for i, l in enumerate(teddy) if l.startswith("**Preferred fix — subprocess isolation**"))
+    begin = next(i for i in range(start, len(teddy)) if teddy[i].startswith("```python"))
+    end = next(i for i in range(begin + 1, len(teddy)) if teddy[i].startswith("```"))
+    block = "\n".join(teddy[begin + 1:end])                       # found by heading, not by line number
     assert "snapshot_download" in block
     assert scorers.sub_check_scores(scorers.TASKS["teddy-001"], block)["download_staging/hf_xet_disabled"] is True
 

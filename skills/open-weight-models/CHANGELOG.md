@@ -7,6 +7,194 @@ frontmatter `version` is the source of truth for releases.
 ## [Unreleased]
 
 ### Added
+- 2026-11-09: `scripts/visualize.py` `plot_reference_map(..., families=...)`: up to 4 families (navy, red,
+  orange, teal) of up to 4 related types each, drawn as shades of one colour (scientific-figures colour
+  rule 2), so related types such as interneuron subtypes can all be named; it refuses more than 4
+  families or members. Without `families` the colours are as before (at most 5 types, the rest grey).
+- 2026-10-30, from a TEDDY-70M test run with added checks:
+  `references/evaluation.md` "Validating a deployed model: five layers" (guidance, not gates:
+  each layer says who runs it and when; layer 4 is a maintainer check recorded in the model file);
+  `references/models/teddy.md` "Validation record" table and a `"tutorial"` pooling option; `references/model-template.md`
+  "Intended use and reference test" (4 bullets) plus three validation bullets;
+  `references/models/teddy.md` "Intended use and reference test", "Pooling for zero-shot use"
+  (served `cell_emb` is the top gene's output for 70M; serve masked mean pooling), compute row for
+  notebook batch size, validation items 14 (batch invariance) and 15 (reference test).
+- `scripts/` — tested helpers the embeddings-to-AI-Search workflow and the check notebook now call instead of
+  carrying their own copies: `vs_index.py` (existing-resource lookup, the `on_existing` guard, index
+  mismatch check, create-or-reuse AI Search endpoint and triggered Delta Sync index that create only with
+  `run_go=True` and never delete, sync tracking by pipeline update, `GRANT SELECT` for readers, a
+  self-retrieval sanity check), `nn_annotate.py` (requests with controls under the body `"params"` key, the
+  served-version check, endpoint embedding with one-cell retry, the non-default-control check, seeded
+  stratified hold-out, neighbour vote, Wilson-bound threshold, score floor, flags, the combined flag rule,
+  and a logistic-regression classifier on frozen embeddings compared with the vote on the same held-out
+  cells) and `visualize.py` (UMAP/PCA map fitted on the reference only, reference and flagged maps,
+  confidence histograms, confusion matrix, per-type accuracy, method comparison with Wilson intervals,
+  markers/pathways, throughput; `scientific-figures` palette applied per figure, no global style change).
+  Unit tests: `tests/test_scripts_vs_index.py`, `tests/test_scripts_nn_annotate.py`,
+  `tests/test_scripts_visualize.py`.
+- `scripts/sample_checks.py` — checks on a whole new sample, for the two kinds of unusual the per-cell flag
+  rule misses (found in the 2026-10-28 TEDDY workshop test: 47 of 55 cells of one B-cell clone passed it,
+  because TEDDY-70M's vocabulary holds 3 of 330 antibody variable genes and no antibody constant genes):
+  `broad_label` (ordered keyword rules matched at a word start), `is_b_lineage`, `composition` and
+  `donor_composition_check` (each donor's broad cell-type mix against healthy donors at natural
+  proportions; outside every healthy donor = unusual), `antibody_usage` (share of cells using the most
+  common heavy-chain V gene, kappa share — one clone vs a mixed population) and `donor_effect_genes`
+  (ribosomal, mitochondrial, sex-linked genes to set aside in donor-vs-donor marker lists). New figures
+  `visualize.plot_donor_composition` and `visualize.plot_antibody_usage`. Tests in
+  `tests/test_scripts_sample_checks.py`; the workflow page's new section "Check the sample, not just the
+  cells" calls them.
+- `scripts/finetune_teddy/` — `train_teddy_classifier.py` and `workload.yaml` for a one-A10 TEDDY-70M
+  cell-type fine-tune on Databricks AI Runtime (`databricks air run`), **not upstream-validated**: TEDDY ships
+  a classification head but no fine-tuning script. Uses upstream preprocessing, tokenization, model and head
+  unchanged; checks batched vs per-cell frozen embeddings (cosine >= 0.9999); reports frozen neighbour vote,
+  frozen logistic regression and fine-tuned accuracy on the same held-out donors; CPU smoke mode. Tests in
+  `tests/test_finetune_teddy.py` (helpers, workload fields, and the loop on a stand-in model when PyTorch
+  is installed). Not yet run on AI Runtime.
+- `references/workflows/embeddings-to-vector-search.md`: step-by-step workflow from
+  per-cell embeddings to a Databricks AI Search (formerly Vector Search) index and
+  nearest-neighbour lookup, worked on TEDDY-70M. It confirms names and existing
+  resources with the user before building, sends inference controls under the REST
+  body key `"params"` (the `teddy.md` `invoke()` helper) and proves a non-default
+  `max_seq_len` changes the embedding, holds out labelled cells with a seeded split
+  stratified by cell type (rare types — fewer than 5 cells — stay in the reference
+  and are reported as not measured), queries only columns the index syncs, and
+  defaults to CELLxGENE Census release 2025-01-30 (as the 2026-10-27 with-skill
+  teddy-002 run did). Its "Interpret and visualise the results" section turns
+  neighbours into a vote label with a confidence (share of agreeing neighbours),
+  picks the confidence threshold by the Wilson lower bound of held-out accuracy (the
+  accuracy you can be 95% sure of) with at least 30 accepted cells, flags
+  low-confidence, uncalibrated or far cells, and gives three matplotlib recipes —
+  Uniform Manifold Approximation and Projection (UMAP) map with a principal
+  component analysis (PCA) fallback under 10 reference cells, confidence histogram,
+  held-out confusion matrix — pointing to the `scientific-figures` and `sc-rnaseq`
+  skills. Not yet run end to end in a workspace.
+- `tests/check_embeddings_to_vector_search.py`: dev-only Databricks notebook that
+  runs the workflow's blocks on a small cell set, including the inference-control,
+  held-out accuracy and figure steps (excluded from the published bundle).
+- `tests/test_embeddings_workflow_recipes.py`: runs the workflow's hold-out,
+  calibration and 2-D map functions on made-up data (UMAP cases skip without
+  `umap-learn`) and checks the notebook defines them identically.
+
+### Changed
+- 2026-11-09: `scripts/visualize.py` reference map: query cells are black rings over a white halo (visible on
+  a black cluster); legend names are wrapped at 34 characters instead of cut; the grey entry reads "other
+  reference types (N)"; the docstring says where the 5-colour limit comes from (scientific-figures colour
+  rule 1) and asks for a meaningful `group_order` (e.g. the query cells' types).
+- 2026-11-09: workflow figures example colours the new cells' most frequent predicted types (at most 5),
+  names the grey types in the note and points to `families=`.
+- 2026-11-09: `teddy.md` "Query cells and \"same type\" scores" row: say which reference types have no
+  query cells (their accuracy is untested), show the neighbours' types for any vote below 10 of 10, and
+  check untested types by leave-one-out on reference cells (2026-11-09 demo: query cells covered 5 of 9
+  types; leave-one-out 20 of 20 interneurons); includes a 9-type brain `families=` example. Express timing
+  row: READY at the first check, 9.2 min after create (an upper bound).
+- 2026-11-09: tests: `test_scripts_nn_annotate.py` follows the column-or-params control contract (both
+  routes, the response echo, no per-cell retry on a settings error); new tests for `families=` and for the
+  index waits (`test_scripts_vs_index.py`); the `teddy.md` download test finds its code block by heading,
+  not by line number.
+- 2026-11-01: findings from the TEDDY 70M wrapper v2 run (2026-10-30, all five validation layers, live
+  `GPU_MEDIUM` endpoint):
+  - `references/models/teddy.md`: Validation record rewritten with v2 results for layers 1-5 (earlier
+    first-token wrapper marked superseded); the settings contract is now checked through a live endpoint;
+    `tutorial` equals `mean` for cells with 2,048 or more expressed genes (checklist item 8 tests it on
+    padded cells only); the tutorial embeds `.raw.X` counts, not the normalised `.X`; self-retrieval asks
+    for at least 10 results (item 10).
+  - `references/integration-contract.md`: records the live-endpoint test of the optional-column standard.
+  - `scripts/nn_annotate.py`: `embed_via_endpoint` and `check_controls_applied` send controls as optional
+    columns by default (`route="column"`; `route="params"` for older endpoints) and raise
+    `ControlNotApplied` if the response echo differs from what was sent; that error is not retried cell by
+    cell (a settings problem, not a batch-size one).
+  - `references/workflows/embeddings-to-vector-search.md`: the column route is the default in the glossary,
+    the facts table, the step 1a embedding example and step 5; the controls check runs once per route; the
+    "controls not reaching predict()" troubleshooting row covers both routes and `ControlNotApplied`; the
+    sanity check asks for at least 10 results (`num_results=1` missed 3 of 50 exact self-matches).
+  - `references/evaluation.md`: run the layer 4 reference test before creating a serving endpoint when
+    possible.
+  - `SKILL.md`: TEDDY status notes wrapper v2 was tested by hand; its blind eval is pending.
+- 2026-10-30: `SKILL.md` Best Practices #2 adds a general rule: download the full pinned release when its
+  size allows (all model sizes, tutorials, demo data, checksum-verified). For very large sources, download
+  what the task needs plus the tutorial and demo data, and record what was skipped in the manifest.
+- 2026-10-30: `references/models/teddy.md` gains a "Deploy with Vector Search" section. It points to
+  `references/workflows/embeddings-to-vector-search.md` and its helpers, and keeps only TEDDY facts
+  (vector size per model size, pooling match, table columns, batch sizes, checks). It is linked from
+  "What this model does". The older `gt_teddy` AI Search subsections are marked as superseded where they
+  disagree. The Hugging Face download section now recommends the full pinned snapshot over HTTPS with
+  per-file SHA-256 checks.
+- 2026-10-30: naming. The skill collection is now Vital-Skills: titles and references to "the HLS
+  skill/extension" in `SKILL.md`, `references/evaluation.md`, `maintenance.md`, `model-template.md`,
+  `integration-contract.md` and `models/index.md` now say Vital-Skills or "this skill". "HLS" is kept
+  where it means the health and life sciences domain (e.g. "HLS models", "HLS data").
+- 2026-10-30: `SKILL.md` Workflow step 7 now points to `references/evaluation.md` (five layers,
+  guidance only) and asks the agent to quote the model file's "Validation record" or say none exists.
+- 2026-10-30: standardized the control contract. `references/integration-contract.md` now has a
+  table of which call paths deliver `params` to a custom PyFunc (SDK `serving_endpoints.query`: no;
+  `mlflow.models.predict`: no `params=`; REST top-level `"params"` and loaded `.predict(df, params=)`:
+  yes) and the standard "controls as optional input columns" (`ColSpec(required=False)`, also
+  accepted in `params`, echoed per response row, unknown values rejected). `SKILL.md` #3 and #13,
+  `teddy.md` and `scgpt.md` point to it; their "MLflow local `predict`" wording now names a loaded
+  model's `.predict` and warns that `mlflow.models.predict` has no `params=`. TEDDY wrapper code not
+  yet migrated.
+- `references/workflows/embeddings-to-vector-search.md` calls `scripts/` instead of repeating its code;
+  adds a `RUN_GO` gate (saved False) for creating the AI Search endpoint and index, an optional
+  "adapt the model" section (frozen-embedding classifier, AI Runtime fine-tune) and a "Write it up"
+  section linking `sc-rnaseq`, `pathway-enrichment-analysis`, `scientific-figures`, `report-builder` and
+  `presentation-builder`. Replacing an index now waits until the old one is gone instead of a fixed 30 s.
+- `tests/check_embeddings_to_vector_search.py` imports the scripts (new `skill_dir` widget) and also
+  reports the classifier-vs-vote comparison; `tests/test_embeddings_workflow_recipes.py` now checks that
+  neither file redefines a script function and that every `vx.`/`nn.`/`viz.` name they use exists.
+- `SKILL.md` routes to the workflow and `scripts/`, and lists the related write-up and AI Runtime skills.
+- `scripts/visualize.py` returns figures detached from pyplot, so a notebook shows each one once (with
+  `display(fig)`); before, every figure was drawn twice. The check notebook uses `display(fig)` instead of
+  `plt.show()`.
+- The workflow page gives the AI Search score exactly — 1 / (1 + squared L2 distance), with the conversion to
+  cosine for unit-length embeddings (checked against recomputed neighbours to 0.00002) — and points to
+  `eval/ground_truth/gt_teddy.py` (moved from `eval/runs_20260924/_ground_truth/`).
+- `tests/requirements.txt` pins `databricks-sdk==0.122.0`, `matplotlib==3.11.2`, `scikit-learn==1.9.1`.
+
+### Fixed
+- 2026-11-09: `scripts/vs_index.py`: a new index answered the `wait_until_queryable` probe, then said
+  "not ready" to the next query (2026-11-08, a new index on a new STANDARD endpoint). `wait_until_queryable`
+  now needs 3 answers in a row (`confirmations`, `confirm_gap_s`), and `index_sanity_check` takes an
+  optional `deadline` and retries "not ready" until then (default unchanged). Workflow step and
+  `teddy.md` "Short runs" item 8 updated; item 7 timing range now 16-29 min.
+- 2026-11-09: `teddy.md` express notes: a scaled-to-zero endpoint rejected a 10-cell all-gene request
+  ("Max request size exceeded for a scale to zero endpoint"); one cell with expressed genes only worked.
+  Replaces the "cold start not yet tested" note.
+- 2026-11-09: `scgpt.md`, `geneformer.md`: `GPU_SMALL` is one T4 (16 GB) on AWS, not an A10G; `GPU_MEDIUM`
+  is one A10G (24 GB) (GPU workload types table,
+  https://docs.databricks.com/aws/en/machine-learning/model-serving/create-manage-serving-endpoints).
+- 2026-11-06: `teddy.md` "Upstream-parity test": with an express deployment the notebook environment is
+  packed for serving, so a minimal `%pip` cell left out scanpy and the parity test was skipped. Install
+  scanpy for the test only into a side folder (`pip --no-deps --target`, then `sys.path`), with no restart
+  and nothing packed with the model. Tested on AI environment v6: 5 cells, same gene sets, min cosine
+  0.9999992.
+- 2026-11-02: `teddy.md` "Short runs" item 7: a new STANDARD Vector Search endpoint reports ONLINE
+  within seconds, but its compute only starts with the first index, which then takes 16-19 min (about
+  1 min of it the sync); a new index on an endpoint that already holds one took 0.7 min. Reuse such an
+  endpoint for short runs and time index create to answering.
+- 2026-11-02: `teddy.md` new "Short runs" list from the workshop test runs: one install cell and one
+  restart; config and client in one cell; Census filters in `value_filter` (double-quote `10x 3' v3`),
+  before sampling; h5ad via `/tmp`; use `vs_index.py` instead of hand-written waits (enum vs string
+  loop); `DataType.string` in signatures.
+- 2026-11-02: `teddy.md` Deploy with Vector Search: new row on choosing query cells; avoid umbrella
+  labels (plain `neuron`) whose subtypes are in the index, since exact-label agreement counts them as
+  misses.
+- 2026-11-02: `teddy.md` Output: `cell_id` is not echoed (match predictions by position), and use
+  `dataframe_records`; a plain dict as `dataframe_split` fails in the SDK.
+- 2026-11-02: `scripts/vs_index.py` `ensure_index` now also waits until the index answers a 1-result
+  query (`wait_until_queryable`): `status.ready` with the full row count was reported before
+  `query_index` stopped returning "index is not ready".
+- 2026-11-02: `teddy.md` checkpoint directory: example path for 70M, the weights are inside `teddy/`,
+  and assert `config.json` and `model.safetensors` exist before loading (one test run set it one folder
+  too shallow). Hugging Face download: how to download one size only and still keep what the fidelity
+  check needs.
+- 2026-11-01: endpoint batch size on `GPU_MEDIUM` (A10G) is now 10 cells per request for TEDDY 70M (8 for
+  400M), not 50: 50 ran out of GPU memory at 2,048 genes. Changed in `scripts/nn_annotate.py`
+  (`MAX_BATCH`), `references/workflows/embeddings-to-vector-search.md` (facts table, step 1a, step 1b
+  tier note, troubleshooting OOM row) and the older `teddy.md` notes (Census pipeline step 7, sizing guide).
+
+## [1.0.0] — 2026-10-29
+
+### Added
 - `eval/corrected_checks.py` — the scorer of record for the replicated Sep–Oct 2026
   sub-checks: twelve of them (thirteen after round 2) matched literal text and were wrong both ways (valid
   alternatives failed; mentions in markdown, download filters or the quoted prompt passed),

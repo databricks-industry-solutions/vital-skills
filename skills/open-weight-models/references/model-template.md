@@ -1,4 +1,4 @@
-# HLS model reference template
+# Model reference template (Vital-Skills open-weight-models)
 
 Copy this file to `references/models/<model-family>.md` for a new model. Replace every placeholder and remove sections that do not apply.
 
@@ -16,6 +16,15 @@ Copy this file to `references/models/<model-family>.md` for a new model. Replace
 ## What this model does
 
 State the supported task in one paragraph. Distinguish research capability from clinical or regulatory validation.
+
+## Intended use and reference test
+
+From the paper or official tutorial; cite the section or file and commit. Drives layers 4-5 in `evaluation.md`.
+
+* Intended use, and the output the paper used for it (e.g. which pooling):
+* Training data: source, cut-off date, quality filters, labels used in training?
+* Reference test: public dataset, metric, published value (or a stand-in and how it differs):
+* Baseline: a simple method on the same test:
 
 ## Inputs and outputs
 
@@ -35,7 +44,7 @@ List:
 
 ## Wrapper boundary
 
-Describe `load_context`, request normalization, prediction, postprocessing, and failure behavior. State whether optional controls are explicit model inputs or tested `params`.
+Describe `load_context`, request normalization, prediction, postprocessing, and failure behavior. List each control with its default and allowed values. Follow the standard in `integration-contract.md`: optional input columns (also accepted in `params`), echoed in each response row.
 
 ## Deployment recommendation
 
@@ -61,6 +70,9 @@ Include:
 * resource-limit tests
 * target-runtime deployment test
 * model-specific scientific sanity checks
+* reference test (layer 4) from "Intended use and reference test", run on the served output and on the paper's representation if they differ
+* field-style checks (layer 5): cross-study split, post-cut-off data, a simple baseline, sensitivity to settings
+* for chained parts (index, second endpoint): completeness, reachability, recall vs exact search, filter leak check (layer 3)
 
 ## Open questions
 

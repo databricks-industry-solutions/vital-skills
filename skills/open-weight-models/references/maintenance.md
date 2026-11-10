@@ -1,6 +1,6 @@
-# Maintaining the HLS open-weight model skill
+# Maintaining the Vital-Skills open-weight-models skill
 
-This guide keeps the HLS extension current without copying generic Databricks ML guidance into every model reference.
+This guide keeps this Vital-Skills skill current without copying generic Databricks ML guidance into every model reference.
 
 ## 1. Treat the skill as a small maintained product
 
@@ -70,7 +70,7 @@ Do not silently fork `custom-pyfunc.md`. If its guidance changes, compare the so
 
 ## 6. Use versioning and a changelog
 
-Version the HLS skill independently from upstream models and Databricks runtimes.
+Version this skill independently from upstream models and Databricks runtimes.
 
 * Major: trigger semantics, adapter contract, or deployment decision rules change.
 * Minor: a new model family, source type, deployment pattern, or test group is added.
@@ -134,11 +134,11 @@ Store versioned prompts and expected criteria rather than only a pass/fail trans
 
 For each prompt, record the Genie Code version, enabled skills, skill version, loaded skill files, tool calls, answer, and evaluator score. Compare:
 
-* A: generic Databricks skills plus HLS skill
+* A: generic Databricks skills plus this skill
 * B: skills disabled
-* C: generic skills enabled but HLS skill disabled
+* C: generic skills enabled but this skill disabled
 
-A new HLS reference should improve its target cases without increasing false triggering on generic ML requests.
+A new model reference should improve its target cases without increasing false triggering on generic ML requests.
 
 ## 9. Recommended update workflow
 
