@@ -57,7 +57,10 @@ class Q:
             r = self.w.statement_execution.get_statement(r.statement_id)
         if r.status and r.status.state != StatementState.SUCCEEDED:
             raise RuntimeError(f"{r.status.error} :: {stmt[:200]}")
-        return r.result.data_array if r.result else []
+        # A SUCCEEDED statement with zero rows returns result.data_array = None (not []), so
+        # coalesce to [] — otherwise every `for r in q(...)` / set comprehension call site
+        # crashes with "TypeError: 'NoneType' object is not iterable" on an empty cohort.
+        return (r.result.data_array or []) if r.result else []
 
 
 def _split_fqn(fqn: str):

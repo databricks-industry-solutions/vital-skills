@@ -54,7 +54,9 @@ class Q:
             r = self.w.statement_execution.get_statement(r.statement_id)
         if r.status and r.status.state != StatementState.SUCCEEDED:
             raise RuntimeError(f"{r.status.error} :: {stmt[:200]}")
-        return r.result.data_array if r.result else []
+        # Zero-row SUCCEEDED statements return result.data_array = None (not []); coalesce so
+        # any `for r in q(...)` call site doesn't crash on an empty result.
+        return (r.result.data_array or []) if r.result else []
 
 
 @dataclass
